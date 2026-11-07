@@ -1,0 +1,446 @@
+import React, { useState, useEffect } from 'react';
+import {
+  PhoneCall,
+  PhoneOff,
+  Clock,
+  Building2,
+  Globe,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  HelpCircle,
+  UserCheck,
+  Send,
+  History,
+  PhoneForwarded
+} from 'lucide-react';
+
+export default function Dialler({
+  leads,
+  setLeads,
+  callLogs,
+  setCallLogs,
+  followups,
+  setFollowups,
+  selectedLeadForCall,
+  currentUser
+}) {
+  const [activeLead, setActiveLead] = useState(selectedLeadForCall || leads[0] || null);
+  const [isCalling, setIsCalling] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [callNotes, setCallNotes] = useState('');
+  const [callOutcome, setCallOutcome] = useState('Considering');
+  const [showOutcomeModal, setShowOutcomeModal] = useState(false);
+  const [callHistorySearch, setCallHistorySearch] = useState('');
+
+  // Timer effect
+  useEffect(() => {
+    let interval = null;
+    if (isCalling) {
+      interval = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isCalling]);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleStartCall = () => {
+    if (!activeLead) return;
+    setIsCalling(true);
+    setCallDuration(0);
+
+    // Trigger actual phone call using tel: protocol
+    // This opens the default calling app (Phone Link, Skype, Teams, FaceTime, etc.) on Windows/Mac/Mobile
+    const cleanPhone = activeLead.phone.replace(/[^+\d]/g, '');
+    try {
+      window.location.href = `tel:${cleanPhone}`;
+    } catch (err) {
+      console.log('Tel URI invocation note:', err);
+    }
+  };
+
+  const handleEndCallClick = () => {
+    setIsCalling(false);
+    setShowOutcomeModal(true);
+  };
+
+  const handleSaveCallOutcome = (e) => {
+    e.preventDefault();
+    if (!activeLead) return;
+
+    // Format duration string
+    const mins = Math.floor(callDuration / 60);
+    const secs = callDuration % 60;
+    const durationStr = `${mins}m ${secs}s`;
+
+    const now = new Date();
+    const timestampStr = `${now.toISOString().split('T')[0]} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    // Create call log entry
+    const newLog = {
+      id: Date.now(),
+      leadId: activeLead.id,
+      leadName: activeLead.name,
+      company: activeLead.company,
+      phone: activeLead.displayPhone || activeLead.phone,
+      caller: currentUser.name,
+      outcome: callOutcome,
+      duration: durationStr,
+      timestamp: timestampStr,
+      notes: callNotes || 'No specific notes recorded.'
+    };
+
+    setCallLogs([newLog, ...callLogs]);
+
+    // Update lead status
+    const updatedLeads = leads.map(l => {
+      if (l.id === activeLead.id) {
+        return { ...l, status: callOutcome };
+      }
+      return l;
+    });
+    setLeads(updatedLeads);
+
+    // If Deal Completed or Call Back, create follow up task automatically
+    if (callOutcome === 'Deal Completed' || callOutcome === 'Call Back Later') {
+      const newFollowup = {
+        id: Date.now() + 1,
+        leadId: activeLead.id,
+        leadName: activeLead.name,
+        company: activeLead.company,
+        phone: activeLead.displayPhone || activeLead.phone,
+        type: callOutcome === 'Deal Completed' ? 'Payment Transfer' : 'Call Back',
+        status: callOutcome === 'Deal Completed' ? 'Pending Transfer' : 'Scheduled',
+        scheduledDate: new Date(Date.now() + 86400000 * 2).toISOString().replace('T', ' ').substring(0, 16),
+        assignedTo: currentUser.name,
+        notes: callNotes || (callOutcome === 'Deal Completed' ? 'Awaiting initial funds transfer.' : 'Requested call back.'),
+        value: activeLead.value
+      };
+      setFollowups([newFollowup, ...followups]);
+    }
+
+    // Reset dialer modal
+    setShowOutcomeModal(false);
+    setCallNotes('');
+    setCallDuration(0);
+  };
+
+  const filteredLogs = callLogs.filter(log =>
+    log.leadName.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
+    log.company.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
+    log.caller.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
+    log.outcome.toLowerCase().includes(callHistorySearch.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
+          <PhoneCall className="w-7 h-7 mr-2 text-indigo-600" />
+          The Dialler Sub-System
+        </h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Manual outbound calling interface. Click to initiate live device call (tel: protocol), track duration, and log outcomes.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Lead Selector & Dialing Console */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Active Dialing Console */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 bg-indigo-50 dark:bg-indigo-950/50 px-4 py-2 rounded-bl-2xl border-l border-b border-indigo-100 dark:border-indigo-900 text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center">
+              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse mr-1.5"></span>
+              Manual Calling Mode
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                Select Lead to Call
+              </label>
+              <select
+                disabled={isCalling}
+                value={activeLead?.id || ''}
+                onChange={(e) => {
+                  const lead = leads.find(l => l.id === Number(e.target.value));
+                  if (lead) setActiveLead(lead);
+                }}
+                className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium dark:text-white disabled:opacity-50"
+              >
+                {leads.map((lead) => (
+                  <option key={lead.id} value={lead.id}>
+                    {lead.name} — {lead.company} ({lead.country} • {lead.solution})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {activeLead && (
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-5 rounded-xl border border-slate-200 dark:border-slate-700/50 mb-6 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">{activeLead.name}</h3>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center mt-0.5">
+                      <Building2 className="w-3.5 h-3.5 mr-1 text-slate-400" /> {activeLead.company} ({activeLead.size} Business)
+                    </div>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <div className="text-xl font-mono font-bold text-blue-600 dark:text-blue-400">{activeLead.displayPhone || activeLead.phone}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center sm:justify-end mt-0.5">
+                      <Globe className="w-3 h-3 mr-1 text-blue-500" /> {activeLead.country} • {activeLead.region}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs text-slate-500">Target Solution:</span>
+                    <span className="ml-1.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded font-semibold text-xs">
+                      {activeLead.solution} (${activeLead.value?.toLocaleString()})
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500">Current Status:</span>
+                    <span className="ml-1.5 font-semibold text-xs text-slate-800 dark:text-slate-200">
+                      {activeLead.status}
+                    </span>
+                  </div>
+                </div>
+
+                {activeLead.notes && (
+                  <div className="text-xs bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">
+                    <strong>Lead Notes:</strong> {activeLead.notes}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Calling Action Controls & Timer */}
+            <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-800/40 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+              {isCalling ? (
+                <div className="text-center space-y-4 w-full">
+                  <div className="inline-flex items-center space-x-2 px-4 py-1.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full font-semibold text-sm animate-pulse">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span>LIVE OUTBOUND CALL IN PROGRESS (Ringing device...)</span>
+                  </div>
+
+                  <div className="text-4xl font-mono font-bold tracking-wider text-slate-900 dark:text-white">
+                    {formatTime(callDuration)}
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <a
+                      href={`tel:${activeLead?.phone}`}
+                      className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-sm transition-all inline-flex items-center space-x-2 shadow-md"
+                    >
+                      <PhoneForwarded className="w-4 h-4" />
+                      <span>Re-trigger Ring (tel:)</span>
+                    </a>
+                    <button
+                      onClick={handleEndCallClick}
+                      className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-lg shadow-red-600/30 transition-all flex items-center space-x-2"
+                    >
+                      <PhoneOff className="w-4 h-4" />
+                      <span>End Call & Log Outcome</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center space-y-3">
+                  <p className="text-xs text-slate-500">Click below to initiate device outbound call (launches default phone app / tel: URI) and start timer.</p>
+                  <button
+                    onClick={handleStartCall}
+                    disabled={!activeLead}
+                    className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 transition-all flex items-center space-x-3 text-lg mx-auto"
+                  >
+                    <PhoneCall className="w-6 h-6" />
+                    <span>Start Outbound Call (Dial)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: IT Solution Pitch Script Helper */}
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center space-x-2 mb-4">
+              <FileText className="w-5 h-5 text-blue-600" />
+              <h3 className="font-bold text-slate-900 dark:text-white">IT Solutions Pitch Script</h3>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-100 dark:border-blue-900/50">
+                <strong className="text-blue-700 dark:text-blue-300 block mb-1">1. Introduction & Hook</strong>
+                "Hello {activeLead?.name || 'there'}, my name is {currentUser.name} with OmniSales IT Solutions. We specialize in empowering {activeLead?.country || 'North American'} businesses like {activeLead?.company || 'your company'} with high-performance {activeLead?.solution || 'websites and portals'}."
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                <strong className="text-slate-900 dark:text-white block mb-1">2. Value Proposition</strong>
+                "We noticed your current online presence could be modernized to drive 3x more inbound customer leads, streamline workflow operations, and boost revenue."
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                <strong className="text-slate-900 dark:text-white block mb-1">3. Closing Call to Action</strong>
+                "Would you be open to a 10-minute technical walkthrough of a tailored prototype for {activeLead?.company} next Tuesday?"
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 text-center">
+            <span className="text-xs text-slate-400">Manual dialing mode: You have full control over start/end.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Call History Section */}
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center">
+            <History className="w-5 h-5 mr-2 text-blue-600" />
+            Outbound Call Logs & History ({filteredLogs.length})
+          </h3>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search call history..."
+              value={callHistorySearch}
+              onChange={(e) => setCallHistorySearch(e.target.value)}
+              className="py-2 px-3 pl-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs dark:text-white w-full sm:w-64"
+            />
+            <History className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <th className="py-3 px-4">Contact / Company</th>
+                <th className="py-3 px-4">Caller</th>
+                <th className="py-3 px-4">Outcome</th>
+                <th className="py-3 px-4">Duration</th>
+                <th className="py-3 px-4">Timestamp</th>
+                <th className="py-3 px-4">Call Notes</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+              {filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-8 text-slate-400">No call logs recorded yet.</td>
+                </tr>
+              ) : (
+                filteredLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50">
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-slate-900 dark:text-white">{log.leadName}</div>
+                      <div className="text-xs text-slate-500">{log.company}</div>
+                    </td>
+                    <td className="py-3.5 px-4 text-xs font-medium text-slate-700 dark:text-slate-300">
+                      {log.caller}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        log.outcome === 'Deal Completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
+                        log.outcome === 'Considering' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' :
+                        log.outcome === 'Call Back Later' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' :
+                        'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                      }`}>
+                        {log.outcome}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 font-mono text-xs text-slate-700 dark:text-slate-300">
+                      {log.duration}
+                    </td>
+                    <td className="py-3.5 px-4 text-xs text-slate-500">
+                      {log.timestamp}
+                    </td>
+                    <td className="py-3.5 px-4 text-xs text-slate-600 dark:text-slate-300 max-w-xs truncate">
+                      {log.notes}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Outcome Modal */}
+      {showOutcomeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+              <h3 className="text-lg font-bold">Call Completed</h3>
+              <p className="text-xs text-blue-100 mt-0.5">Select outcome and add notes for {activeLead?.name} ({activeLead?.company})</p>
+            </div>
+
+            <form onSubmit={handleSaveCallOutcome} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                  Call Outcome *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Considering', 'Deal Completed', 'Denied', 'Call Back Later', 'No Answer'].map((outcome) => (
+                    <button
+                      type="button"
+                      key={outcome}
+                      onClick={() => setCallOutcome(outcome)}
+                      className={`p-3 rounded-xl border text-xs font-semibold text-left transition-all ${
+                        callOutcome === outcome
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                      }`}
+                    >
+                      {outcome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                  Call Notes & Next Steps
+                </label>
+                <textarea
+                  rows="3"
+                  placeholder="Summarize conversation discussion, client objections, or requirements..."
+                  value={callNotes}
+                  onChange={(e) => setCallNotes(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white resize-none"
+                ></textarea>
+              </div>
+
+              {callOutcome === 'Deal Completed' && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-900 text-xs text-emerald-800 dark:text-emerald-300">
+                  🎉 Selecting <strong>Deal Completed</strong> will automatically create a follow-up task for wire transfer verification (${activeLead?.value?.toLocaleString()}).
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center space-x-2"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Save Call Log & Update Lead</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

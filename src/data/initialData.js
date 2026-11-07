@@ -1,0 +1,230 @@
+export const INITIAL_USERS = [
+  { id: 1, name: 'Alex Developer (Admin)', email: 'admin@sales.com', password: 'admin123', role: 'Admin', permissions: { leads: true, dialler: true, analytics: true, followups: true, admin: true }, status: 'Active' },
+  { id: 2, name: 'Sarah Jenkins (Senior Caller)', email: 'sarah@sales.com', password: 'sarah123', role: 'Sales Agent', permissions: { leads: true, dialler: true, analytics: false, followups: true, admin: false }, status: 'Active' },
+  { id: 3, name: 'Michael Chang (Follow-up Specialist)', email: 'michael@sales.com', password: 'michael123', role: 'Follow-up Agent', permissions: { leads: true, dialler: false, analytics: false, followups: true, admin: false }, status: 'Active' },
+  { id: 4, name: 'Emily Thorne (Sales Analyst)', email: 'emily@sales.com', password: 'emily123', role: 'Analyst', permissions: { leads: true, dialler: false, analytics: true, followups: false, admin: false }, status: 'Active' }
+];
+
+export const INITIAL_LEADS = [
+  {
+    id: 1,
+    name: 'Robert Sterling',
+    company: 'Sterling Logistics Corp',
+    phone: '+14165550192',
+    displayPhone: '+1 (416) 555-0192',
+    email: 'robert@sterlinglogistics.ca',
+    country: 'Canada',
+    region: 'Ontario (Toronto)',
+    size: 'Large',
+    solution: 'Web Portal',
+    status: 'New',
+    value: 28000,
+    notes: 'Looking to replace legacy logistics tracking portal with cloud-native web portal.',
+    createdAt: '2026-11-01'
+  },
+  {
+    id: 2,
+    name: 'Jessica Dubois',
+    company: 'Montréal Gourmet Foods',
+    phone: '+15145550143',
+    displayPhone: '+1 (514) 555-0143',
+    email: 'jessica@mtlgourmet.ca',
+    country: 'Canada',
+    region: 'Quebec (Montreal)',
+    size: 'Medium',
+    solution: 'Mobile App',
+    status: 'Contacted',
+    value: 15000,
+    notes: 'Interested in a direct-to-consumer ordering mobile app for iOS and Android.',
+    createdAt: '2026-11-02'
+  },
+  {
+    id: 3,
+    name: 'David Miller',
+    company: 'Cascade Timber & Hardware',
+    phone: '+12065550188',
+    displayPhone: '+1 (206) 555-0188',
+    email: 'dmiller@cascadetimber.com',
+    country: 'USA',
+    region: 'Washington (Seattle)',
+    size: 'Large',
+    solution: 'Website',
+    status: 'Qualified',
+    value: 12000,
+    notes: 'Needs modern corporate website overhaul with e-commerce wholesale catalog.',
+    createdAt: '2026-11-03'
+  },
+  {
+    id: 4,
+    name: 'Amanda Vance',
+    company: 'Austin Tech Solutions',
+    phone: '+15125550171',
+    displayPhone: '+1 (512) 555-0171',
+    email: 'amanda@austintechsol.com',
+    country: 'USA',
+    region: 'Texas (Austin)',
+    size: 'Medium',
+    solution: 'Web Portal',
+    status: 'Considering',
+    value: 22000,
+    notes: 'Evaluating our proposal for client management portal. Follow up next Tuesday.',
+    createdAt: '2026-11-04'
+  },
+  {
+    id: 5,
+    name: 'Kevin O’Connor',
+    company: 'Vancouver Harbor Exports',
+    phone: '+16045550165',
+    displayPhone: '+1 (604) 555-0165',
+    email: 'kevin@vancouverharbor.ca',
+    country: 'Canada',
+    region: 'British Columbia (Vancouver)',
+    size: 'Large',
+    solution: 'Mobile App',
+    status: 'Deal Completed',
+    value: 45000,
+    notes: 'Signed contract for custom cargo tracking mobile application. Awaiting initial 50% bank transfer.',
+    createdAt: '2026-11-05'
+  },
+  {
+    id: 6,
+    name: 'Rachel Goldberg',
+    company: 'Manhattan Boutique Retail',
+    phone: '+12125550129',
+    displayPhone: '+1 (212) 555-0129',
+    email: 'rachel@manhattanboutique.com',
+    country: 'USA',
+    region: 'New York (NYC)',
+    size: 'Small',
+    solution: 'Website',
+    status: 'New',
+    value: 8500,
+    notes: 'Wants Shopify / custom hybrid e-commerce store redesign.',
+    createdAt: '2026-11-06'
+  },
+  {
+    id: 7,
+    name: 'Marcus Brody',
+    company: 'Chicago Precision Engineering',
+    phone: '+13125550154',
+    displayPhone: '+1 (312) 555-0154',
+    email: 'mbrody@chicagoprecision.com',
+    country: 'USA',
+    region: 'Illinois (Chicago)',
+    size: 'Large',
+    solution: 'Web Portal',
+    status: 'Denied',
+    value: 35000,
+    notes: 'Went with internal development team instead of outsourced IT solution.',
+    createdAt: '2026-11-02'
+  },
+  {
+    id: 8,
+    name: 'Chloe Tremblay',
+    company: 'Quebec BioHealth Labs',
+    phone: '+14185550111',
+    displayPhone: '+1 (418) 555-0111',
+    email: 'ctremblay@quebecbio.ca',
+    country: 'Canada',
+    region: 'Quebec (Quebec City)',
+    size: 'Medium',
+    solution: 'Web Portal',
+    status: 'Considering',
+    value: 20000,
+    notes: 'Reviewing HIPAA/PIPEDA secure data portal architecture.',
+    createdAt: '2026-11-05'
+  }
+];
+
+export const INITIAL_CALL_LOGS = [
+  {
+    id: 1,
+    leadId: 5,
+    leadName: 'Kevin O’Connor',
+    company: 'Vancouver Harbor Exports',
+    phone: '+1 (604) 555-0165',
+    caller: 'Sarah Jenkins',
+    outcome: 'Deal Completed',
+    duration: '14m 22s',
+    timestamp: '2026-11-06 14:30',
+    notes: 'Finalized mobile app specs and milestone payments. Contract emailed for signature.'
+  },
+  {
+    id: 2,
+    leadId: 4,
+    leadName: 'Amanda Vance',
+    company: 'Austin Tech Solutions',
+    phone: '+1 (512) 555-0171',
+    caller: 'Sarah Jenkins',
+    outcome: 'Considering',
+    duration: '08m 15s',
+    timestamp: '2026-11-06 11:10',
+    notes: 'Discussed API integration capabilities. Needs quote breakdown before next call.'
+  },
+  {
+    id: 3,
+    leadId: 7,
+    leadName: 'Marcus Brody',
+    company: 'Chicago Precision Engineering',
+    phone: '+1 (312) 555-0154',
+    caller: 'Alex Developer',
+    outcome: 'Denied',
+    duration: '04m 50s',
+    timestamp: '2026-11-05 16:00',
+    notes: 'Budget constraints for this quarter. Decided to build in-house.'
+  },
+  {
+    id: 4,
+    leadId: 2,
+    leadName: 'Jessica Dubois',
+    company: 'Montréal Gourmet Foods',
+    phone: '+1 (514) 555-0143',
+    caller: 'Sarah Jenkins',
+    outcome: 'Call Back Later',
+    duration: '06m 40s',
+    timestamp: '2026-11-05 10:15',
+    notes: 'Busy with inventory audit. Requested call back on Monday at 2 PM.'
+  }
+];
+
+export const INITIAL_FOLLOWUPS = [
+  {
+    id: 1,
+    leadId: 5,
+    leadName: 'Kevin O’Connor',
+    company: 'Vancouver Harbor Exports',
+    phone: '+1 (604) 555-0165',
+    type: 'Payment Transfer',
+    status: 'Pending Transfer',
+    scheduledDate: '2026-11-08 17:00',
+    assignedTo: 'Michael Chang',
+    notes: 'Deal completed ($45k). Awaiting wire transfer confirmation from accounting department.',
+    value: 45000
+  },
+  {
+    id: 2,
+    leadId: 2,
+    leadName: 'Jessica Dubois',
+    company: 'Montréal Gourmet Foods',
+    phone: '+1 (514) 555-0143',
+    type: 'Call Back',
+    status: 'Scheduled',
+    scheduledDate: '2026-11-10 14:00',
+    assignedTo: 'Sarah Jenkins',
+    notes: 'Follow up after inventory audit for mobile app wireframes review.',
+    value: 15000
+  },
+  {
+    id: 3,
+    leadId: 4,
+    leadName: 'Amanda Vance',
+    company: 'Austin Tech Solutions',
+    phone: '+1 (512) 555-0171',
+    type: 'Quote Review',
+    status: 'Scheduled',
+    scheduledDate: '2026-11-11 11:30',
+    assignedTo: 'Sarah Jenkins',
+    notes: 'Review detailed cost breakdown and delivery timeline for client web portal.',
+    value: 22000
+  }
+];
