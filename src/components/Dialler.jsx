@@ -13,7 +13,9 @@ import {
   UserCheck,
   Send,
   History,
-  PhoneForwarded
+  PhoneForwarded,
+  MessageSquare,
+  Video
 } from 'lucide-react';
 
 export default function Dialler({
@@ -58,14 +60,25 @@ export default function Dialler({
     setIsCalling(true);
     setCallDuration(0);
 
-    // Trigger actual phone call using tel: protocol
-    // This opens the default calling app (Phone Link, Skype, Teams, FaceTime, etc.) on Windows/Mac/Mobile
-    const cleanPhone = activeLead.phone.replace(/[^+\d]/g, '');
+    // Trigger free device calling via tel: protocol (Windows Phone Link, FaceTime, Skype, mobile)
+    const cleanPhone = (activeLead.phone || '').replace(/[^+\d]/g, '');
     try {
       window.location.href = `tel:${cleanPhone}`;
     } catch (err) {
-      console.log('Tel URI invocation note:', err);
+      console.log('Device call protocol note:', err);
     }
+  };
+
+  const handleWhatsAppCall = () => {
+    if (!activeLead) return;
+    const cleanPhone = (activeLead.phone || '').replace(/[^\d]/g, '');
+    window.open(`https://wa.me/${cleanPhone}?text=Hello%20${encodeURIComponent(activeLead.name)},%20calling%20from%20OmniSales%20regarding%20IT%20Solutions.`, '_blank');
+  };
+
+  const handleSkypeCall = () => {
+    if (!activeLead) return;
+    const cleanPhone = (activeLead.phone || '').replace(/[^+\d]/g, '');
+    window.open(`skype:${cleanPhone}?call`, '_blank');
   };
 
   const handleEndCallClick = () => {
@@ -146,22 +159,21 @@ export default function Dialler({
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
-          <PhoneCall className="w-7 h-7 mr-2 text-indigo-600" />
-          The Dialler Sub-System
+          <PhoneCall className="w-7 h-7 mr-2 text-emerald-600" />
+          The Dialler Sub-System (100% Free Calling)
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Manual outbound calling interface. Click to initiate live device call (tel: protocol), track duration, and log outcomes.
+          Make free live calls using your device (Windows Phone Link, WhatsApp, Skype, or Mobile Carrier) with full call timer and outcome logging.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Lead Selector & Dialing Console */}
+        {/* Left Column: Lead Selector & Free Calling Console */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Active Dialing Console */}
           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 bg-indigo-50 dark:bg-indigo-950/50 px-4 py-2 rounded-bl-2xl border-l border-b border-indigo-100 dark:border-indigo-900 text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center">
-              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse mr-1.5"></span>
-              Manual Calling Mode
+            <div className="absolute top-0 right-0 bg-emerald-50 dark:bg-emerald-950/50 px-4 py-2 rounded-bl-2xl border-l border-b border-emerald-100 dark:border-emerald-900 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-1.5"></span>
+              100% Free Calling Mode
             </div>
 
             <div className="mb-6">
@@ -177,11 +189,15 @@ export default function Dialler({
                 }}
                 className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium dark:text-white disabled:opacity-50"
               >
-                {leads.map((lead) => (
-                  <option key={lead.id} value={lead.id}>
-                    {lead.name} — {lead.company} ({lead.country} • {lead.solution})
-                  </option>
-                ))}
+                {leads.length === 0 ? (
+                  <option value="">No leads available. Go to Leads Generator to add leads.</option>
+                ) : (
+                  leads.map((lead) => (
+                    <option key={lead.id} value={lead.id}>
+                      {lead.name} — {lead.company} ({lead.country} • {lead.solution})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -195,7 +211,7 @@ export default function Dialler({
                     </div>
                   </div>
                   <div className="text-left sm:text-right">
-                    <div className="text-xl font-mono font-bold text-blue-600 dark:text-blue-400">{activeLead.displayPhone || activeLead.phone}</div>
+                    <div className="text-xl font-mono font-bold text-emerald-600 dark:text-emerald-400">{activeLead.displayPhone || activeLead.phone}</div>
                     <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center sm:justify-end mt-0.5">
                       <Globe className="w-3 h-3 mr-1 text-blue-500" /> {activeLead.country} • {activeLead.region}
                     </div>
@@ -225,13 +241,13 @@ export default function Dialler({
               </div>
             )}
 
-            {/* Calling Action Controls & Timer */}
-            <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-800/40 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+            {/* Free Calling Options & Timer */}
+            <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-800/40 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
               {isCalling ? (
                 <div className="text-center space-y-4 w-full">
                   <div className="inline-flex items-center space-x-2 px-4 py-1.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full font-semibold text-sm animate-pulse">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                    <span>LIVE OUTBOUND CALL IN PROGRESS (Ringing device...)</span>
+                    <span>LIVE FREE CALL IN PROGRESS</span>
                   </div>
 
                   <div className="text-4xl font-mono font-bold tracking-wider text-slate-900 dark:text-white">
@@ -239,16 +255,23 @@ export default function Dialler({
                   </div>
 
                   <div className="flex flex-wrap justify-center gap-3">
-                    <a
-                      href={`tel:${activeLead?.phone}`}
-                      className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-sm transition-all inline-flex items-center space-x-2 shadow-md"
+                    <button
+                      onClick={handleStartCall}
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-xs transition-all inline-flex items-center space-x-1.5"
                     >
                       <PhoneForwarded className="w-4 h-4" />
-                      <span>Re-trigger Ring (tel:)</span>
-                    </a>
+                      <span>Re-dial Device (tel:)</span>
+                    </button>
+                    <button
+                      onClick={handleWhatsAppCall}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-xs transition-all inline-flex items-center space-x-1.5"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>WhatsApp Free Call</span>
+                    </button>
                     <button
                       onClick={handleEndCallClick}
-                      className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-lg shadow-red-600/30 transition-all flex items-center space-x-2"
+                      className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-lg shadow-red-600/30 transition-all flex items-center space-x-2 text-xs"
                     >
                       <PhoneOff className="w-4 h-4" />
                       <span>End Call & Log Outcome</span>
@@ -256,16 +279,37 @@ export default function Dialler({
                   </div>
                 </div>
               ) : (
-                <div className="text-center space-y-3">
-                  <p className="text-xs text-slate-500">Click below to initiate device outbound call (launches default phone app / tel: URI) and start timer.</p>
-                  <button
-                    onClick={handleStartCall}
-                    disabled={!activeLead}
-                    className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/30 transition-all flex items-center space-x-3 text-lg mx-auto"
-                  >
-                    <PhoneCall className="w-6 h-6" />
-                    <span>Start Outbound Call (Dial)</span>
-                  </button>
+                <div className="text-center space-y-4 w-full">
+                  <p className="text-xs text-slate-500">Choose your 100% free calling method to connect with {activeLead?.name || 'customer'}:</p>
+
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={handleStartCall}
+                      disabled={!activeLead}
+                      className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
+                    >
+                      <PhoneCall className="w-5 h-5" />
+                      <span>Device / Phone Link Call (Free)</span>
+                    </button>
+
+                    <button
+                      onClick={handleWhatsAppCall}
+                      disabled={!activeLead}
+                      className="px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
+                    >
+                      <MessageSquare className="w-5 h-5" />
+                      <span>WhatsApp Call (100% Free)</span>
+                    </button>
+
+                    <button
+                      onClick={handleSkypeCall}
+                      disabled={!activeLead}
+                      className="px-6 py-3.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
+                    >
+                      <Video className="w-5 h-5" />
+                      <span>Skype Call (Free)</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -276,13 +320,13 @@ export default function Dialler({
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center space-x-2 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className="w-5 h-5 text-emerald-600" />
               <h3 className="font-bold text-slate-900 dark:text-white">IT Solutions Pitch Script</h3>
             </div>
 
             <div className="space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-100 dark:border-blue-900/50">
-                <strong className="text-blue-700 dark:text-blue-300 block mb-1">1. Introduction & Hook</strong>
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
+                <strong className="text-emerald-700 dark:text-emerald-300 block mb-1">1. Introduction & Hook</strong>
                 "Hello {activeLead?.name || 'there'}, my name is {currentUser.name} with OmniSales IT Solutions. We specialize in empowering {activeLead?.country || 'North American'} businesses like {activeLead?.company || 'your company'} with high-performance {activeLead?.solution || 'websites and portals'}."
               </div>
 
@@ -299,7 +343,7 @@ export default function Dialler({
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 text-center">
-            <span className="text-xs text-slate-400">Manual dialing mode: You have full control over start/end.</span>
+            <span className="text-xs text-slate-400">100% Free calling via WhatsApp, Skype, and Windows Phone Link.</span>
           </div>
         </div>
       </div>
@@ -308,7 +352,7 @@ export default function Dialler({
       <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center">
-            <History className="w-5 h-5 mr-2 text-blue-600" />
+            <History className="w-5 h-5 mr-2 text-emerald-600" />
             Outbound Call Logs & History ({filteredLogs.length})
           </h3>
           <div className="relative">
@@ -381,9 +425,9 @@ export default function Dialler({
       {showOutcomeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
               <h3 className="text-lg font-bold">Call Completed</h3>
-              <p className="text-xs text-blue-100 mt-0.5">Select outcome and add notes for {activeLead?.name} ({activeLead?.company})</p>
+              <p className="text-xs text-emerald-100 mt-0.5">Select outcome and add notes for {activeLead?.name} ({activeLead?.company})</p>
             </div>
 
             <form onSubmit={handleSaveCallOutcome} className="p-6 space-y-4">
@@ -399,7 +443,7 @@ export default function Dialler({
                       onClick={() => setCallOutcome(outcome)}
                       className={`p-3 rounded-xl border text-xs font-semibold text-left transition-all ${
                         callOutcome === outcome
-                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 shadow-sm'
+                          ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 shadow-sm'
                           : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
                       }`}
                     >
@@ -431,7 +475,7 @@ export default function Dialler({
               <div className="flex justify-end space-x-3 pt-2">
                 <button
                   type="submit"
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center space-x-2"
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center space-x-2"
                 >
                   <Send className="w-4 h-4" />
                   <span>Save Call Log & Update Lead</span>
