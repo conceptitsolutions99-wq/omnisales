@@ -60,7 +60,7 @@ export default function Dialler({
     setIsCalling(true);
     setCallDuration(0);
 
-    // Trigger free device calling via tel: protocol (Windows Phone Link, FaceTime, Skype, mobile)
+    // Trigger free device calling via tel: protocol
     const cleanPhone = (activeLead.phone || '').replace(/[^+\d]/g, '');
     try {
       window.location.href = `tel:${cleanPhone}`;
@@ -147,12 +147,17 @@ export default function Dialler({
     setCallDuration(0);
   };
 
-  const filteredLogs = callLogs.filter(log =>
-    log.leadName.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
-    log.company.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
-    log.caller.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
-    log.outcome.toLowerCase().includes(callHistorySearch.toLowerCase())
-  );
+  // Role-based filtering for call logs: Admin sees all, employees see only their own calls
+  const filteredLogs = callLogs.filter(log => {
+    const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
+    const isUserCaller = log.caller === currentUser.name;
+    const matchesPermission = isAdmin || isUserCaller;
+    const matchesSearch = log.leadName.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
+                          log.company.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
+                          log.caller.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
+                          log.outcome.toLowerCase().includes(callHistorySearch.toLowerCase());
+    return matchesPermission && matchesSearch;
+  });
 
   return (
     <div className="space-y-6">

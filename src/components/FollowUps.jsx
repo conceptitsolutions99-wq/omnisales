@@ -8,10 +8,11 @@ import {
   Building2,
   Plus,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  Shield
 } from 'lucide-react';
 
-export default function FollowUps({ followups, setFollowups, leads }) {
+export default function FollowUps({ followups, setFollowups, leads, currentUser }) {
   const [filterStatus, setFilterStatus] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newFollowup, setNewFollowup] = useState({
@@ -19,7 +20,7 @@ export default function FollowUps({ followups, setFollowups, leads }) {
     type: 'Payment Transfer',
     status: 'Pending Transfer',
     scheduledDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
-    assignedTo: 'Michael Chang',
+    assignedTo: currentUser.name,
     notes: 'Awaiting wire transfer confirmation from client accounting.'
   });
 
@@ -43,18 +44,24 @@ export default function FollowUps({ followups, setFollowups, leads }) {
       leadId: selectedLead.id,
       leadName: selectedLead.name,
       company: selectedLead.company,
-      phone: selectedLead.phone,
+      phone: selectedLead.displayPhone || selectedLead.phone,
       value: selectedLead.value,
-      ...newFollowup
+      ...newFollowup,
+      assignedTo: currentUser.name
     };
 
     setFollowups([followupToAdd, ...followups]);
     setIsModalOpen(false);
   };
 
+  // Role-based filtering: Admin sees all, employees see only their own assigned follow-ups
   const filteredFollowups = followups.filter(f => {
-    if (filterStatus === 'All') return true;
-    return f.status === filterStatus;
+    const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
+    const isAssignedToUser = f.assignedTo === currentUser.name;
+    const matchesPermission = isAdmin || isAssignedToUser;
+    const matchesStatus = filterStatus === 'All' || f.status === filterStatus;
+
+    return matchesPermission && matchesStatus;
   });
 
   return (
@@ -64,10 +71,12 @@ export default function FollowUps({ followups, setFollowups, leads }) {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
             <Clock className="w-7 h-7 mr-2 text-amber-600" />
-            Customer Follow-up Sub-System
+            Customer Follow-up Queue ({currentUser.role === 'Admin' ? 'All Company Tasks' : 'My Assigned Tasks'})
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Track deals completed pending money wire transfers, scheduled customer callbacks, and quote reviews.
+            {currentUser.role === 'Admin'
+              ? 'Admin View: Viewing all company follow-ups, pending wire transfers, and scheduled callbacks across all agents.'
+              : `Personal View: Showing follow-ups assigned specifically to ${currentUser.name}.`}
           </p>
         </div>
 
@@ -83,7 +92,7 @@ export default function FollowUps({ followups, setFollowups, leads }) {
       {/* Filter Bar */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-          Filter Tasks ({filteredFollowups.length})
+          Tasks ({filteredFollowups.length})
         </span>
         <div className="flex items-center space-x-2">
           <select
@@ -103,7 +112,7 @@ export default function FollowUps({ followups, setFollowups, leads }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredFollowups.length === 0 ? (
           <div className="col-span-full text-center py-12 text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-            No follow-up tasks found for this filter.
+            No follow-up tasks found assigned to you.
           </div>
         ) : (
           filteredFollowups.map((item) => (
@@ -147,7 +156,7 @@ export default function FollowUps({ followups, setFollowups, leads }) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Assigned Agent:</span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{item.assignedTo}</span>
+                    <span className="font-medium text-blue-600 dark:text-blue-400">{item.assignedTo}</span>
                   </div>
                 </div>
 
@@ -179,7 +188,7 @@ export default function FollowUps({ followups, setFollowups, leads }) {
           <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-amber-600 to-orange-600 text-white">
               <h3 className="text-lg font-bold">Schedule Customer Follow-up</h3>
-              <p className="text-xs text-amber-100 mt-0.5">Create callback or money transfer tracking task</p>
+              <p className="text-xs text-amber-100 mt-0.5">Assign callback or money transfer task</p>
             </div>
 
             <form onSubmit={handleAddFollowup} className="p-6 space-y-4">

@@ -218,6 +218,7 @@ export default function App() {
             followups={followups}
             setFollowups={setFollowups}
             leads={leads}
+            currentUser={currentUser}
           />
         )}
 
