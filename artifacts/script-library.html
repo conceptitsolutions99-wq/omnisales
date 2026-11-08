@@ -1,0 +1,691 @@
+<title>Sales Script Library</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+
+<style>
+:root {
+  /* Layout: Searchable script library with categorized templates */
+  --bg: #ffffff;
+  --surface: #f8fafc;
+  --surface-raised: #ffffff;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-bg: #e0f2fe;
+  --success: #10b981;
+  --success-bg: #d1fae5;
+  --warning: #f59e0b;
+  --warning-bg: #fef3c7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-raised: #334155;
+    --border: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #64748b;
+    --accent: #38bdf8;
+    --accent-hover: #7dd3fc;
+    --accent-bg: #0c4a6e;
+    --success: #34d399;
+    --success-bg: #064e3b;
+    --warning: #fbbf24;
+    --warning-bg: #78350f;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-raised: #334155;
+  --border: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent: #38bdf8;
+  --accent-hover: #7dd3fc;
+  --accent-bg: #0c4a6e;
+  --success: #34d399;
+  --success-bg: #064e3b;
+  --warning: #fbbf24;
+  --warning-bg: #78350f;
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 32px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-wrap: balance;
+}
+
+.header p {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.search-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.filter-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  padding: 6px 12px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tag:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.scripts-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.script-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.script-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+.script-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.script-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.script-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.meta-badge {
+  padding: 4px 8px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.script-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 16px;
+}
+
+.icon-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.script-content {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.script-variables {
+  background: var(--warning-bg);
+  border-left: 3px solid var(--warning);
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.variables-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--warning);
+  margin-bottom: 8px;
+}
+
+.variables-list {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.script-tips {
+  background: var(--success-bg);
+  border-left: 3px solid var(--success);
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.tips-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--success);
+  margin-bottom: 8px;
+}
+
+.tips-list {
+  font-size: 13px;
+  color: var(--text-secondary);
+  list-style-position: inside;
+}
+
+.copy-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--success);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.3s;
+  pointer-events: none;
+}
+
+.copy-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.no-results {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+  .script-header {
+    flex-direction: column;
+  }
+
+  .search-bar {
+    flex-direction: column;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+}
+</style>
+
+<div class="container">
+  <div class="header">
+    <h1>📚 Sales Script Library</h1>
+    <p>Proven call scripts and templates for IT solutions sales - customizable for your conversations</p>
+  </div>
+
+  <div class="search-bar">
+    <input
+      type="text"
+      class="search-input"
+      placeholder="Search scripts by keyword..."
+      id="searchInput"
+      oninput="filterScripts()"
+    />
+    <div class="filter-tags">
+      <button class="tag active" data-category="all" onclick="filterByCategory(this, 'all')">All</button>
+      <button class="tag" data-category="cold-call" onclick="filterByCategory(this, 'cold-call')">Cold Call</button>
+      <button class="tag" data-category="follow-up" onclick="filterByCategory(this, 'follow-up')">Follow-up</button>
+      <button class="tag" data-category="objection" onclick="filterByCategory(this, 'objection')">Objections</button>
+      <button class="tag" data-category="closing" onclick="filterByCategory(this, 'closing')">Closing</button>
+    </div>
+  </div>
+
+  <div class="scripts-grid" id="scriptsGrid">
+    <!-- Scripts will be populated by JavaScript -->
+  </div>
+
+  <div class="no-results" id="noResults" style="display: none;">
+    <p>No scripts found matching your search.</p>
+  </div>
+</div>
+
+<div class="copy-toast" id="copyToast">✓ Script copied to clipboard!</div>
+
+<script>
+const scripts = [
+  {
+    id: 1,
+    title: 'Website Development Cold Call Opening',
+    category: 'cold-call',
+    solution: 'Website',
+    script: `Hi [Name], this is [Your Name] from Concept IT Solutions.
+
+I help [business type] companies in [Canada/USA] increase their online visibility and customer engagement through custom websites.
+
+I noticed [Company Name] is in the [industry] space, and I thought you might be interested in how we helped [similar company] increase their online conversions by 40% with a redesigned website.
+
+Do you have 2 minutes to discuss how a modern, mobile-friendly website could benefit your business?`,
+    variables: '[Name], [Your Name], [business type], [Canada/USA], [Company Name], [industry], [similar company]',
+    tips: ['Research the company website beforehand', 'Mention specific pain points you noticed', 'Have a relevant case study ready']
+  },
+  {
+    id: 2,
+    title: 'Web Portal Solution Introduction',
+    category: 'cold-call',
+    solution: 'Web Portal',
+    script: `Hi [Name], [Your Name] here from Concept IT Solutions.
+
+We specialize in building custom web portals for [industry] companies to streamline operations and improve customer experience.
+
+For example, we recently built a client portal for [company] that reduced their support tickets by 50% and improved customer satisfaction scores.
+
+I'm calling because I thought [Company Name] might benefit from a similar solution for [specific use case: order tracking / client management / inventory visibility].
+
+Would you be interested in a brief 15-minute call next week to explore this?`,
+    variables: '[Name], [Your Name], [industry], [company], [Company Name], [specific use case]',
+    tips: ['Identify their operational pain point first', 'Quantify the benefit (time saved, cost reduced)', 'Offer a specific calendar slot']
+  },
+  {
+    id: 3,
+    title: 'Mobile App Value Proposition',
+    category: 'cold-call',
+    solution: 'Mobile App',
+    script: `Hi [Name], this is [Your Name] calling from Concept IT Solutions.
+
+We develop native mobile apps for iOS and Android that help businesses like yours engage customers directly on their phones.
+
+I saw that [Company Name] has a strong [web presence / physical presence], and I think a mobile app could really amplify that by [specific benefit: loyalty program / ordering / booking / field operations].
+
+Companies in your space that added a mobile app saw an average 30% increase in customer engagement.
+
+Would you be open to a quick conversation about what a mobile app could do for [Company Name]?`,
+    variables: '[Name], [Your Name], [Company Name], [web presence / physical presence], [specific benefit]',
+    tips: ['Know their industry mobile trends', 'Mention competitor mobile strategies', 'Focus on customer convenience, not technology']
+  },
+  {
+    id: 4,
+    title: 'Follow-up After Proposal Sent',
+    category: 'follow-up',
+    solution: 'All',
+    script: `Hi [Name], it's [Your Name] from Concept IT Solutions.
+
+I wanted to follow up on the proposal I sent over on [date] for the [Website/Web Portal/Mobile App] project.
+
+I know you're busy, so I wanted to quickly check:
+
+1. Did you have a chance to review the proposal?
+2. Do you have any questions about our approach or timeline?
+3. Is there anything else you need from me to move forward?
+
+I'm here to help clarify anything and make this decision as easy as possible for you.`,
+    variables: '[Name], [Your Name], [date], [Website/Web Portal/Mobile App]',
+    tips: ['Call 3-4 business days after sending proposal', 'Be ready to walk through proposal highlights', 'Offer to schedule a review call']
+  },
+  {
+    id: 5,
+    title: 'Follow-up After "Call Me Back" Response',
+    category: 'follow-up',
+    solution: 'All',
+    script: `Hi [Name], [Your Name] from Concept IT Solutions here.
+
+You asked me to give you a call back today regarding [the website project / the web portal discussion / the mobile app opportunity].
+
+I wanted to circle back and see if now is a good time, or if there's a better time this week that works for your schedule?
+
+[If yes] Great! So when we last spoke, you mentioned [pain point / interest]. Have you had any more thoughts on that?`,
+    variables: '[Name], [Your Name], [the website project / the web portal discussion / the mobile app opportunity], [pain point / interest]',
+    tips: ['Reference your last conversation specifically', 'Be flexible with timing', 'Have your notes from the last call ready']
+  },
+  {
+    id: 6,
+    title: 'Handling "We Already Have a Website" Objection',
+    category: 'objection',
+    solution: 'Website',
+    script: `That's great that you already have a website! Many of our best clients had websites before working with us.
+
+The question I'd ask is: Is your current website generating the leads and sales you want?
+
+Most businesses we talk to find that their website is:
+- Not mobile-friendly (60% of traffic is mobile now)
+- Not optimized for search engines
+- Missing modern features like live chat or online booking
+- Built on outdated technology that's hard to update
+
+When was your site last updated? And more importantly, is it delivering the results you need for your business?`,
+    variables: 'None',
+    tips: ['Don't criticize their current site directly', 'Focus on results, not technology', 'Ask when it was last updated']
+  },
+  {
+    id: 7,
+    title: 'Handling "It\'s Too Expensive" Objection',
+    category: 'objection',
+    solution: 'All',
+    script: `I completely understand budget is a concern. Let me reframe this for you:
+
+Think of this as an investment, not an expense. Most of our clients see ROI within 6-12 months.
+
+For example, if this [website/portal/app] brings in just [2-3 additional clients per month / saves 10 hours of staff time per week / increases repeat purchases by 15%], it pays for itself.
+
+We also offer flexible payment terms - we can structure this as [monthly payments over 12 months / milestone-based payments / phased approach].
+
+Would it help if I showed you how past clients justified the investment?`,
+    variables: '[website/portal/app], [2-3 additional clients per month / saves 10 hours of staff time per week / increases repeat purchases by 15%], [monthly payments over 12 months / milestone-based payments / phased approach]',
+    tips: ['Calculate ROI specific to their business', 'Offer payment flexibility', 'Share a relevant case study']
+  },
+  {
+    id: 8,
+    title: 'Handling "Send Me Some Information" Stall',
+    category: 'objection',
+    solution: 'All',
+    script: `Absolutely, I'd be happy to send you information.
+
+But I want to make sure I send you the MOST relevant information for your specific needs, not just generic brochures.
+
+Can I ask you just 2-3 quick questions so I can tailor what I send?
+
+1. What's the main challenge you're trying to solve? [Listen]
+2. What's your timeline for making a decision on this? [Listen]
+3. Are you the primary decision-maker, or will others be involved? [Listen]
+
+Perfect! Based on what you've told me, I'll send over [specific case study / custom proposal / pricing options] by [specific time].
+
+Can we schedule a 15-minute follow-up call for [specific date] to discuss what I send?`,
+    variables: '[specific case study / custom proposal / pricing options], [specific time], [specific date]',
+    tips: ['Always qualify before sending materials', 'Set a specific follow-up time', 'Send customized materials, not generic PDFs']
+  },
+  {
+    id: 9,
+    title: 'Assumptive Close Technique',
+    category: 'closing',
+    solution: 'All',
+    script: `Based on everything we've discussed, it sounds like this [website/portal/app] is exactly what you need.
+
+Here's what happens next:
+
+I'll send over the agreement today with the scope we discussed. Once you sign, we'll schedule our kickoff meeting for [next week / specific date].
+
+Our development team has availability starting [timeframe], which means we can have you live by [completion date].
+
+Should I send the agreement to this email address, or is there a better one?
+
+And just to confirm - would you prefer to start with [Option A] or [Option B] that we discussed?`,
+    variables: '[website/portal/app], [next week / specific date], [timeframe], [completion date], [Option A], [Option B]',
+    tips: ['Assume the sale is happening', 'Give specific next steps', 'Offer a minor choice, not yes/no']
+  },
+  {
+    id: 10,
+    title: 'Urgency Close Technique',
+    category: 'closing',
+    solution: 'All',
+    script: `I'm excited that this solution is a good fit for [Company Name].
+
+I should mention - our development team currently has availability in our [November/current month] queue. If we get started this week, we can have you live by [specific date].
+
+However, if we push this to next month, it would push your launch date to [later date], which means you'd miss [seasonal opportunity / campaign / deadline].
+
+I'd hate for you to miss that window. Can I send over the agreement today so we can reserve that spot for you?`,
+    variables: '[Company Name], [November/current month], [specific date], [later date], [seasonal opportunity / campaign / deadline]',
+    tips: ['Only use genuine urgency, never fabricate', 'Tie urgency to their business need', 'Offer to expedite paperwork']
+  },
+  {
+    id: 11,
+    title: 'Summary Close Technique',
+    category: 'closing',
+    solution: 'All',
+    script: `Let me make sure I have everything correct:
+
+You need a [Website/Web Portal/Mobile App] that:
+- [Feature 1 they requested]
+- [Feature 2 they requested]
+- [Feature 3 they requested]
+
+The investment is [$ amount] with [payment terms].
+
+Timeline is [X weeks/months] from kickoff to launch.
+
+And you mentioned wanting to launch by [their target date].
+
+Did I capture everything correctly?
+
+[Yes] Perfect! Let's move forward. I'll have the agreement over to you by [time] today.`,
+    variables: '[Website/Web Portal/Mobile App], [Feature 1-3 they requested], [$ amount], [payment terms], [X weeks/months], [their target date], [time]',
+    tips: ['Summarize their own words back to them', 'Confirm every detail', 'Make next step specific and immediate']
+  },
+  {
+    id: 12,
+    title: 'Voicemail Script That Gets Callbacks',
+    category: 'cold-call',
+    solution: 'All',
+    script: `Hi [Name], this is [Your Name] from Concept IT Solutions calling at [time].
+
+I wanted to reach out because we recently helped [similar company] in [their industry] [achieve specific result] with [our solution type].
+
+I thought you might be interested in hearing how we did it.
+
+My direct number is [your number]. That's [your number repeated slowly].
+
+I'll also try you again [tomorrow morning / specific time].
+
+Looking forward to connecting, [Name].`,
+    variables: '[Name], [Your Name], [time], [similar company], [their industry], [achieve specific result], [our solution type], [your number], [tomorrow morning / specific time]',
+    tips: ['Keep it under 30 seconds', 'Give a specific reason to call back', 'Repeat your number clearly and slowly']
+  }
+];
+
+let currentCategory = 'all';
+
+function renderScripts() {
+  const grid = document.getElementById('scriptsGrid');
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+  const noResults = document.getElementById('noResults');
+
+  let filtered = scripts.filter(script => {
+    const matchesCategory = currentCategory === 'all' || script.category === currentCategory;
+    const matchesSearch = searchTerm === '' ||
+                         script.title.toLowerCase().includes(searchTerm) ||
+                         script.script.toLowerCase().includes(searchTerm) ||
+                         script.solution.toLowerCase().includes(searchTerm);
+    return matchesCategory && matchesSearch;
+  });
+
+  if (filtered.length === 0) {
+    grid.style.display = 'none';
+    noResults.style.display = 'block';
+  } else {
+    grid.style.display = 'grid';
+    noResults.style.display = 'none';
+  }
+
+  grid.innerHTML = filtered.map(script => `
+    <div class="script-card">
+      <div class="script-header">
+        <div>
+          <div class="script-title">${script.title}</div>
+          <div class="script-meta">
+            <span class="meta-badge">${script.category.replace('-', ' ').toUpperCase()}</span>
+            <span class="meta-badge">${script.solution}</span>
+          </div>
+        </div>
+        <div class="script-actions">
+          <button class="icon-btn" onclick="copyScript(${script.id})" title="Copy to clipboard">📋</button>
+        </div>
+      </div>
+
+      <div class="script-content">${script.script}</div>
+
+      ${script.variables ? `
+      <div class="script-variables">
+        <div class="variables-title">⚙️ Variables to Customize</div>
+        <div class="variables-list">${script.variables}</div>
+      </div>
+      ` : ''}
+
+      ${script.tips ? `
+      <div class="script-tips">
+        <div class="tips-title">💡 Pro Tips</div>
+        <ul class="tips-list">
+          ${script.tips.map(tip => `<li>${tip}</li>`).join('')}
+        </ul>
+      </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function filterByCategory(btn, category) {
+  document.querySelectorAll('.tag').forEach(tag => tag.classList.remove('active'));
+  btn.classList.add('active');
+  currentCategory = category;
+  renderScripts();
+}
+
+function filterScripts() {
+  renderScripts();
+}
+
+function copyScript(scriptId) {
+  const script = scripts.find(s => s.id === scriptId);
+  const text = script.script;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast();
+    }).catch(() => {
+      // Fallback: select the text
+      selectText(text);
+    });
+  } else {
+    selectText(text);
+  }
+}
+
+function selectText(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    showToast();
+  } catch (e) {
+    alert('Could not copy script. Please select and copy manually.');
+  }
+  document.body.removeChild(textarea);
+}
+
+function showToast() {
+  const toast = document.getElementById('copyToast');
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2000);
+}
+
+// Initial render
+renderScripts();
+</script>

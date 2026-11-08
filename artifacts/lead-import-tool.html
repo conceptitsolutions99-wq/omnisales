@@ -1,0 +1,771 @@
+<title>Lead Import Tool</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+
+<style>
+:root {
+  /* Layout: CSV import wizard with validation preview */
+  --bg: #ffffff;
+  --surface: #f8fafc;
+  --surface-raised: #ffffff;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent: #10b981;
+  --accent-hover: #059669;
+  --accent-bg: #d1fae5;
+  --success: #10b981;
+  --success-bg: #d1fae5;
+  --error: #ef4444;
+  --error-bg: #fee2e2;
+  --warning: #f59e0b;
+  --warning-bg: #fef3c7;
+  --info: #3b82f6;
+  --info-bg: #dbeafe;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-raised: #334155;
+    --border: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #64748b;
+    --accent: #34d399;
+    --accent-hover: #6ee7b7;
+    --accent-bg: #064e3b;
+    --success: #34d399;
+    --success-bg: #064e3b;
+    --error: #f87171;
+    --error-bg: #7f1d1d;
+    --warning: #fbbf24;
+    --warning-bg: #78350f;
+    --info: #60a5fa;
+    --info-bg: #1e3a8a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-raised: #334155;
+  --border: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent: #34d399;
+  --accent-hover: #6ee7b7;
+  --accent-bg: #064e3b;
+  --success: #34d399;
+  --success-bg: #064e3b;
+  --error: #f87171;
+  --error-bg: #7f1d1d;
+  --warning: #fbbf24;
+  --warning-bg: #78350f;
+  --info: #60a5fa;
+  --info-bg: #1e3a8a;
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-wrap: balance;
+}
+
+.header p {
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.step-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.step.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.step.completed {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.step-number {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.step.active .step-number {
+  background: var(--accent);
+  color: white;
+}
+
+.step.completed .step-number::before {
+  content: '✓';
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 60px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.upload-zone:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.upload-zone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  transform: scale(1.02);
+}
+
+.upload-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.upload-text {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.upload-hint {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.file-input {
+  display: none;
+}
+
+.info-box {
+  background: var(--info-bg);
+  border-left: 3px solid var(--info);
+  padding: 16px;
+  border-radius: 6px;
+  margin-top: 24px;
+}
+
+.info-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--info);
+  margin-bottom: 8px;
+}
+
+.info-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  overflow-x: auto;
+  display: block;
+}
+
+.preview-table table {
+  width: 100%;
+  min-width: 600px;
+}
+
+.preview-table th {
+  background: var(--surface-raised);
+  padding: 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+}
+
+.preview-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.preview-table tr:hover {
+  background: var(--surface-raised);
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-valid {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.status-error {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.status-warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.validation-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.summary-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.summary-value {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.error-list {
+  background: var(--error-bg);
+  border-left: 3px solid var(--error);
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.error-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--error);
+  margin-bottom: 12px;
+}
+
+.error-item {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.error-item:last-child {
+  border-bottom: none;
+}
+
+.success-screen {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.success-icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+  animation: bounce 1s;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+.success-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.success-text {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+}
+
+@media (max-width: 768px) {
+  .step-indicator {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .validation-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
+</style>
+
+<div class="container">
+  <div class="header">
+    <h1>📥 Lead Import Tool</h1>
+    <p>Bulk import business leads from CSV with automatic validation and preview</p>
+  </div>
+
+  <div class="step-indicator">
+    <div class="step active" id="step1">
+      <div class="step-number">1</div>
+      <span>Upload CSV</span>
+    </div>
+    <div class="step" id="step2">
+      <div class="step-number">2</div>
+      <span>Review & Validate</span>
+    </div>
+    <div class="step" id="step3">
+      <div class="step-number">3</div>
+      <span>Import Complete</span>
+    </div>
+  </div>
+
+  <div id="uploadSection" class="card">
+    <div class="upload-zone" onclick="document.getElementById('fileInput').click()"
+         ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+      <div class="upload-icon">📄</div>
+      <div class="upload-text">Drop your CSV file here or click to browse</div>
+      <div class="upload-hint">Supports .csv files up to 10MB</div>
+    </div>
+    <input type="file" id="fileInput" class="file-input" accept=".csv" onchange="handleFileSelect(event)" />
+
+    <div class="info-box">
+      <div class="info-title">📋 Required CSV Columns</div>
+      <div class="info-text">
+        <strong>Required:</strong> Name, Company, Phone<br>
+        <strong>Optional:</strong> Email, Country (Canada/USA), Region, Size (Small/Medium/Large), Solution (Website/Web Portal/Mobile App), Value, Notes
+      </div>
+    </div>
+  </div>
+
+  <div id="validationSection" class="card" style="display: none;">
+    <h2 style="margin-bottom: 24px; font-size: 20px;">Review Imported Leads</h2>
+
+    <div class="validation-summary">
+      <div class="summary-card">
+        <div class="summary-value" id="totalLeads">0</div>
+        <div class="summary-label">Total Leads</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value" style="color: var(--success);" id="validLeads">0</div>
+        <div class="summary-label">Valid</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value" style="color: var(--error);" id="errorLeads">0</div>
+        <div class="summary-label">Errors</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value" style="color: var(--warning);" id="warningLeads">0</div>
+        <div class="summary-label">Warnings</div>
+      </div>
+    </div>
+
+    <div id="errorContainer" style="display: none;"></div>
+
+    <div class="preview-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Name</th>
+            <th>Company</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Country</th>
+            <th>Solution</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody id="previewBody">
+          <!-- Rows will be populated by JavaScript -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="resetImport()">Cancel & Start Over</button>
+      <button class="btn btn-primary" onclick="confirmImport()">Import Valid Leads</button>
+    </div>
+  </div>
+
+  <div id="successSection" class="card" style="display: none;">
+    <div class="success-screen">
+      <div class="success-icon">✅</div>
+      <div class="success-title">Import Successful!</div>
+      <div class="success-text">
+        <span id="importedCount">0</span> leads have been successfully imported to your OmniSales system.
+      </div>
+      <button class="btn btn-primary" onclick="downloadJSON()">Download JSON</button>
+      <button class="btn btn-secondary" onclick="resetImport()" style="margin-left: 12px;">Import More Leads</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let parsedLeads = [];
+let validatedLeads = [];
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('dragover');
+}
+
+function handleDragLeave(e) {
+  e.currentTarget.classList.remove('dragover');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.csv')) {
+    processFile(file);
+  } else {
+    alert('Please upload a valid CSV file.');
+  }
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) {
+    processFile(file);
+  }
+}
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    parseCSV(text);
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.split('\n').filter(line => line.trim());
+  if (lines.length < 2) {
+    alert('CSV file must contain headers and at least one data row.');
+    return;
+  }
+
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  parsedLeads = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',').map(v => v.trim());
+    const lead = {};
+    headers.forEach((header, index) => {
+      lead[header] = values[index] || '';
+    });
+    parsedLeads.push(lead);
+  }
+
+  validateLeads();
+  showValidation();
+}
+
+function validateLeads() {
+  validatedLeads = parsedLeads.map((lead, index) => {
+    const errors = [];
+    const warnings = [];
+
+    // Required fields
+    if (!lead.name) errors.push('Name is required');
+    if (!lead.company) errors.push('Company is required');
+    if (!lead.phone) errors.push('Phone is required');
+
+    // Phone validation
+    if (lead.phone && !/[\d+\-() ]+/.test(lead.phone)) {
+      errors.push('Invalid phone format');
+    }
+
+    // Email validation
+    if (lead.email && !lead.email.includes('@')) {
+      warnings.push('Invalid email format');
+    }
+
+    // Country validation
+    if (lead.country && !['canada', 'usa', 'united states'].includes(lead.country.toLowerCase())) {
+      warnings.push('Country should be Canada or USA');
+    }
+
+    // Size validation
+    if (lead.size && !['small', 'medium', 'large'].includes(lead.size.toLowerCase())) {
+      warnings.push('Size should be Small, Medium, or Large');
+    }
+
+    // Solution validation
+    const validSolutions = ['website', 'web portal', 'mobile app'];
+    if (lead.solution && !validSolutions.some(s => lead.solution.toLowerCase().includes(s.toLowerCase()))) {
+      warnings.push('Solution should be Website, Web Portal, or Mobile App');
+    }
+
+    return {
+      ...lead,
+      row: index + 2,
+      errors,
+      warnings,
+      status: errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'valid'
+    };
+  });
+}
+
+function showValidation() {
+  document.getElementById('uploadSection').style.display = 'none';
+  document.getElementById('validationSection').style.display = 'block';
+  document.getElementById('step1').classList.remove('active');
+  document.getElementById('step1').classList.add('completed');
+  document.getElementById('step2').classList.add('active');
+
+  const total = validatedLeads.length;
+  const valid = validatedLeads.filter(l => l.status === 'valid').length;
+  const errors = validatedLeads.filter(l => l.status === 'error').length;
+  const warnings = validatedLeads.filter(l => l.status === 'warning').length;
+
+  document.getElementById('totalLeads').textContent = total;
+  document.getElementById('validLeads').textContent = valid;
+  document.getElementById('errorLeads').textContent = errors;
+  document.getElementById('warningLeads').textContent = warnings;
+
+  // Show error summary if there are errors
+  if (errors > 0) {
+    const errorContainer = document.getElementById('errorContainer');
+    const allErrors = validatedLeads.filter(l => l.errors.length > 0);
+    errorContainer.innerHTML = `
+      <div class="error-list">
+        <div class="error-title">⚠️ ${errors} Lead(s) Have Errors</div>
+        ${allErrors.map(lead => `
+          <div class="error-item">
+            <strong>Row ${lead.row}:</strong> ${lead.errors.join(', ')}
+          </div>
+        `).join('')}
+      </div>
+    `;
+    errorContainer.style.display = 'block';
+  }
+
+  // Populate preview table
+  const tbody = document.getElementById('previewBody');
+  tbody.innerHTML = validatedLeads.map(lead => `
+    <tr>
+      <td><span class="status-badge status-${lead.status}">${lead.status}</span></td>
+      <td>${lead.name || '-'}</td>
+      <td>${lead.company || '-'}</td>
+      <td>${lead.phone || '-'}</td>
+      <td>${lead.email || '-'}</td>
+      <td>${lead.country || '-'}</td>
+      <td>${lead.solution || '-'}</td>
+      <td>${lead.value ? '$' + Number(lead.value).toLocaleString() : '-'}</td>
+    </tr>
+  `).join('');
+}
+
+function confirmImport() {
+  const validLeads = validatedLeads.filter(l => l.status !== 'error');
+
+  if (validLeads.length === 0) {
+    alert('No valid leads to import. Please fix errors and try again.');
+    return;
+  }
+
+  // Prepare leads for OmniSales format
+  const omnisalesLeads = validLeads.map((lead, index) => ({
+    id: Date.now() + index,
+    name: lead.name,
+    company: lead.company,
+    phone: lead.phone.replace(/[^+\d]/g, ''),
+    displayPhone: lead.phone,
+    email: lead.email || '',
+    country: lead.country || 'Canada',
+    region: lead.region || '',
+    size: lead.size || 'Medium',
+    solution: lead.solution || 'Website',
+    status: 'New',
+    value: Number(lead.value) || 15000,
+    notes: lead.notes || 'Imported from CSV',
+    createdAt: new Date().toISOString().split('T')[0]
+  }));
+
+  // Store in localStorage for OmniSales to pick up
+  try {
+    const existing = localStorage.getItem('omnisales_leads');
+    const existingLeads = existing ? JSON.parse(existing) : [];
+    localStorage.setItem('omnisales_leads', JSON.stringify([...omnisalesLeads, ...existingLeads]));
+    localStorage.setItem('omnisales_import_json', JSON.stringify(omnisalesLeads));
+  } catch (e) {
+    console.error('Could not save to localStorage:', e);
+  }
+
+  document.getElementById('validationSection').style.display = 'none';
+  document.getElementById('successSection').style.display = 'block';
+  document.getElementById('step2').classList.remove('active');
+  document.getElementById('step2').classList.add('completed');
+  document.getElementById('step3').classList.add('active');
+  document.getElementById('step3').classList.add('completed');
+  document.getElementById('importedCount').textContent = omnisalesLeads.length;
+}
+
+function downloadJSON() {
+  try {
+    const json = localStorage.getItem('omnisales_import_json');
+    if (!json) {
+      alert('No imported data found.');
+      return;
+    }
+
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `omnisales-leads-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Could not download JSON. Here is the data:\n\n' + localStorage.getItem('omnisales_import_json'));
+  }
+}
+
+function resetImport() {
+  parsedLeads = [];
+  validatedLeads = [];
+  document.getElementById('fileInput').value = '';
+  document.getElementById('uploadSection').style.display = 'block';
+  document.getElementById('validationSection').style.display = 'none';
+  document.getElementById('successSection').style.display = 'none';
+  document.getElementById('step1').classList.add('active');
+  document.getElementById('step1').classList.remove('completed');
+  document.getElementById('step2').classList.remove('active');
+  document.getElementById('step2').classList.remove('completed');
+  document.getElementById('step3').classList.remove('active');
+  document.getElementById('step3').classList.remove('completed');
+}
+</script>

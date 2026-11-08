@@ -1,0 +1,772 @@
+<title>Sales Training Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+
+<style>
+:root {
+  /* Layout: Progressive training modules with interactive examples */
+  --bg: #ffffff;
+  --surface: #f8fafc;
+  --surface-raised: #ffffff;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-bg: #eef2ff;
+  --success: #10b981;
+  --success-bg: #d1fae5;
+  --info: #3b82f6;
+  --info-bg: #dbeafe;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-raised: #334155;
+    --border: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #64748b;
+    --accent: #818cf8;
+    --accent-hover: #a5b4fc;
+    --accent-bg: #312e81;
+    --success: #34d399;
+    --success-bg: #064e3b;
+    --info: #60a5fa;
+    --info-bg: #1e3a8a;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-raised: #334155;
+  --border: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent: #818cf8;
+  --accent-hover: #a5b4fc;
+  --accent-bg: #312e81;
+  --success: #34d399;
+  --success-bg: #064e3b;
+  --info: #60a5fa;
+  --info-bg: #1e3a8a;
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-wrap: balance;
+}
+
+.header p {
+  font-size: 16px;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.progress-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 32px;
+}
+
+.progress-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.progress-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.module {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.module-header {
+  padding: 20px 24px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.module-header:hover {
+  background: var(--surface-raised);
+}
+
+.module-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.module-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.module-name {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.module-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.module-content {
+  padding: 0 24px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s, padding 0.3s;
+}
+
+.module.active .module-content {
+  max-height: 2000px;
+  padding: 0 24px 24px;
+}
+
+.module.active .module-status {
+  transform: rotate(180deg);
+}
+
+.lesson {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.lesson:last-child {
+  margin-bottom: 0;
+}
+
+.lesson h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.lesson p {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.example {
+  background: var(--info-bg);
+  border-left: 3px solid var(--info);
+  padding: 16px;
+  border-radius: 6px;
+  margin: 16px 0;
+}
+
+.example-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--info);
+  margin-bottom: 8px;
+}
+
+.example-text {
+  color: var(--text-primary);
+  font-style: italic;
+}
+
+.tip {
+  background: var(--success-bg);
+  border-left: 3px solid var(--success);
+  padding: 16px;
+  border-radius: 6px;
+  margin: 16px 0;
+}
+
+.tip-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--success);
+  margin-bottom: 8px;
+}
+
+.checklist {
+  list-style: none;
+  padding: 0;
+}
+
+.checklist li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: start;
+  gap: 12px;
+}
+
+.checklist li:last-child {
+  border-bottom: none;
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.checkbox.checked::after {
+  content: '✓';
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.complete-btn {
+  width: 100%;
+  padding: 12px 24px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 16px;
+}
+
+.complete-btn:hover {
+  background: var(--accent-hover);
+}
+
+.complete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .header h1 {
+    font-size: 26px;
+  }
+
+  .module-header {
+    padding: 16px;
+  }
+
+  .module.active .module-content {
+    padding: 0 16px 16px;
+  }
+}
+</style>
+
+<div class="container">
+  <div class="header">
+    <h1>🎓 OmniSales Agent Training Guide</h1>
+    <p>Complete interactive training program for new sales agents selling IT solutions (Websites, Web Portals, Mobile Apps) to Canada & USA businesses</p>
+  </div>
+
+  <div class="progress-bar">
+    <div class="progress-label">
+      <span>YOUR PROGRESS</span>
+      <span id="progressText">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+  </div>
+
+  <div class="module active">
+    <div class="module-header" onclick="toggleModule(this)">
+      <div class="module-title">
+        <div class="module-number">1</div>
+        <div class="module-name">Getting Started with OmniSales</div>
+      </div>
+      <div class="module-status">▼</div>
+    </div>
+    <div class="module-content">
+      <div class="lesson">
+        <h3>Understanding the OmniSales Platform</h3>
+        <p>OmniSales is your complete outbound sales system targeting Canadian and USA businesses for IT solutions:</p>
+        <ul class="checklist">
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Dashboard:</strong> View your personal metrics, call logs, and pipeline value</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Leads Generator:</strong> Access and filter business leads by country, size, and solution type</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>The Dialler:</strong> Make calls via tel: protocol (Phone Link, Skype, WhatsApp) with real-time logging</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Analytics:</strong> Track your conversion rate and call outcomes</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Follow-ups:</strong> Manage callbacks and payment transfer confirmations</span>
+          </li>
+        </ul>
+        <div class="tip">
+          <div class="tip-label">💡 Pro Tip</div>
+          <div>You only see YOUR OWN data as a sales agent. Admin users see company-wide metrics.</div>
+        </div>
+      </div>
+
+      <div class="lesson">
+        <h3>Your First Login & Setup</h3>
+        <p>When you log in for the first time, familiarize yourself with these key areas:</p>
+        <ul class="checklist">
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Check your user role and permissions in the top navigation bar</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Review the Dashboard to understand your current pipeline</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Test your calling setup (WhatsApp, Skype, or Phone Link)</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Set your preferred theme (light/dark mode)</span>
+          </li>
+        </ul>
+      </div>
+
+      <button class="complete-btn" onclick="completeModule(this)">Complete Module 1</button>
+    </div>
+  </div>
+
+  <div class="module">
+    <div class="module-header" onclick="toggleModule(this)">
+      <div class="module-title">
+        <div class="module-number">2</div>
+        <div class="module-name">IT Solutions Knowledge</div>
+      </div>
+      <div class="module-status">▼</div>
+    </div>
+    <div class="module-content">
+      <div class="lesson">
+        <h3>Three Core IT Solutions We Sell</h3>
+        <p><strong>1. Custom Websites & E-Commerce ($10K-$25K)</strong></p>
+        <p>High-converting corporate websites and online stores for small to medium businesses.</p>
+        <div class="example">
+          <div class="example-label">Pitch Example</div>
+          <div class="example-text">"We build custom websites that convert visitors into customers. Unlike template builders, our sites are tailored to your brand and optimized for search engines. Most clients see ROI within 6 months."</div>
+        </div>
+
+        <p><strong>2. Web Portals & Dashboards ($25K-$50K)</strong></p>
+        <p>Custom client portals, logistics trackers, and secure enterprise software for medium to large businesses.</p>
+        <div class="example">
+          <div class="example-label">Pitch Example</div>
+          <div class="example-text">"Imagine your customers tracking their orders in real-time through a branded portal. We build custom web applications that streamline your operations and improve customer satisfaction."</div>
+        </div>
+
+        <p><strong>3. Mobile Applications ($40K-$80K)</strong></p>
+        <p>Native iOS and Android apps for customer engagement and operational efficiency.</p>
+        <div class="example">
+          <div class="example-label">Pitch Example</div>
+          <div class="example-text">"Put your business in your customers' pockets. We develop native mobile apps that work seamlessly on iPhone and Android, perfect for loyalty programs, delivery tracking, or field operations."</div>
+        </div>
+      </div>
+
+      <div class="lesson">
+        <h3>Qualifying Questions</h3>
+        <ul class="checklist">
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>"What's your current website situation?" (identifies pain point)</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>"How are you currently managing [operations/customers/orders]?" (uncovers needs)</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>"What's your timeline for this project?" (gauges urgency)</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>"What's your budget range for this investment?" (qualifies financially)</span>
+          </li>
+        </ul>
+      </div>
+
+      <button class="complete-btn" onclick="completeModule(this)">Complete Module 2</button>
+    </div>
+  </div>
+
+  <div class="module">
+    <div class="module-header" onclick="toggleModule(this)">
+      <div class="module-title">
+        <div class="module-number">3</div>
+        <div class="module-name">Making Effective Calls</div>
+      </div>
+      <div class="module-status">▼</div>
+    </div>
+    <div class="module-content">
+      <div class="lesson">
+        <h3>The Perfect Cold Call Structure</h3>
+        <p><strong>Introduction (15 seconds):</strong></p>
+        <div class="example">
+          <div class="example-label">Script</div>
+          <div class="example-text">"Hi [Name], this is [Your Name] from Concept IT Solutions. We help [business type] companies in [Canada/USA] improve their digital presence. Do you have 2 minutes to chat?"</div>
+        </div>
+
+        <p><strong>Value Proposition (30 seconds):</strong></p>
+        <div class="example">
+          <div class="example-label">Script</div>
+          <div class="example-text">"We recently helped [similar company] increase their online sales by 40% with a custom e-commerce platform. I noticed [their company] is in [industry] and thought you might benefit from a similar solution."</div>
+        </div>
+
+        <p><strong>Qualifying Questions (2-3 minutes):</strong></p>
+        <ul class="checklist">
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Ask about current challenges with their website/systems</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Identify decision-makers and budget authority</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Gauge timeline and urgency</span>
+          </li>
+        </ul>
+
+        <p><strong>Next Steps (30 seconds):</strong></p>
+        <div class="example">
+          <div class="example-label">Script</div>
+          <div class="example-text">"Based on what you've shared, I'd love to send you a brief proposal outlining how we can help. When would be a good time for a 15-minute follow-up call next week?"</div>
+        </div>
+      </div>
+
+      <div class="lesson">
+        <h3>Handling Common Objections</h3>
+        <p><strong>Objection:</strong> "We already have a website."</p>
+        <div class="tip">
+          <div class="tip-label">Response</div>
+          <div>"That's great! Many of our clients had websites but wanted to modernize or add functionality like online ordering, customer portals, or mobile apps. When was your site last updated?"</div>
+        </div>
+
+        <p><strong>Objection:</strong> "It's too expensive."</p>
+        <div class="tip">
+          <div class="tip-label">Response</div>
+          <div>"I understand budget is important. Most clients see this as an investment that pays for itself. For example, if it brings in just 2-3 additional clients per month, it's already covered. We also offer flexible payment terms."</div>
+        </div>
+
+        <p><strong>Objection:</strong> "Send me some information."</p>
+        <div class="tip">
+          <div class="tip-label">Response</div>
+          <div>"Absolutely! To make sure I send you the most relevant information, can I ask just 2 quick questions about your needs?" [Then qualify them]</div>
+        </div>
+      </div>
+
+      <button class="complete-btn" onclick="completeModule(this)">Complete Module 3</button>
+    </div>
+  </div>
+
+  <div class="module">
+    <div class="module-header" onclick="toggleModule(this)">
+      <div class="module-title">
+        <div class="module-number">4</div>
+        <div class="module-name">Using The Dialler System</div>
+      </div>
+      <div class="module-status">▼</div>
+    </div>
+    <div class="module-content">
+      <div class="lesson">
+        <h3>Step-by-Step Dialling Process</h3>
+        <ul class="checklist">
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Step 1:</strong> Select a lead from the Leads Generator or Dashboard</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Step 2:</strong> Click "Call Now" - this opens your device's calling app (Phone Link/Skype/WhatsApp)</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Step 3:</strong> The timer starts automatically when you click "Start Call"</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Step 4:</strong> Make your call following the script structure</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Step 5:</strong> Click "End Call" when finished</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Step 6:</strong> Select outcome: Considering, Deal Completed, Denied, or Call Back Later</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Step 7:</strong> Add detailed notes about the conversation</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span><strong>Step 8:</strong> Click "Save Call Log & Update Lead"</span>
+          </li>
+        </ul>
+
+        <div class="tip">
+          <div class="tip-label">💡 Important</div>
+          <div>Always add detailed notes! Future you (or your team) will thank you when following up.</div>
+        </div>
+      </div>
+
+      <div class="lesson">
+        <h3>Call Outcome Definitions</h3>
+        <p><strong>✅ Deal Completed:</strong> Client verbally agreed and is ready to sign/pay</p>
+        <p><strong>🤔 Considering:</strong> Interested, asked for proposal, needs time to think</p>
+        <p><strong>❌ Denied:</strong> Not interested, not a fit, or explicitly rejected</p>
+        <p><strong>📞 Call Back Later:</strong> Asked to call back at specific time, or couldn't reach decision-maker</p>
+      </div>
+
+      <button class="complete-btn" onclick="completeModule(this)">Complete Module 4</button>
+    </div>
+  </div>
+
+  <div class="module">
+    <div class="module-header" onclick="toggleModule(this)">
+      <div class="module-title">
+        <div class="module-number">5</div>
+        <div class="module-name">Closing Deals & Follow-ups</div>
+      </div>
+      <div class="module-status">▼</div>
+    </div>
+    <div class="module-content">
+      <div class="lesson">
+        <h3>Closing Techniques</h3>
+        <p><strong>The Assumptive Close:</strong></p>
+        <div class="example">
+          <div class="example-label">Example</div>
+          <div class="example-text">"Great! I'll send over the agreement today. Would you prefer to start with the website or the mobile app first?"</div>
+        </div>
+
+        <p><strong>The Summary Close:</strong></p>
+        <div class="example">
+          <div class="example-label">Example</div>
+          <div class="example-text">"So we've discussed a custom e-commerce site at $18K with mobile-responsive design, SEO optimization, and ongoing support. Sound good?"</div>
+        </div>
+
+        <p><strong>The Urgency Close:</strong></p>
+        <div class="example">
+          <div class="example-label">Example</div>
+          <div class="example-text">"We have availability in our development queue this month. If we start now, we can have you live by [date]. Shall I reserve that slot?"</div>
+        </div>
+      </div>
+
+      <div class="lesson">
+        <h3>Managing Follow-ups</h3>
+        <ul class="checklist">
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Create follow-up task immediately after "Considering" or "Call Back" outcomes</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Schedule specific date and time (not "next week")</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Add context notes: what to discuss, what was promised</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Check Follow-ups tab daily at start of shift</span>
+          </li>
+          <li>
+            <div class="checkbox" onclick="toggleCheck(this)"></div>
+            <span>Update status after completing follow-up call</span>
+          </li>
+        </ul>
+
+        <div class="tip">
+          <div class="tip-label">🎯 Success Metric</div>
+          <div>Top performers follow up within 24-48 hours. Speed matters in sales!</div>
+        </div>
+      </div>
+
+      <button class="complete-btn" onclick="completeModule(this)">Complete Module 5</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleModule(header) {
+  const module = header.parentElement;
+  module.classList.toggle('active');
+}
+
+function toggleCheck(checkbox) {
+  checkbox.classList.toggle('checked');
+  updateProgress();
+}
+
+function completeModule(btn) {
+  const module = btn.closest('.module');
+  const checkboxes = module.querySelectorAll('.checkbox');
+  const allChecked = Array.from(checkboxes).every(cb => cb.classList.contains('checked'));
+
+  if (!allChecked) {
+    alert('Please complete all checklist items before marking this module as complete.');
+    return;
+  }
+
+  btn.textContent = '✓ Module Completed';
+  btn.style.background = 'var(--success)';
+  btn.disabled = true;
+
+  // Save progress
+  try {
+    const moduleNumber = module.querySelector('.module-number').textContent;
+    localStorage.setItem(`module-${moduleNumber}-complete`, 'true');
+  } catch (e) {}
+
+  updateProgress();
+
+  // Auto-open next module
+  const nextModule = module.nextElementSibling;
+  if (nextModule && nextModule.classList.contains('module')) {
+    setTimeout(() => {
+      nextModule.classList.add('active');
+      nextModule.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 500);
+  }
+}
+
+function updateProgress() {
+  const totalChecks = document.querySelectorAll('.checkbox').length;
+  const checkedBoxes = document.querySelectorAll('.checkbox.checked').length;
+  const percentage = Math.round((checkedBoxes / totalChecks) * 100);
+
+  document.getElementById('progressFill').style.width = percentage + '%';
+  document.getElementById('progressText').textContent = percentage + '%';
+
+  // Save checked state
+  try {
+    const checkStates = Array.from(document.querySelectorAll('.checkbox')).map(
+      (cb, i) => cb.classList.contains('checked')
+    );
+    localStorage.setItem('training-progress', JSON.stringify(checkStates));
+  } catch (e) {}
+}
+
+// Load saved progress
+try {
+  const saved = localStorage.getItem('training-progress');
+  if (saved) {
+    const states = JSON.parse(saved);
+    document.querySelectorAll('.checkbox').forEach((cb, i) => {
+      if (states[i]) {
+        cb.classList.add('checked');
+      }
+    });
+  }
+
+  // Check completed modules
+  document.querySelectorAll('.module').forEach(module => {
+    const moduleNumber = module.querySelector('.module-number').textContent;
+    if (localStorage.getItem(`module-${moduleNumber}-complete`) === 'true') {
+      const btn = module.querySelector('.complete-btn');
+      btn.textContent = '✓ Module Completed';
+      btn.style.background = 'var(--success)';
+      btn.disabled = true;
+    }
+  });
+
+  updateProgress();
+} catch (e) {}
+</script>
