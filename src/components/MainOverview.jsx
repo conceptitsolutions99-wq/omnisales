@@ -14,12 +14,22 @@ import {
   ShieldCheck
 } from 'lucide-react';
 
-export default function MainOverview({ leads, callLogs, followups, setActiveTab, onStartCall }) {
-  const totalLeads = leads.length;
-  const dealsCompleted = leads.filter(l => l.status === 'Deal Completed').length;
-  const pendingFollowups = followups.filter(f => f.status !== 'Completed').length;
-  const totalPipeline = leads.reduce((acc, l) => acc + (l.value || 0), 0);
-  const wonPipeline = leads.filter(l => l.status === 'Deal Completed').reduce((acc, l) => acc + (l.value || 0), 0);
+export default function MainOverview({ leads, callLogs, followups, setActiveTab, onStartCall, currentUser }) {
+  // Role-based filtering: Admin sees all data, employees see only their own
+  const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
+
+  const userCallLogs = isAdmin ? callLogs : callLogs.filter(log => log.caller === currentUser.name);
+  const userFollowups = isAdmin ? followups : followups.filter(f => f.assignedTo === currentUser.name);
+
+  // Get lead IDs from user's call logs to determine which leads they've worked on
+  const userLeadIds = new Set(userCallLogs.map(log => log.leadId));
+  const userLeads = isAdmin ? leads : leads.filter(l => userLeadIds.has(l.id));
+
+  const totalLeads = userLeads.length;
+  const dealsCompleted = userLeads.filter(l => l.status === 'Deal Completed').length;
+  const pendingFollowups = userFollowups.filter(f => f.status !== 'Completed').length;
+  const totalPipeline = userLeads.reduce((acc, l) => acc + (l.value || 0), 0);
+  const wonPipeline = userLeads.filter(l => l.status === 'Deal Completed').reduce((acc, l) => acc + (l.value || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -32,9 +42,13 @@ export default function MainOverview({ leads, callLogs, followups, setActiveTab,
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3">
             Outbound Sales & IT Solutions Command Center
+            {!isAdmin && <span className="block text-xl mt-2 text-blue-100">Personal Performance View: {currentUser.name}</span>}
+            {isAdmin && <span className="block text-xl mt-2 text-blue-100">Admin View: All Company Data</span>}
           </h1>
           <p className="text-blue-100 text-base mb-6 leading-relaxed">
-            Manage your leads generation, manual outbound dialer, conversion analytics, and customer follow-ups for Custom Websites, Web Portals, and Mobile Applications.
+            {isAdmin
+              ? 'Manage company-wide leads generation, outbound dialer operations, conversion analytics, and customer follow-ups for Custom Websites, Web Portals, and Mobile Applications.'
+              : 'Track your personal leads, calls, conversion analytics, and customer follow-ups for Custom Websites, Web Portals, and Mobile Applications.'}
           </p>
           <div className="flex flex-wrap gap-3">
             <button

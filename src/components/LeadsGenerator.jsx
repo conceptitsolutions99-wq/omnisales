@@ -17,7 +17,7 @@ import {
   Database
 } from 'lucide-react';
 
-export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelectLeadForCall }) {
+export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelectLeadForCall, currentUser, callLogs }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [countryFilter, setCountryFilter] = useState('All');
   const [sizeFilter, setSizeFilter] = useState('All');
@@ -117,8 +117,13 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
     }, 1200);
   };
 
+  // Role-based filtering: Admin sees all leads, employees see only leads they've called
+  const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
+  const userLeadIds = new Set(callLogs.filter(log => log.caller === currentUser.name).map(log => log.leadId));
+  const visibleLeads = isAdmin ? leads : leads.filter(l => userLeadIds.has(l.id));
+
   // Filter logic
-  const filteredLeads = leads.filter(lead => {
+  const filteredLeads = visibleLeads.filter(lead => {
     const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           lead.phone.includes(searchTerm) ||
@@ -155,10 +160,12 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
             <Users className="w-7 h-7 mr-2 text-blue-600" />
-            Leads Generator Sub-System
+            Leads Generator Sub-System ({isAdmin ? 'All Leads' : 'My Leads'})
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Real-time business leads in Canada and USA for IT solutions (Websites, Web Portals, Mobile Apps).
+            {isAdmin
+              ? 'Admin View: All company leads in Canada and USA for IT solutions (Websites, Web Portals, Mobile Apps).'
+              : `Personal View: Showing only leads you've contacted. Logged in as ${currentUser.name}.`}
           </p>
         </div>
 
@@ -246,7 +253,7 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500">
-          <span>Showing <strong>{filteredLeads.length}</strong> of <strong>{leads.length}</strong> leads</span>
+          <span>Showing <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads</span>
           <div className="flex items-center space-x-2">
             <span>Status Filter:</span>
             <select

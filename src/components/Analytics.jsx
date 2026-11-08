@@ -12,24 +12,33 @@ import {
   PieChart
 } from 'lucide-react';
 
-export default function Analytics({ leads, callLogs }) {
-  const totalCalls = callLogs.length;
-  const completedDeals = callLogs.filter(l => l.outcome === 'Deal Completed').length;
-  const consideringCalls = callLogs.filter(l => l.outcome === 'Considering').length;
-  const deniedCalls = callLogs.filter(l => l.outcome === 'Denied').length;
-  const callbackCalls = callLogs.filter(l => l.outcome === 'Call Back Later').length;
+export default function Analytics({ leads, callLogs, currentUser }) {
+  // Role-based filtering: Admin sees all data, employees see only their own
+  const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
+
+  const userCallLogs = isAdmin ? callLogs : callLogs.filter(log => log.caller === currentUser.name);
+
+  // Get lead IDs from user's call logs to determine which leads they've worked on
+  const userLeadIds = new Set(userCallLogs.map(log => log.leadId));
+  const userLeads = isAdmin ? leads : leads.filter(l => userLeadIds.has(l.id));
+
+  const totalCalls = userCallLogs.length;
+  const completedDeals = userCallLogs.filter(l => l.outcome === 'Deal Completed').length;
+  const consideringCalls = userCallLogs.filter(l => l.outcome === 'Considering').length;
+  const deniedCalls = userCallLogs.filter(l => l.outcome === 'Denied').length;
+  const callbackCalls = userCallLogs.filter(l => l.outcome === 'Call Back Later').length;
 
   const conversionRate = totalCalls > 0 ? ((completedDeals / totalCalls) * 100).toFixed(1) : 0;
-  const totalRevenueWon = leads.filter(l => l.status === 'Deal Completed').reduce((acc, l) => acc + (l.value || 0), 0);
+  const totalRevenueWon = userLeads.filter(l => l.status === 'Deal Completed').reduce((acc, l) => acc + (l.value || 0), 0);
 
   // Solution breakdown
-  const solutionCounts = leads.reduce((acc, l) => {
+  const solutionCounts = userLeads.reduce((acc, l) => {
     acc[l.solution] = (acc[l.solution] || 0) + 1;
     return acc;
   }, {});
 
   // Country breakdown
-  const countryCounts = leads.reduce((acc, l) => {
+  const countryCounts = userLeads.reduce((acc, l) => {
     acc[l.country] = (acc[l.country] || 0) + 1;
     return acc;
   }, {});
@@ -40,10 +49,12 @@ export default function Analytics({ leads, callLogs }) {
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
           <BarChart3 className="w-7 h-7 mr-2 text-violet-600" />
-          Analytics & Information Sub-System
+          Analytics & Information Sub-System ({isAdmin ? 'All Company Data' : 'My Performance'})
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Analyze outbound sales data, call outcomes (Considering, Deal Completed, Denied), and revenue performance.
+          {isAdmin
+            ? 'Admin View: Company-wide outbound sales data, call outcomes (Considering, Deal Completed, Denied), and revenue performance.'
+            : `Personal View: Your individual sales performance and call analytics. Logged in as ${currentUser.name}.`}
         </p>
       </div>
 

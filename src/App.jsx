@@ -181,6 +181,7 @@ export default function App() {
             callLogs={callLogs}
             followups={followups}
             setActiveTab={setActiveTab}
+            currentUser={currentUser}
           />
         )}
 
@@ -190,6 +191,8 @@ export default function App() {
             setLeads={setLeads}
             setActiveTab={setActiveTab}
             onSelectLeadForCall={setSelectedLeadForCall}
+            currentUser={currentUser}
+            callLogs={callLogs}
           />
         )}
 
@@ -210,6 +213,7 @@ export default function App() {
           <Analytics
             leads={leads}
             callLogs={callLogs}
+            currentUser={currentUser}
           />
         )}
 
