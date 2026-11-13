@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Users,
+  MapPin,
   Search,
   Filter,
   Plus,
@@ -17,6 +18,15 @@ import {
   Database
 } from 'lucide-react';
 
+const CATEGORY_OPTIONS = [
+  { value: 'offices', label: 'Offices' },
+  { value: 'professional', label: 'Professional services' },
+  { value: 'retail', label: 'Retail & shops' },
+  { value: 'food', label: 'Restaurants & cafés' },
+  { value: 'health', label: 'Health & dental' },
+  { value: 'trades', label: 'Trades & repair' },
+];
+
 export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelectLeadForCall, currentUser, callLogs }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [countryFilter, setCountryFilter] = useState('All');
@@ -26,6 +36,8 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
+  const [fetchCity, setFetchCity] = useState('Toronto');
+  const [fetchCategory, setFetchCategory] = useState('offices');
 
   // New lead form state
   const [newLead, setNewLead] = useState({
@@ -73,48 +85,57 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
     });
   };
 
-  // Fetch Live Real Business Leads from Public Directory / Corporate Registry API simulator
+  // Pull real businesses (with a published phone number) from OpenStreetMap's Overpass API
   const handleFetchLiveLeads = async () => {
+    const city = fetchCity.trim();
+    const categoryLabel = CATEGORY_OPTIONS.find(option => option.value === fetchCategory)?.label || 'businesses';
+
+    if (city.length < 2) {
+      setFetchMessage('Enter a city or region to search, for example Toronto or Dallas.');
+      return;
+    }
+
     setIsFetchingLive(true);
-    setFetchMessage('Connecting to North American Business Registries (USA & Canada)...');
+    setFetchMessage(`Searching OpenStreetMap for ${categoryLabel} in ${city}…`);
 
-    setTimeout(() => {
-      const realLiveCompanies = [
-        { name: 'Jonathan Vance', company: 'Nova Scotia Marine Tech Ltd', city: 'Halifax, NS', country: 'Canada', size: 'Medium', solution: 'Web Portal', val: 24000 },
-        { name: 'Claire Henderson', company: 'Cascade Renewable Energy LLC', city: 'Portland, OR', country: 'USA', size: 'Large', solution: 'Mobile App', val: 55000 },
-        { name: 'Marc Tremblay', company: 'Laurentian Logistics & Freight', city: 'Quebec City, QC', country: 'Canada', size: 'Large', solution: 'Web Portal', val: 38000 },
-        { name: 'Evelyn Wright', company: 'Silicon Valley Cloud Security Inc', city: 'San Jose, CA', country: 'USA', size: 'Medium', solution: 'Website', val: 19000 },
-        { name: 'Liam O’Donnell', company: 'Prairie Grain & Agro Corp', city: 'Calgary, AB', country: 'Canada', size: 'Large', solution: 'Web Portal', val: 42000 },
-        { name: 'Sophia Martinez', company: 'Miami Sunbelt Real Estate Group', city: 'Miami, FL', country: 'USA', size: 'Small', solution: 'Website', val: 12500 }
-      ];
-
-      const fetched = realLiveCompanies.map((item, index) => {
-        const areaCode = item.country === 'Canada' ? Math.floor(Math.random() * 400 + 200) : Math.floor(Math.random() * 800 + 200);
-        const phoneDigits = `+1${areaCode}555${Math.floor(Math.random() * 9000 + 1000)}`;
-        const displayPhone = `+1 (${areaCode}) 555-${phoneDigits.slice(-4)}`;
-        return {
-          id: Date.now() + index,
-          name: item.name,
-          company: item.company,
-          phone: phoneDigits,
-          displayPhone: displayPhone,
-          email: `${item.name.toLowerCase().replace(/[^a-z]/g, '')}@${item.company.toLowerCase().replace(/[^a-z]/g, '')}.com`,
-          country: item.country,
-          region: item.city,
-          size: item.size,
-          solution: item.solution,
-          status: 'New',
-          value: item.val,
-          notes: 'Fetched live from North American Business Registry API.',
-          createdAt: new Date().toISOString().split('T')[0]
-        };
+    try {
+      const params = new URLSearchParams({
+        city,
+        category: fetchCategory,
+        limit: '30',
+        country: countryFilter === 'All' ? '' : countryFilter,
       });
 
-      setLeads(prev => [...fetched, ...prev]);
+      const response = await fetch(`/api/leads?${params.toString()}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Lead search failed (${response.status}).`);
+
+      const fetched = Array.isArray(data.leads) ? data.leads : [];
+      if (fetched.length === 0) {
+        setFetchMessage(`No ${categoryLabel.toLowerCase()} with a published phone number were found in ${city}. Try another city or category.`);
+        return;
+      }
+
+      const existingPhones = new Set(leads.map(lead => lead.phone));
+      const fresh = fetched.filter(lead => !existingPhones.has(lead.phone));
+      const skipped = fetched.length - fresh.length;
+
+      if (fresh.length > 0) setLeads(prev => [...fresh, ...prev]);
+
+      setFetchMessage(
+        `Added ${fresh.length} real business leads from ${city} (${data.attribution || '© OpenStreetMap contributors'}).` +
+          (skipped ? ` ${skipped} already in your list were skipped.` : '')
+      );
+      setTimeout(() => setFetchMessage(''), 10000);
+    } catch (err) {
+      setFetchMessage(
+        err.message === 'Failed to fetch'
+          ? 'Cannot reach the lead service. Start the API with “npm start” and try again.'
+          : err.message
+      );
+    } finally {
       setIsFetchingLive(false);
-      setFetchMessage(`Successfully ingested ${fetched.length} verified live business leads from USA & Canada!`);
-      setTimeout(() => setFetchMessage(''), 4000);
-    }, 1200);
+    }
   };
 
   // Role-based filtering: Admin sees all leads, employees see only leads they've called
@@ -169,14 +190,36 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
+            <input
+              type="text"
+              value={fetchCity}
+              onChange={(e) => setFetchCity(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleFetchLiveLeads();
+              }}
+              placeholder="City (e.g. Toronto)"
+              className="w-44 pl-8 pr-3 py-2.5 glass-input rounded-xl text-sm"
+            />
+          </div>
+          <select
+            value={fetchCategory}
+            onChange={(e) => setFetchCategory(e.target.value)}
+            className="py-2.5 px-3 glass-input rounded-xl text-sm"
+          >
+            {CATEGORY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
           <button
             onClick={handleFetchLiveLeads}
             disabled={isFetchingLive}
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium rounded-xl shadow-md transition-all flex items-center space-x-2 text-sm"
           >
             <RefreshCw className={`w-4 h-4 ${isFetchingLive ? 'animate-spin' : ''}`} />
-            <span>{isFetchingLive ? 'Fetching Live Leads...' : 'Fetch Live Business Leads (API)'}</span>
+            <span>{isFetchingLive ? 'Searching...' : 'Fetch Real Business Leads'}</span>
           </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
@@ -253,7 +296,10 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-[var(--glass-border)] text-xs text-muted">
-          <span>Showing <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads</span>
+          <span>
+            Showing <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads
+            <span className="opacity-60"> · lead data © OpenStreetMap contributors</span>
+          </span>
           <div className="flex items-center space-x-2">
             <span>Status Filter:</span>
             <select
@@ -310,15 +356,29 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
                       </div>
                     </td>
                     <td className="py-4 px-4">
-                      <span className="inline-block px-2 py-0.5 glass-soft text-[var(--text-primary)]/80 rounded text-xs font-medium mb-1">
-                        {lead.size} Business
-                      </span>
+                      {lead.size && lead.size !== 'Unknown' && (
+                        <span className="inline-block px-2 py-0.5 glass-soft text-[var(--text-primary)]/80 rounded text-xs font-medium mb-1">
+                          {lead.size} Business
+                        </span>
+                      )}
                       <div className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                        {lead.solution}
+                        {lead.solution || <span className="text-muted font-normal">Not specified</span>}
                       </div>
+                      {lead.website ? (
+                        <a
+                          href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] text-muted hover:text-[var(--text-primary)] underline underline-offset-2"
+                        >
+                          website on file
+                        </a>
+                      ) : (
+                        <span className="text-[10px] text-muted">no website listed</span>
+                      )}
                     </td>
                     <td className="py-4 px-4 font-semibold text-[var(--text-primary)]">
-                      ${lead.value?.toLocaleString()}
+                      {lead.value ? `$${lead.value.toLocaleString()}` : <span className="text-muted font-normal">—</span>}
                     </td>
                     <td className="py-4 px-4">
                       {getStatusBadge(lead.status)}

@@ -431,7 +431,7 @@ export default function MainOverview({ leads, callLogs, followups, setActiveTab,
           {
             step: '02',
             title: 'The Dialler',
-            body: 'Manual outbound calling with a live timer, free device / WhatsApp / Skype channels and instant outcome logging.',
+            body: 'Manual outbound calling with a live timer, device and WhatsApp channels, plus instant outcome logging.',
             action: 'dialler',
             cta: 'Open the dialler',
             tint: 'from-emerald-400 to-teal-500',

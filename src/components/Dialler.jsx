@@ -15,7 +15,6 @@ import {
   History,
   PhoneForwarded,
   MessageSquare,
-  Video,
   Mail,
   Copy,
   Check,
@@ -175,7 +174,7 @@ export default function Dialler({
     setIsCalling(true);
     setCallDuration(0);
 
-    // Trigger free device calling via tel: protocol
+    // Trigger device calling via the tel: protocol
     const cleanPhone = (activeLead.phone || '').replace(/[^+\d]/g, '');
     try {
       window.location.href = `tel:${cleanPhone}`;
@@ -189,12 +188,6 @@ export default function Dialler({
     const cleanPhone = (activeLead.phone || '').replace(/[^\d]/g, '');
     const message = `Hello ${activeLead.name}, calling from Concept IT Solutions regarding our IT solutions.`;
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
-  };
-
-  const handleSkypeCall = () => {
-    if (!activeLead) return;
-    const cleanPhone = (activeLead.phone || '').replace(/[^+\d]/g, '');
-    window.open(`skype:${cleanPhone}?call`, '_blank');
   };
 
   // Build a ready-to-send outreach draft from the active lead and a template
@@ -403,20 +396,20 @@ export default function Dialler({
       <div>
         <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center">
           <PhoneCall className="w-7 h-7 mr-2 text-emerald-600" />
-          The Dialler Sub-System (100% Free Calling)
+          The Dialler Sub-System
         </h1>
         <p className="text-sm text-muted mt-1">
-          Make free live calls using your device (Windows Phone Link, WhatsApp, Skype, or Mobile Carrier) with a full call timer and outcome logging — or send a ready-written email draft straight from your own mail app.
+          Call from your device (Windows Phone Link, WhatsApp or your mobile carrier) with a full call timer and outcome logging — or send a ready-written email draft straight from your own mail app.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Lead Selector & Free Calling Console */}
+        {/* Left Column: Lead Selector & Calling Console */}
         <div className="lg:col-span-2 space-y-6">
           <div className="glass p-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 bg-emerald-50 dark:bg-emerald-950/50 px-4 py-2 rounded-bl-2xl border-l border-b border-emerald-100 dark:border-emerald-900 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-1.5"></span>
-              Free channels · call &amp; email
+              Live channels · call &amp; email
             </div>
 
             <div className="mb-6">
@@ -484,13 +477,13 @@ export default function Dialler({
               </div>
             )}
 
-            {/* Free Calling Options & Timer */}
+            {/* Calling Options & Timer */}
             <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-800/40 dark:to-slate-900 rounded-2xl border border-[var(--glass-border)] space-y-4">
               {isCalling ? (
                 <div className="text-center space-y-4 w-full">
                   <div className="inline-flex items-center space-x-2 px-4 py-1.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full font-semibold text-sm animate-pulse">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                    <span>LIVE FREE CALL IN PROGRESS</span>
+                    <span>CALL IN PROGRESS</span>
                   </div>
 
                   <div className="text-4xl font-mono font-bold tracking-wider text-[var(--text-primary)]">
@@ -510,7 +503,7 @@ export default function Dialler({
                       className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-xs transition-all inline-flex items-center space-x-1.5"
                     >
                       <MessageSquare className="w-4 h-4" />
-                      <span>WhatsApp Free Call</span>
+                      <span>WhatsApp Call</span>
                     </button>
                     <button
                       onClick={handleEndCallClick}
@@ -523,7 +516,7 @@ export default function Dialler({
                 </div>
               ) : (
                 <div className="text-center space-y-4 w-full">
-                  <p className="text-xs text-muted">Choose a free channel to reach {activeLead?.name || 'customer'}:</p>
+                  <p className="text-xs text-muted">Choose a channel to reach {activeLead?.name || 'customer'}:</p>
 
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
@@ -532,7 +525,7 @@ export default function Dialler({
                       className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
                     >
                       <PhoneCall className="w-5 h-5" />
-                      <span>Device / Phone Link Call (Free)</span>
+                      <span>Device / Phone Link Call</span>
                     </button>
 
                     <button
@@ -541,16 +534,7 @@ export default function Dialler({
                       className="px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
                     >
                       <MessageSquare className="w-5 h-5" />
-                      <span>WhatsApp Call (100% Free)</span>
-                    </button>
-
-                    <button
-                      onClick={handleSkypeCall}
-                      disabled={!activeLead}
-                      className="px-6 py-3.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
-                    >
-                      <Video className="w-5 h-5" />
-                      <span>Skype Call (Free)</span>
+                      <span>WhatsApp Call</span>
                     </button>
 
                     <button
@@ -559,7 +543,7 @@ export default function Dialler({
                       className="px-6 py-3.5 bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center space-x-2 text-sm"
                     >
                       <Mail className="w-5 h-5" />
-                      <span>Email Prospect (Free)</span>
+                      <span>Email Prospect</span>
                     </button>
                   </div>
                 </div>
@@ -595,7 +579,7 @@ export default function Dialler({
           </div>
 
           <div className="mt-6 pt-4 border-t border-[var(--glass-border)] text-center">
-            <span className="text-xs text-muted">Free outreach via WhatsApp, Skype, Windows Phone Link and email.</span>
+            <span className="text-xs text-muted">Outreach via WhatsApp, Windows Phone Link and email.</span>
           </div>
         </div>
       </div>
