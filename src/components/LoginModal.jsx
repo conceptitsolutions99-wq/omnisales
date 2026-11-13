@@ -43,7 +43,7 @@ export default function LoginModal({ users, onLogin }) {
           <div className="relative mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-400 flex items-center justify-center shadow-xl shadow-indigo-600/40 mb-4">
             <Shield className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">OmniSales</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">Concept IT Solutions</h1>
           <p className="text-[13px] text-muted mt-1 inline-flex items-center gap-1.5">
             <Sparkles className="w-3 h-3 text-cyan-400" />
             Secure outbound sales &amp; IT solutions

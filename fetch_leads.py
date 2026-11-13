@@ -14,7 +14,7 @@ def fetch_real_leads():
     LIMIT 20
     """
     url = 'https://query.wikidata.org/sparql?query=' + urllib.parse.quote(sparql_query) + '&format=json'
-    req = urllib.request.Request(url, headers={'User-Agent': 'OmniSalesOutboundSystem/1.0 (contact@omnisales.io)'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'ConceptITSolutionsOutboundSystem/1.0 (contact@omnisales.io)'})
 
     try:
         with urllib.request.urlopen(req, timeout=10) as response:

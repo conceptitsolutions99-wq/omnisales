@@ -520,7 +520,7 @@ body {
       <div class="success-icon">✅</div>
       <div class="success-title">Import Successful!</div>
       <div class="success-text">
-        <span id="importedCount">0</span> leads have been successfully imported to your OmniSales system.
+        <span id="importedCount">0</span> leads have been successfully imported to your Concept IT Solutions system.
       </div>
       <button class="btn btn-primary" onclick="downloadJSON()">Download JSON</button>
       <button class="btn btn-secondary" onclick="resetImport()" style="margin-left: 12px;">Import More Leads</button>
@@ -695,7 +695,7 @@ function confirmImport() {
     return;
   }
 
-  // Prepare leads for OmniSales format
+  // Prepare leads for Concept IT Solutions format
   const omnisalesLeads = validLeads.map((lead, index) => ({
     id: Date.now() + index,
     name: lead.name,
@@ -713,7 +713,7 @@ function confirmImport() {
     createdAt: new Date().toISOString().split('T')[0]
   }));
 
-  // Store in localStorage for OmniSales to pick up
+  // Store in localStorage for Concept IT Solutions to pick up
   try {
     const existing = localStorage.getItem('omnisales_leads');
     const existingLeads = existing ? JSON.parse(existing) : [];

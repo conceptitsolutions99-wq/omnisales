@@ -55,7 +55,7 @@ app.post('/api/voice', (req, res) => {
     const dial = twiml.dial({ callerId: twilioNumber });
     dial.number(toNumber);
   } else {
-    twiml.say('Thanks for calling OmniSales IT Pro. Connecting your outbound call.');
+    twiml.say('Thanks for calling Concept IT Solutions. Connecting your outbound call.');
   }
 
   res.type('text/xml');
@@ -70,7 +70,7 @@ const configuredSmtpPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
 const SMTP_PORT = Number.isInteger(configuredSmtpPort) && configuredSmtpPort > 0 ? configuredSmtpPort : 465;
 const smtpUser = process.env.GMAIL_USER || 'conceptitsolutions99@gmail.com';
 const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
-const mailFrom = process.env.MAIL_FROM || `OmniSales IT Solutions <${smtpUser}>`;
+const mailFrom = process.env.MAIL_FROM || `Concept IT Solutions <${smtpUser}>`;
 
 const transporter = smtpPass
   ? nodemailer.createTransport({
@@ -165,5 +165,5 @@ app.get('*', (req, res) => {
 const configuredPort = Number.parseInt(process.env.PORT || '', 10);
 const PORT = Number.isInteger(configuredPort) && configuredPort > 0 ? configuredPort : 3000;
 app.listen(PORT, () => {
-  console.log(`OmniSales Server running on port ${PORT}`);
+  console.log(`Concept IT Solutions Server running on port ${PORT}`);
 });

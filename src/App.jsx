@@ -20,11 +20,20 @@ function AmbientBackdrop() {
   );
 }
 
+// Users saved in localStorage keep an older display name until renamed here
+const LEGACY_NAMES = [['Alex Developer', 'Seif Amr']];
+
+const renameLegacyUser = (user) => {
+  if (!user || typeof user.name !== 'string') return user;
+  const name = LEGACY_NAMES.reduce((current, [from, to]) => current.split(from).join(to), user.name);
+  return name === user.name ? user : { ...user, name };
+};
+
 export default function App() {
   // Load state from localStorage or fresh empty start
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('omnisales_user');
-    return saved ? JSON.parse(saved) : null;
+    return saved ? renameLegacyUser(JSON.parse(saved)) : null;
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -43,10 +52,10 @@ export default function App() {
         const parsed = JSON.parse(saved);
         return parsed.map(u => {
           const defaultUser = INITIAL_USERS.find(iu => iu.email === u.email);
-          return {
+          return renameLegacyUser({
             ...u,
             password: u.password || (defaultUser ? defaultUser.password : 'sales123')
-          };
+          });
         });
       } catch (e) {
         return INITIAL_USERS;

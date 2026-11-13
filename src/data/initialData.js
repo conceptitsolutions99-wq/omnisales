@@ -1,5 +1,5 @@
 export const INITIAL_USERS = [
-  { id: 1, name: 'Alex Developer (Admin)', email: 'admin@sales.com', password: 'admin123', role: 'Admin', permissions: { leads: true, dialler: true, analytics: true, followups: true, admin: true }, status: 'Active' },
+  { id: 1, name: 'Seif Amr (Admin)', email: 'admin@sales.com', password: 'admin123', role: 'Admin', permissions: { leads: true, dialler: true, analytics: true, followups: true, admin: true }, status: 'Active' },
   { id: 2, name: 'Sarah Jenkins (Senior Caller)', email: 'sarah@sales.com', password: 'sarah123', role: 'Sales Agent', permissions: { leads: true, dialler: true, analytics: false, followups: true, admin: false }, status: 'Active' },
   { id: 3, name: 'Michael Chang (Follow-up Specialist)', email: 'michael@sales.com', password: 'michael123', role: 'Follow-up Agent', permissions: { leads: true, dialler: false, analytics: false, followups: true, admin: false }, status: 'Active' },
   { id: 4, name: 'Emily Thorne (Sales Analyst)', email: 'emily@sales.com', password: 'emily123', role: 'Analyst', permissions: { leads: true, dialler: false, analytics: true, followups: false, admin: false }, status: 'Active' }
@@ -167,7 +167,7 @@ export const INITIAL_CALL_LOGS = [
     leadName: 'Marcus Brody',
     company: 'Chicago Precision Engineering',
     phone: '+1 (312) 555-0154',
-    caller: 'Alex Developer',
+    caller: 'Seif Amr',
     outcome: 'Denied',
     duration: '04m 50s',
     timestamp: '2026-11-05 16:00',

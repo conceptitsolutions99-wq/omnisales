@@ -45,12 +45,12 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
               {/* Identity */}
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-400 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-indigo-500/40 shrink-0">
-                  OS
+                  CI
                   <span className="absolute -right-0.5 -bottom-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[var(--page-bg)] live-dot" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-[15px] tracking-tight whitespace-nowrap">OmniSales</span>
+                    <span className="font-bold text-[15px] tracking-tight whitespace-nowrap">Concept IT Solutions</span>
                     <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full accent-pill">
                       <Sparkles className="w-2.5 h-2.5" /> IT Pro
                     </span>
