@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, ArrowRight, KeyRound, Ban, Sparkles, Globe } from 'lucide-react';
+import { ArrowRight, KeyRound, Ban, Sparkles, Globe } from 'lucide-react';
 
 export default function LoginModal({ users, onLogin }) {
   const [selectedEmail, setSelectedEmail] = useState(users[0]?.email || 'admin@sales.com');
@@ -40,10 +40,12 @@ export default function LoginModal({ users, onLogin }) {
         {/* Brand header */}
         <div className="relative px-6 pt-8 pb-6 text-center">
           <div className="absolute inset-x-10 -top-24 h-40 bg-indigo-500/25 blur-3xl pointer-events-none" />
-          <div className="relative mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-400 flex items-center justify-center shadow-xl shadow-indigo-600/40 mb-4">
-            <Shield className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Concept IT Solutions</h1>
+          <h1 className="sr-only">Concept IT Solutions</h1>
+          <img
+            src="/logo.svg"
+            alt="Concept — Technology Company"
+            className="relative mx-auto w-40 sm:w-44 rounded-2xl shadow-2xl shadow-blue-950/60 ring-1 ring-white/10 mb-4"
+          />
           <p className="text-[13px] text-muted mt-1 inline-flex items-center gap-1.5">
             <Sparkles className="w-3 h-3 text-cyan-400" />
             Secure outbound sales &amp; IT solutions

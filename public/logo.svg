@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Concept — Technology Company">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#04060d"/>
+      <stop offset="0.45" stop-color="#081120"/>
+      <stop offset="1" stop-color="#03050a"/>
+    </linearGradient>
+
+    <linearGradient id="streak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0a2540" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#1e5f9e" stop-opacity="0.55"/>
+      <stop offset="0.42" stop-color="#63b6ee" stop-opacity="0.85"/>
+      <stop offset="0.5" stop-color="#cfeaff" stop-opacity="0.95"/>
+      <stop offset="0.58" stop-color="#63b6ee" stop-opacity="0.85"/>
+      <stop offset="0.82" stop-color="#1e5f9e" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#0a2540" stop-opacity="0"/>
+    </linearGradient>
+
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#9fd8ff" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#2f7fc4" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#0a2540" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="soft" x="-20%" y="-60%" width="140%" height="220%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- diffused light core -->
+  <ellipse cx="256" cy="252" rx="250" ry="96" fill="url(#core)" filter="url(#soft)"/>
+
+  <!-- horizontal light streaks -->
+  <g fill="url(#streak)">
+    <rect x="0" y="146" width="512" height="2" opacity="0.25"/>
+    <rect x="0" y="156" width="512" height="1" opacity="0.35"/>
+    <rect x="0" y="164" width="512" height="2" opacity="0.45"/>
+    <rect x="0" y="175" width="512" height="1" opacity="0.30"/>
+    <rect x="0" y="184" width="512" height="3" opacity="0.55"/>
+    <rect x="0" y="196" width="512" height="2" opacity="0.40"/>
+    <rect x="0" y="205" width="512" height="1" opacity="0.60"/>
+    <rect x="0" y="214" width="512" height="3" opacity="0.50"/>
+    <rect x="0" y="226" width="512" height="2" opacity="0.35"/>
+    <rect x="0" y="236" width="512" height="4" opacity="0.70"/>
+    <rect x="0" y="248" width="512" height="2" opacity="0.45"/>
+    <rect x="0" y="258" width="512" height="5" opacity="0.85"/>
+    <rect x="0" y="270" width="512" height="3" opacity="0.55"/>
+    <rect x="0" y="280" width="512" height="2" opacity="0.70"/>
+    <rect x="0" y="290" width="512" height="4" opacity="0.60"/>
+    <rect x="0" y="301" width="512" height="2" opacity="0.45"/>
+    <rect x="0" y="310" width="512" height="3" opacity="0.55"/>
+    <rect x="0" y="320" width="512" height="2" opacity="0.35"/>
+    <rect x="0" y="330" width="512" height="1" opacity="0.30"/>
+    <rect x="0" y="340" width="512" height="2" opacity="0.22"/>
+  </g>
+
+  <!-- bright horizon line through the wordmark -->
+  <rect x="0" y="249" width="512" height="2" fill="#dff2ff" opacity="0.55"/>
+  <rect x="0" y="262" width="512" height="1" fill="#ffffff" opacity="0.28"/>
+
+  <!-- wordmark -->
+  <text x="256" y="258" text-anchor="middle"
+        font-family="'Segoe UI Light', 'Helvetica Neue', 'Arial Narrow', Arial, sans-serif"
+        font-size="46" font-weight="200" letter-spacing="15" fill="#f2f9ff">CONCEPT</text>
+
+  <!-- tagline -->
+  <text x="256" y="300" text-anchor="middle"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="12" font-weight="400" letter-spacing="4.6" fill="#9fc3e0">TECHNOLOGY&#160;COMPANY</text>
+</svg>
