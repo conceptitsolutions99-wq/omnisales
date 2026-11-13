@@ -148,6 +148,7 @@ export default function Dialler({
   const [emailStatus, setEmailStatus] = useState(null);
   const [emailLog, setEmailLog] = useState([]);
   const [emailConfigured, setEmailConfigured] = useState(true);
+  const [emailSender, setEmailSender] = useState('');
   const [emailTemplate, setEmailTemplate] = useState('intro');
 
   // Timer effect
@@ -225,6 +226,7 @@ export default function Dialler({
       const data = await response.json();
       setEmailLog(Array.isArray(data.emails) ? data.emails : []);
       setEmailConfigured(data.configured !== false);
+      setEmailSender(data.sender || '');
     } catch (err) {
       setEmailLog([]);
     }
@@ -290,7 +292,7 @@ export default function Dialler({
         type: 'error',
         message:
           err.message === 'Failed to fetch'
-            ? 'Cannot reach the mail server. Start it with “npm start” and set RESEND_API_KEY in .env.'
+            ? 'Cannot reach the mail server. Start it with “npm start” and set GMAIL_APP_PASSWORD in .env.'
             : err.message
       });
     } finally {
@@ -718,8 +720,8 @@ export default function Dialler({
           </h3>
           <span className="text-[11px] text-muted">
             {emailConfigured
-              ? 'Server-side sends via Resend · newest first'
-              : 'Sending not configured — add RESEND_API_KEY to .env'}
+              ? `Sending as ${emailSender || 'your Gmail account'} · newest first`
+              : 'Sending not configured — add GMAIL_APP_PASSWORD to .env'}
           </span>
         </div>
 
@@ -956,7 +958,7 @@ export default function Dialler({
               )}
 
               <p className="text-[11px] text-muted">
-                Sent from your OmniSales server through Resend, and recorded in the delivery log on this screen.
+                Sent through your Gmail account on the OmniSales server, and recorded in the delivery log on this screen.
               </p>
 
               <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-[var(--glass-border)]">

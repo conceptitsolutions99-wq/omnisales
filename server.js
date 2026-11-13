@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const twilio = require('twilio');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(express.json());
@@ -64,9 +64,22 @@ app.post('/api/voice', (req, res) => {
 
 /* ─────────────────────────  Transactional email (Resend)  ───────────────────────── */
 
-const resendApiKey = process.env.RESEND_API_KEY || '';
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
-const mailFrom = process.env.RESEND_FROM || 'OmniSales IT Solutions <onboarding@resend.dev>';
+// Gmail SMTP: sends as the configured Gmail address using a Google app password
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const configuredSmtpPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
+const SMTP_PORT = Number.isInteger(configuredSmtpPort) && configuredSmtpPort > 0 ? configuredSmtpPort : 465;
+const smtpUser = process.env.GMAIL_USER || 'conceptitsolutions99@gmail.com';
+const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
+const mailFrom = process.env.MAIL_FROM || `OmniSales IT Solutions <${smtpUser}>`;
+
+const transporter = smtpPass
+  ? nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: smtpUser, pass: smtpPass }
+    })
+  : null;
 const emailLogPath = path.join(__dirname, 'data', 'emails.json');
 
 const readEmailLog = () => {
@@ -97,9 +110,9 @@ app.post('/api/emails', async (req, res) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to).trim())) {
     return res.status(400).json({ error: 'That recipient address does not look valid.' });
   }
-  if (!resend) {
+  if (!transporter) {
     return res.status(503).json({
-      error: 'Email sending is not configured. Add RESEND_API_KEY to .env and restart the server.'
+      error: `Email sending is not configured. Add GMAIL_APP_PASSWORD for ${smtpUser} to .env and restart the server.`
     });
   }
 
@@ -119,19 +132,15 @@ app.post('/api/emails', async (req, res) => {
   };
 
   try {
-    const result = await resend.emails.send({
+    const info = await transporter.sendMail({
       from: mailFrom,
-      to: [entry.to],
+      to: entry.to,
       subject,
       text: body
     });
 
-    if (result && result.error) {
-      throw new Error(result.error.message || 'The email provider rejected the message.');
-    }
-
     entry.status = 'sent';
-    entry.providerId = (result && result.data && result.data.id) || null;
+    entry.providerId = info.messageId || null;
     writeEmailLog([entry, ...readEmailLog()]);
     res.json({ ok: true, email: entry });
   } catch (err) {
@@ -144,7 +153,7 @@ app.post('/api/emails', async (req, res) => {
 
 // API: Delivery log (most recent first)
 app.get('/api/emails', (req, res) => {
-  res.json({ configured: Boolean(resend), from: mailFrom, emails: readEmailLog() });
+  res.json({ configured: Boolean(transporter), from: mailFrom, sender: smtpUser, emails: readEmailLog() });
 });
 
 // Fallback to SPA index.html
