@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>temp-app</title>
+    <title>OmniSales · Outbound Command Center</title>
+    <script>
+      // Apply the saved theme before first paint so the dark default never flashes light
+      (function () {
+        try {
+          var saved = localStorage.getItem('omnisales_theme');
+          var useLight = saved !== null && JSON.parse(saved) === false;
+          document.documentElement.classList.toggle('dark', !useLight);
+        } catch (error) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

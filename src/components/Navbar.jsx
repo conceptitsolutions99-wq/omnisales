@@ -9,113 +9,150 @@ import {
   Sun,
   Moon,
   LogOut,
-  Globe
+  Globe,
+  Sparkles,
+  Search
 } from 'lucide-react';
 
-export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode }) {
+const initialsOf = (name = '') =>
+  name
+    .replace(/\(.*?\)/g, '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(part => part[0])
+    .join('')
+    .toUpperCase();
+
+export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode, onOpenPalette }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: true },
-    { id: 'leads', label: 'Leads Generator', icon: Users, permission: currentUser.permissions.leads },
-    { id: 'dialler', label: 'The Dialler', icon: PhoneCall, permission: currentUser.permissions.dialler },
+    { id: 'leads', label: 'Leads', icon: Users, permission: currentUser.permissions.leads },
+    { id: 'dialler', label: 'Dialler', icon: PhoneCall, permission: currentUser.permissions.dialler },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, permission: currentUser.permissions.analytics },
     { id: 'followups', label: 'Follow-ups', icon: Clock, permission: currentUser.permissions.followups },
-    { id: 'admin', label: 'Admin Control', icon: ShieldAlert, permission: currentUser.permissions.admin },
-  ];
+    { id: 'admin', label: 'Admin', icon: ShieldAlert, permission: currentUser.permissions.admin },
+  ].filter(item => item.permission);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <>
+      {/* Floating glass top bar */}
+      <div className="sticky top-0 z-40 pt-3 sm:pt-4 px-3 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1400px]">
+          <header className="glass glass-strong !rounded-2xl px-3 sm:px-4">
+            <div className="flex items-center justify-between gap-3 h-16">
 
-          {/* Logo & Region Indicator */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20">
-                OS
+              {/* Identity */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-400 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-indigo-500/40 shrink-0">
+                  OS
+                  <span className="absolute -right-0.5 -bottom-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[var(--page-bg)] live-dot" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[15px] tracking-tight whitespace-nowrap">OmniSales</span>
+                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full accent-pill">
+                      <Sparkles className="w-2.5 h-2.5" /> IT Pro
+                    </span>
+                  </div>
+                  <div className="hidden md:flex items-center gap-1.5 text-[11px] text-muted whitespace-nowrap">
+                    <Globe className="w-3 h-3 text-cyan-400" />
+                    Canada &amp; USA · Web · Portals · Apps
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="font-bold text-lg tracking-tight text-slate-900 dark:text-white">OmniSales</span>
-                <span className="text-xs ml-1.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-full font-semibold">IT Pro</span>
-              </div>
-            </div>
 
-            <div className="hidden md:flex items-center space-x-1.5 pl-4 border-l border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400">
-              <Globe className="w-3.5 h-3.5 text-blue-500" />
-              <span>Target: Canada & USA (Websites, Portals, Apps)</span>
-            </div>
-          </div>
+              {/* Desktop segmented navigation */}
+              <nav className="hidden lg:flex items-center gap-1 p-1 rounded-xl glass-soft">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`relative flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all duration-300 ${
+                        isActive
+                          ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-600/35'
+                          : 'text-muted hover:text-[var(--text-primary)] hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
 
-          {/* Navigation Tabs */}
-          <nav className="hidden lg:flex items-center space-x-1">
-            {navItems.map((item) => {
-              if (!item.permission) return null;
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
+              {/* Controls */}
+              <div className="flex items-center gap-2">
                 <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
+                  onClick={onOpenPalette}
+                  className="flex items-center gap-2 h-9 px-2.5 xl:px-3 rounded-xl glass-soft text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  title="Search (Ctrl/Cmd + K)"
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <Search className="w-4 h-4 shrink-0" />
+                  <span className="hidden xl:inline text-[12px] font-medium">Search…</span>
+                  <kbd className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold border border-[var(--glass-border)]">
+                    ⌘K
+                  </kbd>
                 </button>
-              );
-            })}
-          </nav>
 
-          {/* Right Controls: Theme Switch & User Profile */}
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Toggle Theme"
-            >
-              {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
-            </button>
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  title="Toggle theme"
+                >
+                  {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+                </button>
 
-            <div className="flex items-center space-x-3 pl-3 border-l border-slate-200 dark:border-slate-800">
-              <div className="text-right hidden sm:block">
-                <div className="text-sm font-semibold text-slate-900 dark:text-white">{currentUser.name}</div>
-                <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">{currentUser.role}</div>
+                <div className="hidden sm:flex items-center gap-2.5 pl-2.5 border-l border-white/10">
+                  <div className="text-right leading-tight">
+                    <div className="text-[13px] font-semibold whitespace-nowrap">{currentUser.name}</div>
+                    <div className="text-[11px] font-medium accent-text whitespace-nowrap">{currentUser.role}</div>
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-400 to-indigo-500 text-[11px] font-bold text-white flex items-center justify-center shadow-md shadow-cyan-500/25">
+                    {initialsOf(currentUser.name)}
+                  </div>
+                </div>
+
+                <button
+                  onClick={onLogout}
+                  className="w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-rose-400 hover:border-rose-400/40 transition-colors"
+                  title="Sign out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={onLogout}
-                className="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                title="Logout"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
 
+            </div>
+          </header>
         </div>
       </div>
 
-      {/* Mobile Navigation Bar */}
-      <div className="lg:hidden flex items-center justify-around bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 px-2 py-2">
-        {navItems.map((item) => {
-          if (!item.permission) return null;
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center p-2 rounded-lg text-xs font-medium ${
-                isActive ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50' : 'text-slate-500 dark:text-slate-400'
-              }`}
-            >
-              <Icon className="w-5 h-5 mb-1" />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
+      {/* Mobile floating dock */}
+      <div className="lg:hidden fixed bottom-3 inset-x-3 z-40">
+        <div className="glass glass-strong !rounded-2xl px-1.5 py-1.5 flex items-center justify-around">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-semibold transition-all ${
+                  isActive
+                    ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-600/30'
+                    : 'text-muted'
+                }`}
+              >
+                <Icon className="w-[18px] h-[18px]" />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </header>
+    </>
   );
 }

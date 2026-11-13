@@ -131,11 +131,11 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center">
             <ShieldAlert className="w-7 h-7 mr-2 text-rose-600" />
             Admin Control & Access Management
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-muted mt-1">
             Full admin control: Manage staff credentials, reset passwords, suspend accounts, and clear database for a fresh start.
           </p>
         </div>
@@ -159,7 +159,7 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
       </div>
 
       {/* Security Notice */}
-      <div className="p-4 bg-blue-50 dark:bg-blue-950/40 rounded-2xl border border-blue-200 dark:border-blue-900 flex items-start space-x-3 text-xs text-blue-800 dark:text-blue-300">
+      <div className="p-4 accent-pill rounded-2xl border border-blue-200 dark:border-blue-900 flex items-start space-x-3 text-xs text-blue-800 dark:text-blue-300">
         <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
         <div>
           <strong>Admin Privilege Center:</strong> You can wipe all leads, call logs, and follow-up tasks via the <strong>Clear Database</strong> button to operate fresh on the system.
@@ -167,16 +167,16 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
       </div>
 
       {/* Users Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 dark:text-white text-base">Authorized Staff & Credentials ({users.length})</h3>
-          <span className="text-xs text-slate-500">Security & Permissions Control</span>
+      <div className="glass overflow-hidden">
+        <div className="p-5 border-b border-[var(--glass-border)] flex items-center justify-between">
+          <h3 className="font-bold text-[var(--text-primary)] text-base">Authorized Staff & Credentials ({users.length})</h3>
+          <span className="text-xs text-muted">Security & Permissions Control</span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <tr className="glass-head text-xs font-semibold uppercase tracking-wider text-muted">
                 <th className="py-3 px-4">User Name & Email</th>
                 <th className="py-3 px-4">Role & Status</th>
                 <th className="py-3 px-4 text-center">Leads Gen</th>
@@ -187,20 +187,20 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                 <th className="py-3 px-4 text-right">Security & Profile Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+            <tbody className="divide-y divide-white/[0.07] text-sm">
               {users.map((user) => (
-                <tr key={user.id} className={`hover:bg-slate-50/70 dark:hover:bg-slate-800/50 ${user.status === 'Suspended' ? 'opacity-60 bg-red-50/30 dark:bg-red-950/10' : ''}`}>
+                <tr key={user.id} className={`row-hover ${user.status === 'Suspended' ? 'opacity-60 bg-red-50/30 dark:bg-red-950/10' : ''}`}>
                   <td className="py-4 px-4">
-                    <div className="font-semibold text-slate-900 dark:text-white flex items-center">
+                    <div className="font-semibold text-[var(--text-primary)] flex items-center">
                       {user.name}
                       {user.id === currentUser.id && (
                         <span className="ml-2 px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 text-xs rounded-full font-semibold">You</span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500">{user.email}</div>
+                    <div className="text-xs text-muted">{user.email}</div>
                   </td>
                   <td className="py-4 px-4 space-y-1">
-                    <span className="px-2.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full text-xs font-semibold inline-block">
+                    <span className="px-2.5 py-0.5 glass-soft text-[var(--text-primary)]/80 rounded-full text-xs font-semibold inline-block">
                       {user.role}
                     </span>
                     <div>
@@ -220,7 +220,7 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                         className={`p-1.5 rounded-lg transition-all ${
                           user.permissions[permKey]
                             ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
+                            : 'glass-soft text-muted hover:bg-white/15'
                         }`}
                         title={`Toggle ${permKey} permission`}
                       >
@@ -237,7 +237,7 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                         setEditNameInput(user.name);
                         setEditEmailInput(user.email);
                       }}
-                      className="px-2.5 py-1.5 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1"
+                      className="px-2.5 py-1.5 accent-pill text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1"
                       title="Edit Name / Username"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
@@ -273,41 +273,41 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
 
       {/* Edit User Details Modal */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
+          <div className="w-full max-w-md glass-strong overflow-hidden">
+            <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
               <h3 className="text-lg font-bold">Edit Employee Profile</h3>
               <p className="text-xs text-blue-100 mt-0.5">Update full name or username (email) for {editingUser.name}</p>
             </div>
 
             <form onSubmit={handleEditUserSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Full Name *</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Full Name *</label>
                 <input
                   type="text"
                   required
                   value={editNameInput}
                   onChange={(e) => setEditNameInput(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Username / Email *</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Username / Email *</label>
                 <input
                   type="email"
                   required
                   value={editEmailInput}
                   onChange={(e) => setEditEmailInput(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex justify-end space-x-3 pt-3 border-t border-[var(--glass-border)]">
                 <button
                   type="button"
                   onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium"
+                  className="px-4 py-2 glass-soft text-[var(--text-primary)]/80 rounded-xl text-sm font-medium"
                 >
                   Cancel
                 </button>
@@ -325,34 +325,34 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
 
       {/* Password Reset Modal */}
       {passwordResetUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
+          <div className="w-full max-w-md glass-strong overflow-hidden">
+            <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
               <h3 className="text-lg font-bold">Reset Password</h3>
               <p className="text-xs text-indigo-100 mt-0.5">Set a new secure password for {passwordResetUser.name}</p>
             </div>
 
             <form onSubmit={handlePasswordResetSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">New Password *</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">New Password *</label>
                 <input
                   type="text"
                   required
                   placeholder="Enter new password..."
                   value={newPasswordInput}
                   onChange={(e) => setNewPasswordInput(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white font-mono"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white font-mono"
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex justify-end space-x-3 pt-3 border-t border-[var(--glass-border)]">
                 <button
                   type="button"
                   onClick={() => {
                     setPasswordResetUser(null);
                     setNewPasswordInput('');
                   }}
-                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium"
+                  className="px-4 py-2 glass-soft text-[var(--text-primary)]/80 rounded-xl text-sm font-medium"
                 >
                   Cancel
                 </button>
@@ -370,56 +370,56 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
 
       {/* Add User Modal */}
       {isAddUserModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-rose-600 to-red-600 text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
+          <div className="w-full max-w-md glass-strong overflow-hidden">
+            <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-rose-600 to-red-600 text-white">
               <h3 className="text-lg font-bold">Create New Staff Account</h3>
               <p className="text-xs text-rose-100 mt-0.5">Provision account credentials and access passwords</p>
             </div>
 
             <form onSubmit={handleAddUser} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Full Name *</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Full Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. David Miller"
                   value={newUser.name}
                   onChange={(e) => setNewUser({...newUser, name: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Email Address *</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Email Address *</label>
                 <input
                   type="email"
                   required
                   placeholder="david@sales.com"
                   value={newUser.email}
                   onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Account Password *</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Account Password *</label>
                 <input
                   type="password"
                   required
                   placeholder="Set secure password..."
                   value={newUser.password}
                   onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white font-mono"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Role Title</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Role Title</label>
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                 >
                   <option value="Admin">Admin</option>
                   <option value="Sales Agent">Sales Agent</option>
@@ -429,10 +429,10 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
               </div>
 
               <div className="space-y-2 pt-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">Initial Sub-System Permissions</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted">Initial Sub-System Permissions</label>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.keys(newUser.permissions).map((key) => (
-                    <label key={key} className="flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <label key={key} className="flex items-center space-x-2 text-xs font-medium text-[var(--text-primary)]/80">
                       <input
                         type="checkbox"
                         checked={newUser.permissions[key]}
@@ -440,7 +440,7 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                           ...newUser,
                           permissions: { ...newUser.permissions, [key]: e.target.checked }
                         })}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-white/20 text-blue-600 focus:ring-blue-500"
                       />
                       <span className="capitalize">{key}</span>
                     </label>
@@ -448,11 +448,11 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex justify-end space-x-3 pt-3 border-t border-[var(--glass-border)]">
                 <button
                   type="button"
                   onClick={() => setIsAddUserModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium"
+                  className="px-4 py-2 glass-soft text-[var(--text-primary)]/80 rounded-xl text-sm font-medium"
                 >
                   Cancel
                 </button>

@@ -69,11 +69,11 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center">
             <Clock className="w-7 h-7 mr-2 text-amber-600" />
             Customer Follow-up Queue ({currentUser.role === 'Admin' ? 'All Company Tasks' : 'My Assigned Tasks'})
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-muted mt-1">
             {currentUser.role === 'Admin'
               ? 'Admin View: Viewing all company follow-ups, pending wire transfers, and scheduled callbacks across all agents.'
               : `Personal View: Showing follow-ups assigned specifically to ${currentUser.name}.`}
@@ -90,15 +90,15 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+      <div className="glass p-4 flex items-center justify-between">
+        <span className="text-xs font-semibold text-muted uppercase tracking-wider">
           Tasks ({filteredFollowups.length})
         </span>
         <div className="flex items-center space-x-2">
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="py-1.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs dark:text-white"
+            className="py-1.5 px-3 glass-input rounded-xl text-xs dark:text-white"
           >
             <option value="All">All Statuses</option>
             <option value="Pending Transfer">Pending Transfer</option>
@@ -111,17 +111,17 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
       {/* Follow-ups List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredFollowups.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-slate-400 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div className="col-span-full text-center py-12 text-muted glass">
             No follow-up tasks found assigned to you.
           </div>
         ) : (
           filteredFollowups.map((item) => (
             <div
               key={item.id}
-              className={`bg-white dark:bg-slate-900 p-6 rounded-2xl border shadow-sm flex flex-col justify-between space-y-4 ${
+              className={`glass p-6 shadow-sm flex flex-col justify-between space-y-4 ${
                 item.status === 'Pending Transfer'
                   ? 'border-amber-300 dark:border-amber-800/80 bg-amber-50/20 dark:bg-amber-950/10'
-                  : 'border-slate-200 dark:border-slate-800'
+                  : 'border-[var(--glass-border)]'
               }`}
             >
               <div className="space-y-3">
@@ -133,44 +133,44 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
                   }`}>
                     {item.status}
                   </span>
-                  <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                  <span className="text-xs font-mono font-bold text-[var(--text-primary)]/80">
                     ${item.value?.toLocaleString()}
                   </span>
                 </div>
 
                 <div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">{item.leadName}</h3>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center mt-0.5">
-                    <Building2 className="w-3.5 h-3.5 mr-1 text-slate-400" /> {item.company}
+                  <h3 className="font-bold text-[var(--text-primary)] text-base">{item.leadName}</h3>
+                  <div className="text-xs text-muted flex items-center mt-0.5">
+                    <Building2 className="w-3.5 h-3.5 mr-1 text-muted" /> {item.company}
                   </div>
                 </div>
 
-                <div className="text-xs bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700/50 space-y-1.5">
+                <div className="text-xs glass-soft p-3 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Task Type:</span>
+                    <span className="text-muted">Task Type:</span>
                     <span className="font-semibold text-blue-600 dark:text-blue-400">{item.type}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Scheduled:</span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{item.scheduledDate}</span>
+                    <span className="text-muted">Scheduled:</span>
+                    <span className="font-medium text-[var(--text-primary)]">{item.scheduledDate}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Assigned Agent:</span>
+                    <span className="text-muted">Assigned Agent:</span>
                     <span className="font-medium text-blue-600 dark:text-blue-400">{item.assignedTo}</span>
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-600 dark:text-slate-300 italic">
+                <p className="text-xs text-[var(--text-secondary)] italic">
                   "{item.notes}"
                 </p>
               </div>
 
               {/* Status Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <div className="pt-3 border-t border-[var(--glass-border)] flex items-center justify-between gap-2">
                 <select
                   value={item.status}
                   onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  className="w-full p-2 glass-input rounded-xl text-xs font-semibold dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
                 >
                   <option value="Pending Transfer">Pending Transfer</option>
                   <option value="Scheduled">Scheduled</option>
@@ -184,20 +184,20 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
 
       {/* Add Followup Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-amber-600 to-orange-600 text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
+          <div className="w-full max-w-md glass-strong overflow-hidden">
+            <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-amber-600 to-orange-600 text-white">
               <h3 className="text-lg font-bold">Schedule Customer Follow-up</h3>
               <p className="text-xs text-amber-100 mt-0.5">Assign callback or money transfer task</p>
             </div>
 
             <form onSubmit={handleAddFollowup} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Select Lead *</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Select Lead *</label>
                 <select
                   value={newFollowup.leadId}
                   onChange={(e) => setNewFollowup({...newFollowup, leadId: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                 >
                   {leads.map((lead) => (
                     <option key={lead.id} value={lead.id}>{lead.name} — {lead.company}</option>
@@ -207,11 +207,11 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Task Type</label>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Task Type</label>
                   <select
                     value={newFollowup.type}
                     onChange={(e) => setNewFollowup({...newFollowup, type: e.target.value})}
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                    className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                   >
                     <option value="Payment Transfer">Payment Transfer</option>
                     <option value="Call Back">Call Back</option>
@@ -219,11 +219,11 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Initial Status</label>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Initial Status</label>
                   <select
                     value={newFollowup.status}
                     onChange={(e) => setNewFollowup({...newFollowup, status: e.target.value})}
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                    className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                   >
                     <option value="Pending Transfer">Pending Transfer</option>
                     <option value="Scheduled">Scheduled</option>
@@ -232,22 +232,22 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Scheduled Date & Time</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Scheduled Date & Time</label>
                 <input
                   type="datetime-local"
                   value={newFollowup.scheduledDate}
                   onChange={(e) => setNewFollowup({...newFollowup, scheduledDate: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Follow-up Notes</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Follow-up Notes</label>
                 <textarea
                   rows="3"
                   value={newFollowup.notes}
                   onChange={(e) => setNewFollowup({...newFollowup, notes: e.target.value})}
-                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white resize-none"
+                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white resize-none"
                 ></textarea>
               </div>
 
@@ -255,7 +255,7 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium"
+                  className="px-4 py-2 glass-soft text-[var(--text-primary)]/80 rounded-xl text-sm font-medium"
                 >
                   Cancel
                 </button>

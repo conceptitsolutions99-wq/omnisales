@@ -8,6 +8,17 @@ import Dialler from './components/Dialler';
 import Analytics from './components/Analytics';
 import FollowUps from './components/FollowUps';
 import AdminDashboard from './components/AdminDashboard';
+import CommandPalette from './components/CommandPalette';
+
+function AmbientBackdrop() {
+  return (
+    <div className="ambient" aria-hidden="true">
+      <div className="orb orb-1" />
+      <div className="orb orb-2" />
+      <div className="orb orb-3" />
+    </div>
+  );
+}
 
 export default function App() {
   // Load state from localStorage or fresh empty start
@@ -18,10 +29,11 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('dashboard');
 
+  // Dark glass is the default experience; light mode is an explicit opt-in
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('omnisales_theme');
     if (saved !== null) return JSON.parse(saved);
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return true;
   });
 
   const [users, setUsers] = useState(() => {
@@ -97,6 +109,22 @@ export default function App() {
   });
 
   const [selectedLeadForCall, setSelectedLeadForCall] = useState(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // ⌘K / Ctrl+K opens the command palette, Esc closes it
+  useEffect(() => {
+    const handleShortcut = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen(prev => !prev);
+      }
+      if (event.key === 'Escape') {
+        setPaletteOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
 
   // Sync with localStorage
   useEffect(() => {
@@ -157,14 +185,17 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <AmbientBackdrop />
         <LoginModal users={users} onLogin={handleLogin} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className="min-h-screen flex flex-col text-[var(--text-primary)]">
+      <AmbientBackdrop />
+
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -172,69 +203,82 @@ export default function App() {
         onLogout={handleLogout}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        onOpenPalette={() => setPaletteOpen(true)}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'dashboard' && (
-          <MainOverview
-            leads={leads}
-            callLogs={callLogs}
-            followups={followups}
-            setActiveTab={setActiveTab}
-            currentUser={currentUser}
-          />
-        )}
+      <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-28 lg:pb-12">
+        <div key={activeTab} className="rise">
+          {activeTab === 'dashboard' && (
+            <MainOverview
+              leads={leads}
+              callLogs={callLogs}
+              followups={followups}
+              setActiveTab={setActiveTab}
+              currentUser={currentUser}
+            />
+          )}
 
-        {activeTab === 'leads' && (
-          <LeadsGenerator
-            leads={leads}
-            setLeads={setLeads}
-            setActiveTab={setActiveTab}
-            onSelectLeadForCall={setSelectedLeadForCall}
-            currentUser={currentUser}
-            callLogs={callLogs}
-          />
-        )}
+          {activeTab === 'leads' && (
+            <LeadsGenerator
+              leads={leads}
+              setLeads={setLeads}
+              setActiveTab={setActiveTab}
+              onSelectLeadForCall={setSelectedLeadForCall}
+              currentUser={currentUser}
+              callLogs={callLogs}
+            />
+          )}
 
-        {activeTab === 'dialler' && (
-          <Dialler
-            leads={leads}
-            setLeads={setLeads}
-            callLogs={callLogs}
-            setCallLogs={setCallLogs}
-            followups={followups}
-            setFollowups={setFollowups}
-            selectedLeadForCall={selectedLeadForCall}
-            currentUser={currentUser}
-          />
-        )}
+          {activeTab === 'dialler' && (
+            <Dialler
+              leads={leads}
+              setLeads={setLeads}
+              callLogs={callLogs}
+              setCallLogs={setCallLogs}
+              followups={followups}
+              setFollowups={setFollowups}
+              selectedLeadForCall={selectedLeadForCall}
+              currentUser={currentUser}
+            />
+          )}
 
-        {activeTab === 'analytics' && (
-          <Analytics
-            leads={leads}
-            callLogs={callLogs}
-            currentUser={currentUser}
-          />
-        )}
+          {activeTab === 'analytics' && (
+            <Analytics
+              leads={leads}
+              callLogs={callLogs}
+              currentUser={currentUser}
+            />
+          )}
 
-        {activeTab === 'followups' && (
-          <FollowUps
-            followups={followups}
-            setFollowups={setFollowups}
-            leads={leads}
-            currentUser={currentUser}
-          />
-        )}
+          {activeTab === 'followups' && (
+            <FollowUps
+              followups={followups}
+              setFollowups={setFollowups}
+              leads={leads}
+              currentUser={currentUser}
+            />
+          )}
 
-        {activeTab === 'admin' && currentUser.permissions.admin && (
-          <AdminDashboard
-            users={users}
-            setUsers={setUsers}
-            currentUser={currentUser}
-            onClearDatabase={handleClearDatabase}
-          />
-        )}
+          {activeTab === 'admin' && currentUser.permissions.admin && (
+            <AdminDashboard
+              users={users}
+              setUsers={setUsers}
+              currentUser={currentUser}
+              onClearDatabase={handleClearDatabase}
+            />
+          )}
+        </div>
       </main>
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        leads={leads}
+        currentUser={currentUser}
+        onSelectLead={setSelectedLeadForCall}
+      />
     </div>
   );
 }

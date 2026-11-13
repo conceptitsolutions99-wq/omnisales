@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Lock, Mail, ArrowRight, UserCheck, KeyRound, Ban } from 'lucide-react';
+import { Shield, ArrowRight, KeyRound, Ban, Sparkles, Globe } from 'lucide-react';
 
 export default function LoginModal({ users, onLogin }) {
   const [selectedEmail, setSelectedEmail] = useState(users[0]?.email || 'admin@sales.com');
@@ -33,20 +33,30 @@ export default function LoginModal({ users, onLogin }) {
   const selectedUser = users.find(u => u.email === selectedEmail);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white text-center relative">
-          <div className="mx-auto w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center mb-3 backdrop-blur-md border border-white/20">
+    <div className="relative w-full max-w-[26rem] rise">
+      <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-indigo-500/30 via-violet-500/20 to-cyan-400/25 blur-3xl pointer-events-none" />
+
+      <div className="relative glass-strong overflow-hidden">
+        {/* Brand header */}
+        <div className="relative px-6 pt-8 pb-6 text-center">
+          <div className="absolute inset-x-10 -top-24 h-40 bg-indigo-500/25 blur-3xl pointer-events-none" />
+          <div className="relative mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-400 flex items-center justify-center shadow-xl shadow-indigo-600/40 mb-4">
             <Shield className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">OmniSales IT Pro</h1>
-          <p className="text-blue-100 text-sm mt-1">Secure Outbound Sales & IT Solutions System</p>
+          <h1 className="text-2xl font-extrabold tracking-tight">OmniSales</h1>
+          <p className="text-[13px] text-muted mt-1 inline-flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-cyan-400" />
+            Secure outbound sales &amp; IT solutions
+          </p>
+          <div className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full accent-pill">
+            <Globe className="w-2.5 h-2.5" /> Canada &amp; USA
+          </div>
         </div>
 
-        <form onSubmit={handleLogin} className="p-6 space-y-5">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Select Account
+        <form onSubmit={handleLogin} className="px-6 pb-7 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted">
+              Select account
             </label>
             <select
               value={selectedEmail}
@@ -55,7 +65,7 @@ export default function LoginModal({ users, onLogin }) {
                 setPassword('');
                 setError('');
               }}
-              className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="glass-input w-full px-3.5 py-3 text-sm font-medium"
             >
               {users.map((user) => (
                 <option key={user.id} value={user.email} disabled={user.status === 'Suspended'}>
@@ -65,48 +75,46 @@ export default function LoginModal({ users, onLogin }) {
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
-              <span>Account Password</span>
+          <div className="space-y-1.5">
+            <label className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted">
+              <span>Account password</span>
               {selectedUser && (
-                <span className="text-blue-600 dark:text-blue-400 font-mono text-[11px]">
-                  Demo Pass: {selectedUser.password}
+                <span className="font-mono text-[10px] normal-case tracking-normal accent-text">
+                  demo · {selectedUser.password}
                 </span>
               )}
             </label>
             <div className="relative">
-              <KeyRound className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+              <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
               <input
                 type="password"
                 required
-                placeholder="Enter account password..."
+                placeholder="Enter account password…"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="glass-input w-full pl-10 pr-4 py-3 text-sm"
               />
             </div>
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-600 dark:text-red-300 font-medium flex items-center space-x-2">
-              <Ban className="w-4 h-4 flex-shrink-0" />
+            <div className="flex items-start gap-2 p-3 rounded-xl border border-rose-400/30 bg-rose-500/10 text-[11px] font-medium text-rose-300">
+              <Ban className="w-4 h-4 flex-shrink-0 mt-px" />
               <span>{error}</span>
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center space-x-2"
+            className="group w-full py-3 px-4 rounded-xl text-white font-semibold text-sm bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-600/35 hover:shadow-indigo-500/50 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
           >
-            <span>Secure Sign In</span>
-            <ArrowRight className="w-4 h-4" />
+            Secure sign in
+            <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />
           </button>
 
-          <div className="text-center pt-2">
-            <p className="text-xs text-slate-400">
-              Protected access: Passwords & suspension controls managed by Admin.
-            </p>
-          </div>
+          <p className="text-center text-[11px] text-muted pt-1">
+            Passwords &amp; suspension controls are managed by your administrator.
+          </p>
         </form>
       </div>
     </div>

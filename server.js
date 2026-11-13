@@ -1,7 +1,9 @@
 require('dotenv').config();
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const twilio = require('twilio');
+const { Resend } = require('resend');
 
 const app = express();
 app.use(express.json());
@@ -60,12 +62,99 @@ app.post('/api/voice', (req, res) => {
   res.send(twiml.toString());
 });
 
+/* ─────────────────────────  Transactional email (Resend)  ───────────────────────── */
+
+const resendApiKey = process.env.RESEND_API_KEY || '';
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
+const mailFrom = process.env.RESEND_FROM || 'OmniSales IT Solutions <onboarding@resend.dev>';
+const emailLogPath = path.join(__dirname, 'data', 'emails.json');
+
+const readEmailLog = () => {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(emailLogPath, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+};
+
+const writeEmailLog = (entries) => {
+  try {
+    fs.mkdirSync(path.dirname(emailLogPath), { recursive: true });
+    fs.writeFileSync(emailLogPath, JSON.stringify(entries.slice(0, 250), null, 2));
+  } catch (err) {
+    console.error('Could not persist email log:', err.message);
+  }
+};
+
+// API: Send an outreach email and record the delivery attempt
+app.post('/api/emails', async (req, res) => {
+  const { to, subject, body, leadId, leadName, company, sentBy } = req.body || {};
+
+  if (!to || !subject || !body) {
+    return res.status(400).json({ error: 'Recipient, subject and message are all required.' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to).trim())) {
+    return res.status(400).json({ error: 'That recipient address does not look valid.' });
+  }
+  if (!resend) {
+    return res.status(503).json({
+      error: 'Email sending is not configured. Add RESEND_API_KEY to .env and restart the server.'
+    });
+  }
+
+  const entry = {
+    id: `em_${Date.now()}`,
+    to: String(to).trim(),
+    subject,
+    body,
+    leadId: leadId ?? null,
+    leadName: leadName || '',
+    company: company || '',
+    sentBy: sentBy || 'Unknown agent',
+    sentAt: new Date().toISOString(),
+    status: 'sending',
+    providerId: null,
+    error: null
+  };
+
+  try {
+    const result = await resend.emails.send({
+      from: mailFrom,
+      to: [entry.to],
+      subject,
+      text: body
+    });
+
+    if (result && result.error) {
+      throw new Error(result.error.message || 'The email provider rejected the message.');
+    }
+
+    entry.status = 'sent';
+    entry.providerId = (result && result.data && result.data.id) || null;
+    writeEmailLog([entry, ...readEmailLog()]);
+    res.json({ ok: true, email: entry });
+  } catch (err) {
+    entry.status = 'failed';
+    entry.error = err.message || 'Sending failed.';
+    writeEmailLog([entry, ...readEmailLog()]);
+    res.status(502).json({ error: entry.error, email: entry });
+  }
+});
+
+// API: Delivery log (most recent first)
+app.get('/api/emails', (req, res) => {
+  res.json({ configured: Boolean(resend), from: mailFrom, emails: readEmailLog() });
+});
+
 // Fallback to SPA index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-const PORT = process.env.PORT || 3000;
+// Ignore an empty or zero PORT so the API always lands on a reachable port
+const configuredPort = Number.parseInt(process.env.PORT || '', 10);
+const PORT = Number.isInteger(configuredPort) && configuredPort > 0 ? configuredPort : 3000;
 app.listen(PORT, () => {
   console.log(`OmniSales Server running on port ${PORT}`);
 });
