@@ -45,7 +45,12 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
               {/* Identity */}
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative w-10 h-10 rounded-xl overflow-hidden ring-1 ring-white/15 shadow-lg shadow-blue-950/50 shrink-0">
-                  <img src="/logo-mark.svg" alt="Concept IT Solutions logo" className="w-full h-full object-cover" />
+                  <img
+                    src="/logo-mark.png"
+                    alt="Concept IT Solutions logo"
+                    className="w-full h-full object-cover"
+                    onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = '/logo-mark.svg'; }}
+                  />
                   <span className="absolute right-0.5 bottom-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[var(--page-bg)] live-dot" />
                 </div>
                 <div className="min-w-0">

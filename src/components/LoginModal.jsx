@@ -42,9 +42,10 @@ export default function LoginModal({ users, onLogin }) {
           <div className="absolute inset-x-10 -top-24 h-40 bg-indigo-500/25 blur-3xl pointer-events-none" />
           <h1 className="sr-only">Concept IT Solutions</h1>
           <img
-            src="/logo.svg"
+            src="/logo.png"
             alt="Concept — Technology Company"
             className="relative mx-auto w-40 sm:w-44 rounded-2xl shadow-2xl shadow-blue-950/60 ring-1 ring-white/10 mb-4"
+            onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = '/logo.svg'; }}
           />
           <p className="text-[13px] text-muted mt-1 inline-flex items-center gap-1.5">
             <Sparkles className="w-3 h-3 text-cyan-400" />

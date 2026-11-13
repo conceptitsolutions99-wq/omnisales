@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo-mark.svg" />
     <link rel="apple-touch-icon" href="/logo-mark.svg" />
+    <script>
+      // Prefer the original PNG artwork for the favicon once it exists, else keep the SVG
+      (function () {
+        var probe = new Image();
+        probe.onload = function () {
+          document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(function (link) {
+            link.href = '/logo-mark.png';
+          });
+        };
+        probe.src = '/logo-mark.png';
+      })();
+    </script>
     <meta name="theme-color" content="#05070f" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Concept IT Solutions · Outbound Command Center</title>
