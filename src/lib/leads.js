@@ -81,7 +81,13 @@ const geocodeCity = async (city) => {
   if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.bbox;
 
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`;
-  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 5000);
+  // A slow geocoder must not fail the whole search: both providers can resolve a city name
+  let response;
+  try {
+    response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 5000);
+  } catch (err) {
+    return null;
+  }
   if (!response.ok) return null;
 
   const results = readJson(response.body);
@@ -230,7 +236,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     `&offset=${Math.max(0, Number(offset) || 0)}` +
     `&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
 
-  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 9000);
+  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 12000);
   if (response.status === 401 || response.status === 403) {
     throw new Error(
       'Geoapify rejected the API key. Check VITE_GEOAPIFY_API_KEY, and make sure the key allows this site domain.'
@@ -325,6 +331,11 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       source: 'Geoapify',
       attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors'
     };
+  }
+
+  // A timeout is not worth showing as "aborted without reason"
+  if (geoapifyError?.name === 'AbortError') {
+    throw new Error('The lead search timed out. Try again, or pick a smaller city.');
   }
 
   // A bad key is the actionable problem here, so it outranks the map service being busy
