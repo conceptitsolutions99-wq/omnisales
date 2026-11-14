@@ -78,7 +78,7 @@ const geocodeCity = async (city) => {
   if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.bbox;
 
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`;
-  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 6000);
+  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 5000);
   if (!response.ok) return null;
 
   const results = readJson(response.body);
@@ -154,7 +154,7 @@ const queryOverpass = async (query) => {
         method: 'POST',
         headers: { ...JSON_HEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `data=${encodeURIComponent(query)}`
-      }, 6000);
+      }, 4500);
 
       if ([429, 502, 503, 504].includes(response.status)) {
         lastError = 'The map service is busy right now. Please try again in a minute.';
@@ -196,11 +196,29 @@ const searchWithOverpass = async ({ city, category, limit, country, bbox }) => {
 
 // Geoapify Places returns the listings; phone/email/website live in Place Details,
 // so the best few results are expanded (1 credit per place on the free plan).
+// Geoapify can resolve the city itself, so the fallback still works when Nominatim fails
+const geocodeWithGeoapify = async (city) => {
+  const url =
+    `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(city)}` +
+    `&limit=1&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
+  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 8000);
+  if (!response.ok) return null;
+
+  const data = readJson(response.body);
+  const box = data?.results?.[0]?.bbox;
+  if (!box) return null;
+
+  return { west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: data.results[0].formatted };
+};
+
 const searchWithGeoapify = async ({ city, category, limit, country, bbox }) => {
-  if (!GEOAPIFY_KEY || !bbox) return [];
+  if (!GEOAPIFY_KEY) return [];
+
+  const area = bbox || (await geocodeWithGeoapify(city));
+  if (!area) return [];
 
   const categories = GEOAPIFY_CATEGORIES[category] || 'office';
-  const filter = `rect:${bbox.west},${bbox.south},${bbox.east},${bbox.north}`;
+  const filter = `rect:${area.west},${area.south},${area.east},${area.north}`;
   const url =
     `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(categories)}` +
     `&filter=${encodeURIComponent(filter)}&limit=${Math.min(Math.max(limit, 1), 20)}` +
@@ -279,25 +297,36 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
   }
 
   // Overpass is busy, timed out, or had nothing: fall back to the keyed provider
+  if (!GEOAPIFY_KEY) {
+    throw new Error(
+      'OpenStreetMap is unavailable right now and no fallback is configured. Add VITE_GEOAPIFY_API_KEY to the environment and redeploy.'
+    );
+  }
+
+  let geoapifyLeads = [];
   let geoapifyError = null;
   try {
-    const geoapifyLeads = await searchWithGeoapify(options);
-    if (geoapifyLeads.length > 0) {
-      return {
-        leads: geoapifyLeads,
-        count: geoapifyLeads.length,
-        location: bbox?.label || city,
-        source: 'Geoapify',
-        attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors'
-      };
-    }
+    geoapifyLeads = await searchWithGeoapify(options);
   } catch (err) {
     geoapifyError = err;
   }
 
+  if (geoapifyLeads.length > 0) {
+    return {
+      leads: geoapifyLeads,
+      count: geoapifyLeads.length,
+      location: bbox?.label || city,
+      source: 'Geoapify',
+      attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors'
+    };
+  }
+
   // A bad key is the actionable problem here, so it outranks the map service being busy
   if (geoapifyError) throw geoapifyError;
-  if (overpassError) throw overpassError;
+
+  throw new Error(
+    `OpenStreetMap is unavailable and Geoapify returned no businesses with a phone number in ${city}. Try a larger city or a different category.`
+  );
 
   return {
     leads: [],
