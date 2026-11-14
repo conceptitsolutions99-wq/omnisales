@@ -18,7 +18,7 @@ dist-ssr
 !.env.example
 
 # Local email delivery log (contains recipient data)
-data/
+/data/
 
 # Editor directories and files
 .vscode/*
