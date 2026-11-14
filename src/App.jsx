@@ -12,6 +12,7 @@ import CommandPalette from './components/CommandPalette';
 import RepliesPanel from './components/RepliesPanel';
 import SetupChecklist from './components/SetupChecklist';
 import { fetchReplies, markRepliesSeen, isAdminUser } from './lib/replies';
+import { getSession, signIn, signOut } from './lib/session';
 
 function AmbientBackdrop() {
   return (
@@ -33,11 +34,16 @@ const renameLegacyUser = (user) => {
 };
 
 export default function App() {
-  // Load state from localStorage or fresh empty start
-  const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('omnisales_user');
-    return saved ? renameLegacyUser(JSON.parse(saved)) : null;
-  });
+  // The session is an HttpOnly cookie verified by the server, never a local flag
+  const [currentUser, setCurrentUser] = useState(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+
+  useEffect(() => {
+    getSession()
+      .then((user) => setCurrentUser(user ? renameLegacyUser(user) : null))
+      .catch(() => setCurrentUser(null))
+      .finally(() => setSessionChecked(true));
+  }, []);
 
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -53,13 +59,7 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return parsed.map(u => {
-          const defaultUser = INITIAL_USERS.find(iu => iu.email === u.email);
-          return renameLegacyUser({
-            ...u,
-            password: u.password || (defaultUser ? defaultUser.password : 'sales123')
-          });
-        });
+        return parsed.map(u => renameLegacyUser(u));
       } catch (e) {
         return INITIAL_USERS;
       }
@@ -177,15 +177,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleShortcut);
   }, []);
 
-  // Sync with localStorage
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('omnisales_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('omnisales_user');
-    }
-  }, [currentUser]);
-
   useEffect(() => {
     localStorage.setItem('omnisales_users', JSON.stringify(users));
   }, [users]);
@@ -212,12 +203,14 @@ export default function App() {
     }
   }, [darkMode]);
 
-  const handleLogin = (user) => {
-    setCurrentUser(user);
+  const handleLogin = async (email, password) => {
+    const user = await signIn(email, password);
+    setCurrentUser(renameLegacyUser(user));
     setActiveTab('dashboard');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOut();
     setCurrentUser(null);
     localStorage.removeItem('omnisales_user');
   };
@@ -234,11 +227,20 @@ export default function App() {
     }
   };
 
+  if (!sessionChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <AmbientBackdrop />
+        <p className="text-sm text-muted">Checking your session…</p>
+      </div>
+    );
+  }
+
   if (!currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <AmbientBackdrop />
-        <LoginModal users={users} onLogin={handleLogin} />
+        <LoginModal onLogin={handleLogin} />
       </div>
     );
   }

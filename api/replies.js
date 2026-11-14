@@ -1,11 +1,15 @@
 // Vercel serverless function: customer replies to outreach email.
 const { fetchReplies } = require('../lib/replies-core');
+const auth = require('../lib/auth-core');
 
 const smtpUser = process.env.GMAIL_USER || '';
 const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+
+  const session = auth.requireSession(req, res);
+  if (!session) return;
 
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -18,8 +22,9 @@ module.exports = async (req, res) => {
     });
   }
 
-  const agent = String(req.query.agent || '').trim();
-  const seesEverything = req.query.all === '1';
+  // The session decides what is visible - never the query string
+  const agent = session.name;
+  const seesEverything = auth.isAdmin(session);
 
   try {
     const replies = await fetchReplies({ user: smtpUser, pass: smtpPass });

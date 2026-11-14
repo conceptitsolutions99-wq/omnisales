@@ -1,6 +1,7 @@
 // Vercel serverless function: sends outreach email through Gmail SMTP.
 // The app password only ever lives in environment variables, never in the browser bundle.
 const nodemailer = require('nodemailer');
+const auth = require('../lib/auth-core');
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const configuredPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
@@ -27,6 +28,9 @@ const deliveries = [];
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+
+  const session = auth.requireSession(req, res);
+  if (!session) return;
 
   if (req.method === 'GET') {
     return res.status(200).json({
@@ -63,7 +67,7 @@ module.exports = async (req, res) => {
     leadId: leadId ?? null,
     leadName: leadName || '',
     company: company || '',
-    sentBy: sentBy || 'Unknown agent',
+    sentBy: session.name || sentBy || 'Unknown agent',
     sentAt: new Date().toISOString(),
     status: 'sending',
     providerId: null,

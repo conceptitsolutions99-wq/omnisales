@@ -7,6 +7,7 @@ const path = require('path');
 const twilio = require('twilio');
 const nodemailer = require('nodemailer');
 const { fetchReplies } = require('./lib/replies-core');
+const auth = require('./lib/auth-core');
 
 const app = express();
 app.use(express.json());
@@ -289,8 +290,16 @@ const writeEmailLog = (entries) => {
   }
 };
 
+// Local auth endpoints share the same handlers the deployment uses
+app.post('/api/auth/login', require('./api/auth/login'));
+app.get('/api/auth/me', require('./api/auth/me'));
+app.post('/api/auth/logout', require('./api/auth/logout'));
+
 // API: Send an outreach email and record the delivery attempt
 app.post('/api/emails', async (req, res) => {
+  const session = auth.requireSession(req, res);
+  if (!session) return;
+
   const { to, subject, body, leadId, leadName, company, sentBy } = req.body || {};
 
   if (!to || !subject || !body) {
@@ -313,7 +322,7 @@ app.post('/api/emails', async (req, res) => {
     leadId: leadId ?? null,
     leadName: leadName || '',
     company: company || '',
-    sentBy: sentBy || 'Unknown agent',
+    sentBy: session.name || sentBy || 'Unknown agent',
     sentAt: new Date().toISOString(),
     status: 'sending',
     providerId: null,
@@ -347,17 +356,22 @@ app.post('/api/emails', async (req, res) => {
 
 // API: Delivery log (most recent first)
 app.get('/api/emails', (req, res) => {
+  const session = auth.requireSession(req, res);
+  if (!session) return;
   res.json({ configured: Boolean(transporter), from: mailFrom, sender: smtpUser, emails: readEmailLog() });
 });
 
 // API: customer replies, attributed to the agent who sent the original email
 app.get('/api/replies', async (req, res) => {
+  const session = auth.requireSession(req, res);
+  if (!session) return;
+
   if (!transporter) {
     return res.status(503).json({ error: 'Reply tracking is not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD to .env and restart the server.' });
   }
 
-  const agent = String(req.query.agent || '').trim();
-  const seesEverything = req.query.all === '1';
+  const agent = session.name;
+  const seesEverything = auth.isAdmin(session);
 
   try {
     const replies = await fetchReplies({ user: smtpUser, pass: smtpPass });

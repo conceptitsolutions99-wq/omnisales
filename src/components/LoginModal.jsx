@@ -1,33 +1,24 @@
 import React, { useState } from 'react';
-import { ArrowRight, KeyRound, Ban, Sparkles, Globe } from 'lucide-react';
+import { ArrowRight, KeyRound, Ban, Sparkles, Globe, Mail, Loader2 } from 'lucide-react';
 
-export default function LoginModal({ users, onLogin }) {
-  const [selectedEmail, setSelectedEmail] = useState(users[0]?.email || 'admin@sales.com');
+export default function LoginModal({ onLogin }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setBusy(true);
 
-    const user = users.find(u => u.email === selectedEmail);
-    if (!user) {
-      setError('Selected account not found.');
-      return;
+    try {
+      await onLogin(email.trim(), password);
+    } catch (err) {
+      setError(err.message === 'Failed to fetch' ? 'Cannot reach the server. Check your connection and try again.' : err.message);
+    } finally {
+      setBusy(false);
     }
-
-    if (user.status === 'Suspended') {
-      setError('This account has been suspended by the administrator. Access denied.');
-      return;
-    }
-
-    const expectedPassword = user.password || 'admin123';
-    if (password !== expectedPassword) {
-      setError('Incorrect password. Please verify your credentials.');
-      return;
-    }
-
-    onLogin(user);
   };
 
   return (
@@ -56,36 +47,30 @@ export default function LoginModal({ users, onLogin }) {
 
         <form onSubmit={handleLogin} className="px-6 pb-7 space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-muted">
-              Select account
-            </label>
-            <select
-              value={selectedEmail}
-              onChange={(e) => {
-                setSelectedEmail(e.target.value);
-                setPassword('');
-                setError('');
-              }}
-              className="glass-input w-full px-3.5 py-3 text-sm font-medium"
-            >
-              {users.map((user) => (
-                <option key={user.id} value={user.email} disabled={user.status === 'Suspended'}>
-                  {user.name} ({user.role}) {user.status === 'Suspended' ? '[SUSPENDED]' : ''}
-                </option>
-              ))}
-            </select>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Work email</label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+              <input
+                type="email"
+                required
+                autoComplete="username"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="glass-input w-full pl-10 pr-4 py-3 text-sm"
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted">
-              <span>Account password</span>
-            </label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Password</label>
             <div className="relative">
               <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
               <input
                 type="password"
                 required
-                placeholder="Enter account password…"
+                autoComplete="current-password"
+                placeholder="Enter your password…"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="glass-input w-full pl-10 pr-4 py-3 text-sm"
@@ -102,14 +87,16 @@ export default function LoginModal({ users, onLogin }) {
 
           <button
             type="submit"
-            className="group w-full py-3 px-4 rounded-xl text-white font-semibold text-sm bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-600/35 hover:shadow-indigo-500/50 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+            disabled={busy}
+            className="group w-full py-3 px-4 rounded-xl text-white font-semibold text-sm bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-600/35 hover:shadow-indigo-500/50 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:hover:translate-y-0"
           >
-            Secure sign in
-            <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {busy ? 'Signing in…' : 'Secure sign in'}
+            {!busy && <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform" />}
           </button>
 
           <p className="text-center text-[11px] text-muted pt-1">
-            Passwords &amp; suspension controls are managed by your administrator.
+            Accounts are managed on the server. Ask your administrator for access.
           </p>
         </form>
       </div>

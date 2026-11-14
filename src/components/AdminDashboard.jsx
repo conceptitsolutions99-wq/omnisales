@@ -9,7 +9,6 @@ import {
   UserCheck,
   Settings,
   Database,
-  KeyRound,
   UserX,
   UserCheck2,
   Edit3,
@@ -18,8 +17,6 @@ import {
 
 export default function AdminDashboard({ users, setUsers, currentUser, onClearDatabase }) {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
-  const [passwordResetUser, setPasswordResetUser] = useState(null);
-  const [newPasswordInput, setNewPasswordInput] = useState('');
 
   const [editingUser, setEditingUser] = useState(null);
   const [editNameInput, setEditNameInput] = useState('');
@@ -28,7 +25,6 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
-    password: '',
     role: 'Sales Agent',
     permissions: {
       leads: true,
@@ -66,22 +62,6 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
     setUsers(updated);
   };
 
-  const handlePasswordResetSubmit = (e) => {
-    e.preventDefault();
-    if (!passwordResetUser || !newPasswordInput) return;
-
-    const updated = users.map(u => {
-      if (u.id === passwordResetUser.id) {
-        return { ...u, password: newPasswordInput };
-      }
-      return u;
-    });
-
-    setUsers(updated);
-    setPasswordResetUser(null);
-    setNewPasswordInput('');
-  };
-
   const handleEditUserSubmit = (e) => {
     e.preventDefault();
     if (!editingUser || !editNameInput || !editEmailInput) return;
@@ -101,7 +81,7 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
 
   const handleAddUser = (e) => {
     e.preventDefault();
-    if (!newUser.name || !newUser.email || !newUser.password) return;
+    if (!newUser.name || !newUser.email) return;
 
     const userToAdd = {
       id: Date.now(),
@@ -114,7 +94,6 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
     setNewUser({
       name: '',
       email: '',
-      password: '',
       role: 'Sales Agent',
       permissions: {
         leads: true,
@@ -136,7 +115,7 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
             Admin Control & Access Management
           </h1>
           <p className="text-sm text-muted mt-1">
-            Full admin control: Manage staff credentials, reset passwords, suspend accounts, and clear database for a fresh start.
+            Full admin control: manage staff records and permissions, suspend access, and clear the database for a fresh start. Passwords are set on the server.
           </p>
         </div>
 
@@ -244,14 +223,6 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                       <span>Edit</span>
                     </button>
                     <button
-                      onClick={() => setPasswordResetUser(user)}
-                      className="px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1"
-                      title="Reset Password"
-                    >
-                      <KeyRound className="w-3.5 h-3.5" />
-                      <span>Reset Pass</span>
-                    </button>
-                    <button
                       onClick={() => handleStatusToggle(user.id)}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 ${
                         user.status === 'Suspended'
@@ -323,58 +294,13 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
         </div>
       )}
 
-      {/* Password Reset Modal */}
-      {passwordResetUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
-          <div className="w-full max-w-md glass-strong overflow-hidden">
-            <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
-              <h3 className="text-lg font-bold">Reset Password</h3>
-              <p className="text-xs text-indigo-100 mt-0.5">Set a new secure password for {passwordResetUser.name}</p>
-            </div>
-
-            <form onSubmit={handlePasswordResetSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">New Password *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter new password..."
-                  value={newPasswordInput}
-                  onChange={(e) => setNewPasswordInput(e.target.value)}
-                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white font-mono"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-3 border-t border-[var(--glass-border)]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPasswordResetUser(null);
-                    setNewPasswordInput('');
-                  }}
-                  className="px-4 py-2 glass-soft text-[var(--text-primary)]/80 rounded-xl text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-md"
-                >
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Add User Modal */}
       {isAddUserModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
           <div className="w-full max-w-md glass-strong overflow-hidden">
             <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-rose-600 to-red-600 text-white">
               <h3 className="text-lg font-bold">Create New Staff Account</h3>
-              <p className="text-xs text-rose-100 mt-0.5">Provision account credentials and access passwords</p>
+              <p className="text-xs text-rose-100 mt-0.5">Add a staff record. Sign-in accounts are managed on the server.</p>
             </div>
 
             <form onSubmit={handleAddUser} className="p-6 space-y-4">
@@ -399,18 +325,6 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                   value={newUser.email}
                   onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                   className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Account Password *</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Set secure password..."
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white font-mono"
                 />
               </div>
 
