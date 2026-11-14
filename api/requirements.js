@@ -20,7 +20,9 @@ module.exports = async (req, res) => {
   }
 
   // ── public: submit the ticked options ──
-  if (req.method === 'POST' && req.body?.token && !auth.getSession(req)) {
+  // The token is the credential, so this must not depend on the browser's cookie: a staff
+  // member opening a customer's link is still the customer of that form.
+  if (req.method === 'POST' && req.body?.token) {
     const body = req.body;
     const saved = await store.saveAnswers(clean(body.token, 64), {
       details: body.details,
