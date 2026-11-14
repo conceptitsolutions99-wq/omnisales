@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { searchLeads } from '../lib/leads';
 import {
   Users,
   MapPin,
@@ -99,16 +100,12 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
     setFetchMessage(`Searching OpenStreetMap for ${categoryLabel} in ${city}…`);
 
     try {
-      const params = new URLSearchParams({
+      const data = await searchLeads({
         city,
         category: fetchCategory,
-        limit: '30',
+        limit: 30,
         country: countryFilter === 'All' ? '' : countryFilter,
       });
-
-      const response = await fetch(`/api/leads?${params.toString()}`);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || `Lead search failed (${response.status}).`);
 
       const fetched = Array.isArray(data.leads) ? data.leads : [];
       if (fetched.length === 0) {
@@ -130,7 +127,7 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
     } catch (err) {
       setFetchMessage(
         err.message === 'Failed to fetch'
-                      ? 'Cannot reach the lead service. Check your connection and try again.'
+                      ? 'Cannot reach the map service. Check your connection and try again.'
           : err.message
       );
     } finally {
