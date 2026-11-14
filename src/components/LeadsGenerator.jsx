@@ -86,6 +86,22 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
     });
   };
 
+  // Each search walks a little further through the provider's results, otherwise a second
+  // search in the same city only ever sees businesses that are already in the list.
+  const OFFSET_KEY = 'omnisales_lead_offsets';
+  const nextSearchOffset = (city, category) => {
+    try {
+      const map = JSON.parse(localStorage.getItem(OFFSET_KEY) || '{}');
+      const key = `${city.toLowerCase()}|${category}`;
+      const offset = Number(map[key] || 0);
+      map[key] = (offset + 20) % 200;
+      localStorage.setItem(OFFSET_KEY, JSON.stringify(map));
+      return offset;
+    } catch (err) {
+      return 0;
+    }
+  };
+
   // Pull real businesses (with a published phone number) from OpenStreetMap's Overpass API
   const handleFetchLiveLeads = async () => {
     const city = fetchCity.trim();
@@ -105,6 +121,7 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
         category: fetchCategory,
         limit: 30,
         country: countryFilter === 'All' ? '' : countryFilter,
+        offset: nextSearchOffset(city, fetchCategory),
       });
 
       const fetched = Array.isArray(data.leads) ? data.leads : [];
@@ -120,8 +137,10 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
       if (fresh.length > 0) setLeads(prev => [...fresh, ...prev]);
 
       setFetchMessage(
-        `Added ${fresh.length} real business leads from ${city} (${data.attribution || '© OpenStreetMap contributors'}).` +
-          (skipped ? ` ${skipped} already in your list were skipped.` : '')
+        fresh.length > 0
+          ? `Added ${fresh.length} real business leads from ${city} (${data.attribution || '© OpenStreetMap contributors'}).` +
+              (skipped ? ` ${skipped} already in your list were skipped.` : '')
+          : `No new businesses this time: all ${skipped} results are already in your list. Search again to move on to the next page, or switch category.`
       );
       setTimeout(() => setFetchMessage(''), 10000);
     } catch (err) {

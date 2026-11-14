@@ -214,7 +214,7 @@ const geocodeWithGeoapify = async (city) => {
   return { west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: data.results[0].formatted };
 };
 
-const searchWithGeoapify = async ({ city, category, limit, country, bbox }) => {
+const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset = 0 }) => {
   if (!GEOAPIFY_KEY) return [];
 
   const area = bbox || (await geocodeWithGeoapify(city));
@@ -222,9 +222,12 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox }) => {
 
   const categories = GEOAPIFY_CATEGORIES[category] || 'office';
   const filter = `rect:${area.west},${area.south},${area.east},${area.north}`;
+  // offset matters: without it every search returns the same first page, so repeat searches
+  // found only businesses that were already in the list
   const url =
     `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(categories)}` +
-    `&filter=${encodeURIComponent(filter)}&limit=${Math.min(Math.max(limit, 1), 20)}` +
+    `&filter=${encodeURIComponent(filter)}&limit=${Math.min(Math.max(limit, 1), 50)}` +
+    `&offset=${Math.max(0, Number(offset) || 0)}` +
     `&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
 
   const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 9000);
@@ -239,7 +242,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox }) => {
   const places = (data?.features || []).map((feature) => feature.properties).filter((place) => place?.place_id);
 
   const expanded = await Promise.all(
-    places.slice(0, 8).map(async (place) => {
+    places.slice(0, 12).map(async (place) => {
       const detailUrl =
         `https://api.geoapify.com/v2/place-details?id=${encodeURIComponent(place.place_id)}` +
         `&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
@@ -276,9 +279,9 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox }) => {
   }));
 };
 
-export async function searchLeads({ city, category = 'offices', limit = 30, country = '' }) {
+export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0 }) {
   const bbox = await geocodeCity(city);
-  const options = { city, category, limit, country, bbox };
+  const options = { city, category, limit, country, bbox, offset };
 
   let overpassLeads = [];
   let overpassError = null;
