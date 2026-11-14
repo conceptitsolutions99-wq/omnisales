@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 const SIGNATURE_SERVICE_LINE = 'Websites · Web Portals · Mobile Apps';
+const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
 // One signature block, applied to every template
 const buildSignature = (agent = {}) =>
@@ -213,16 +214,39 @@ export default function Dialler({
     setShowEmailCompose(true);
   };
 
+  // The deployed endpoint keeps no disk, so each browser stores what it sent too
+  const readLocalEmailLog = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(EMAIL_LOG_KEY) || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+      return [];
+    }
+  };
+
+  const writeLocalEmailLog = (entries) => {
+    try {
+      localStorage.setItem(EMAIL_LOG_KEY, JSON.stringify(entries.slice(0, 100)));
+    } catch (err) {
+      /* storage unavailable: the session list still shows what was sent */
+    }
+  };
+
   const fetchEmailLog = async () => {
+    const local = readLocalEmailLog();
     try {
       const response = await fetch('/api/emails');
       if (!response.ok) throw new Error(`Log unavailable (${response.status})`);
       const data = await response.json();
-      setEmailLog(Array.isArray(data.emails) ? data.emails : []);
+      const serverEmails = Array.isArray(data.emails) ? data.emails : [];
+      const merged = [...local, ...serverEmails]
+        .filter((entry, index, all) => all.findIndex((other) => other.id === entry.id) === index)
+        .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
+      setEmailLog(merged);
       setEmailConfigured(data.configured !== false);
       setEmailSender(data.sender || '');
     } catch (err) {
-      setEmailLog([]);
+      setEmailLog(local);
     }
   };
 
@@ -280,13 +304,28 @@ export default function Dialler({
       };
       setCallLogs([emailLogEntry, ...callLogs]);
 
+      writeLocalEmailLog([
+        {
+          id: data.email?.id || `local_${Date.now()}`,
+          to: emailTo.trim(),
+          subject: emailSubject,
+          leadName: activeLead?.name || '',
+          sentBy: currentUser.name,
+          sentAt: new Date().toISOString(),
+          status: 'sent',
+          providerId: data.email?.providerId || null,
+          error: null
+        },
+        ...readLocalEmailLog()
+      ]);
+
       fetchEmailLog();
     } catch (err) {
       setEmailStatus({
         type: 'error',
         message:
           err.message === 'Failed to fetch'
-            ? 'Cannot reach the mail server. Start it with “npm start” and set GMAIL_APP_PASSWORD in .env.'
+            ? 'Cannot reach the mail service. Check your connection, and make sure GMAIL_USER and GMAIL_APP_PASSWORD are set in the environment variables.'
             : err.message
       });
     } finally {
@@ -706,7 +745,7 @@ export default function Dialler({
           <span className="text-[11px] text-muted">
             {emailConfigured
               ? `Sending as ${emailSender || 'your Gmail account'} · newest first`
-              : 'Sending not configured — add GMAIL_APP_PASSWORD to .env'}
+              : 'Sending not configured — add GMAIL_USER and GMAIL_APP_PASSWORD to the environment variables'}
           </span>
         </div>
 

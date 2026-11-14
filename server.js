@@ -256,11 +256,11 @@ app.get('/api/leads', async (req, res) => {
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const configuredSmtpPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
 const SMTP_PORT = Number.isInteger(configuredSmtpPort) && configuredSmtpPort > 0 ? configuredSmtpPort : 465;
-const smtpUser = process.env.GMAIL_USER || 'conceptitsolutions99@gmail.com';
+const smtpUser = process.env.GMAIL_USER || '';
 const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
-const mailFrom = process.env.MAIL_FROM || `Concept IT Solutions <${smtpUser}>`;
+const mailFrom = process.env.MAIL_FROM || (smtpUser ? `Concept IT Solutions <${smtpUser}>` : '');
 
-const transporter = smtpPass
+const transporter = smtpPass && smtpUser
   ? nodemailer.createTransport({
       host: SMTP_HOST,
       port: SMTP_PORT,

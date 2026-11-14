@@ -130,7 +130,7 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
     } catch (err) {
       setFetchMessage(
         err.message === 'Failed to fetch'
-          ? 'Cannot reach the lead service. Start the API with “npm start” and try again.'
+                      ? 'Cannot reach the lead service. Check your connection and try again.'
           : err.message
       );
     } finally {
