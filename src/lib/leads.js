@@ -7,8 +7,7 @@ const JSON_HEADERS = { Accept: 'application/json' };
 // osm.ch only carries Swiss data, so it is deliberately excluded
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
-  'https://lz4.overpass-api.de/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter'
+  'https://lz4.overpass-api.de/api/interpreter'
 ];
 
 // Each category maps to OSM selectors that require a published phone number
@@ -34,11 +33,15 @@ const LEAD_CATEGORIES = {
   ]
 };
 
-const fetchWithTimeout = async (url, options = {}, timeoutMs = 7000) => {
+// The timer stays armed until the body is read: a response that stalls mid-body
+// would otherwise hang the request forever.
+const requestWithTimeout = async (url, options = {}, timeoutMs = 7000) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const body = await response.text();
+    return { ok: response.ok, status: response.status, body };
   } finally {
     clearTimeout(timer);
   }
@@ -53,10 +56,15 @@ const geocodeCity = async (city) => {
   if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.bbox;
 
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`;
-  const response = await fetchWithTimeout(url, { headers: JSON_HEADERS }, 10000);
+  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 6000);
   if (!response.ok) return null;
 
-  const results = await response.json();
+  let results;
+  try {
+    results = JSON.parse(response.body);
+  } catch (err) {
+    return null;
+  }
   if (!Array.isArray(results) || results.length === 0) return null;
 
   const [south, north, west, east] = results[0].boundingbox.map(Number);
@@ -125,11 +133,11 @@ const queryOverpass = async (query) => {
 
   for (const endpoint of OVERPASS_ENDPOINTS) {
     try {
-      const response = await fetchWithTimeout(endpoint, {
+      const response = await requestWithTimeout(endpoint, {
         method: 'POST',
         headers: { ...JSON_HEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `data=${encodeURIComponent(query)}`
-      });
+      }, 6000);
 
       if ([429, 502, 503, 504].includes(response.status)) {
         lastError = 'The map service is busy right now. Please try again in a minute.';
@@ -141,7 +149,13 @@ const queryOverpass = async (query) => {
         continue;
       }
 
-      const payload = await response.json();
+      let payload;
+      try {
+        payload = JSON.parse(response.body);
+      } catch (err) {
+        lastError = 'The map data service returned an unexpected response.';
+        continue;
+      }
 
       // An empty payload can mean limited coverage on a mirror - try the next one
       if ((payload.elements || []).length === 0 && endpoint !== OVERPASS_ENDPOINTS[OVERPASS_ENDPOINTS.length - 1]) {

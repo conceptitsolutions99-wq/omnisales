@@ -14,7 +14,11 @@ const transporter = smtpPass && smtpUser
       host: SMTP_HOST,
       port: SMTP_PORT,
       secure: SMTP_PORT === 465,
-      auth: { user: smtpUser, pass: smtpPass }
+      auth: { user: smtpUser, pass: smtpPass },
+      // Keep a stalled SMTP session inside the function's time limit
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 9000
     })
   : null;
 
