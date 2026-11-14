@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { INITIAL_USERS } from './data/initialData';
 import LoginModal from './components/LoginModal';
+import ForcePasswordChange from './components/ForcePasswordChange';
 import Navbar from './components/Navbar';
 import MainOverview from './components/MainOverview';
 import LeadsGenerator from './components/LeadsGenerator';
@@ -241,6 +242,20 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <AmbientBackdrop />
         <LoginModal onLogin={handleLogin} />
+      </div>
+    );
+  }
+
+  // A temporary password from the admin only opens the change-password screen
+  if (currentUser.mustChangePassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <AmbientBackdrop />
+        <ForcePasswordChange
+          user={currentUser}
+          onChanged={(user) => setCurrentUser(user ? renameLegacyUser(user) : { ...currentUser, mustChangePassword: false })}
+          onSignOut={handleLogout}
+        />
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShieldAlert,
   UserPlus,
@@ -12,11 +12,55 @@ import {
   UserX,
   UserCheck2,
   Edit3,
-  Trash2
+  Trash2,
+  Copy,
+  KeyRound,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
+import { listStaff, createStaff, resetStaffPassword, setStaffStatus, updateStaff } from '../lib/staff';
 
-export default function AdminDashboard({ users, setUsers, currentUser, onClearDatabase }) {
+export default function AdminDashboard({ currentUser, onClearDatabase }) {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+
+  // Accounts live on the server, so the screen reads them instead of keeping its own copy
+  const [users, setUsers] = useState([]);
+  const [storage, setStorage] = useState('persistent');
+  const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState('');
+  const [busyEmail, setBusyEmail] = useState('');
+  const [creating, setCreating] = useState(false);
+  // Shown once: the temporary password the admin hands to the employee
+  const [handover, setHandover] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await listStaff();
+      setUsers(data.users || []);
+      setStorage(data.storage || 'persistent');
+      setActionError('');
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const runAction = async (email, work) => {
+    setBusyEmail(email);
+    setActionError('');
+    try {
+      await work();
+      await refresh();
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setBusyEmail('');
+    }
+  };
 
   const [editingUser, setEditingUser] = useState(null);
   const [editNameInput, setEditNameInput] = useState('');
@@ -35,62 +79,71 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
     }
   });
 
-  const handlePermissionToggle = (userId, permKey) => {
-    const updated = users.map(u => {
-      if (u.id === userId) {
-        return {
-          ...u,
-          permissions: {
-            ...u.permissions,
-            [permKey]: !u.permissions[permKey]
-          }
-        };
-      }
-      return u;
-    });
-    setUsers(updated);
+  const handlePermissionToggle = (user, permKey) => {
+    if (busyEmail) return;
+    runAction(user.email, () =>
+      updateStaff(user.email, { permissions: { ...user.permissions, [permKey]: !user.permissions[permKey] } })
+    );
   };
 
-  const handleStatusToggle = (userId) => {
-    const updated = users.map(u => {
-      if (u.id === userId) {
-        const nextStatus = u.status === 'Suspended' ? 'Active' : 'Suspended';
-        return { ...u, status: nextStatus };
-      }
-      return u;
-    });
-    setUsers(updated);
+  const handleStatusToggle = (user) => {
+    if (busyEmail) return;
+    const nextStatus = user.status === 'Suspended' ? 'Active' : 'Suspended';
+    runAction(user.email, () => setStaffStatus(user.email, nextStatus));
   };
 
-  const handleEditUserSubmit = (e) => {
+  const handleResetPassword = (user) => {
+    if (busyEmail) return;
+    if (!window.confirm(`Issue a new temporary password for ${user.name}? Their current password stops working immediately.`)) return;
+    runAction(user.email, async () => {
+      const result = await resetStaffPassword(user.email);
+      setCopied(false);
+      setHandover({ name: user.name, email: user.email, password: result.tempPassword });
+    });
+  };
+
+  const handleEditUserSubmit = async (e) => {
     e.preventDefault();
-    if (!editingUser || !editNameInput || !editEmailInput) return;
+    if (!editingUser || !editNameInput) return;
 
-    const updated = users.map(u => {
-      if (u.id === editingUser.id) {
-        return { ...u, name: editNameInput, email: editEmailInput };
-      }
-      return u;
-    });
-
-    setUsers(updated);
-    setEditingUser(null);
-    setEditNameInput('');
-    setEditEmailInput('');
+    try {
+      await updateStaff(editingUser.email, { name: editNameInput });
+      setEditingUser(null);
+      setEditNameInput('');
+      setEditEmailInput('');
+      await refresh();
+    } catch (err) {
+      setActionError(err.message);
+    }
   };
 
-  const handleAddUser = (e) => {
+  const handleAddUser = async (e) => {
     e.preventDefault();
     if (!newUser.name || !newUser.email) return;
 
-    const userToAdd = {
-      id: Date.now(),
-      ...newUser,
-      status: 'Active'
-    };
+    setCreating(true);
+    setActionError('');
+    try {
+      const result = await createStaff({
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        permissions: newUser.permissions
+      });
+      setIsAddUserModalOpen(false);
+      setCopied(false);
+      setHandover({ name: result.user.name, email: result.user.email, password: result.tempPassword });
+      await refresh();
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setCreating(false);
+    }
+  };
 
-    setUsers([...users, userToAdd]);
+  const closeAddUser = () => {
     setIsAddUserModalOpen(false);
+    setActionError('');
     setNewUser({
       name: '',
       email: '',
@@ -115,7 +168,7 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
             Admin Control & Access Management
           </h1>
           <p className="text-sm text-muted mt-1">
-            Full admin control: manage staff records and permissions, suspend access, and clear the database for a fresh start. Passwords are set on the server.
+            Create staff accounts here. Each new account gets a one-time temporary password that the employee must replace the first time they sign in.
           </p>
         </div>
 
@@ -145,6 +198,23 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
         </div>
       </div>
 
+      {storage === 'memory' && (
+        <div className="flex items-start gap-2 p-3 rounded-xl border border-amber-400/30 bg-amber-500/10 text-xs font-medium text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-px" />
+          <span>
+            Accounts created here are held in memory only: they disappear when the server restarts or redeploys.
+            Add the two database variables to keep them.
+          </span>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="flex items-start gap-2 p-3 rounded-xl border border-rose-400/30 bg-rose-500/10 text-xs font-medium text-rose-500">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-px" />
+          <span>{actionError}</span>
+        </div>
+      )}
+
       {/* Users Table */}
       <div className="glass overflow-hidden">
         <div className="p-5 border-b border-[var(--glass-border)] flex items-center justify-between">
@@ -167,16 +237,35 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.07] text-sm">
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="py-6 px-4 text-center text-sm text-muted">
+                    <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading accounts…
+                  </td>
+                </tr>
+              )}
+              {!loading && users.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-6 px-4 text-center text-sm text-muted">
+                    No staff accounts yet. Use <strong>Create New Account</strong> to add one.
+                  </td>
+                </tr>
+              )}
               {users.map((user) => (
-                <tr key={user.id} className={`row-hover ${user.status === 'Suspended' ? 'opacity-60 bg-red-50/30 dark:bg-red-950/10' : ''}`}>
+                <tr key={user.email} className={`row-hover ${user.status === 'Suspended' ? 'opacity-60 bg-red-50/30 dark:bg-red-950/10' : ''}`}>
                   <td className="py-4 px-4">
                     <div className="font-semibold text-[var(--text-primary)] flex items-center">
                       {user.name}
-                      {user.id === currentUser.id && (
+                      {user.email === currentUser?.email && (
                         <span className="ml-2 px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 text-xs rounded-full font-semibold">You</span>
                       )}
                     </div>
                     <div className="text-xs text-muted">{user.email}</div>
+                    {user.mustChangePassword && (
+                      <div className="text-[10px] font-semibold text-amber-500 mt-1 inline-flex items-center gap-1">
+                        <KeyRound className="w-3 h-3" /> Temporary password not yet replaced
+                      </div>
+                    )}
                   </td>
                   <td className="py-4 px-4 space-y-1">
                     <span className="px-2.5 py-0.5 glass-soft text-[var(--text-primary)]/80 rounded-full text-xs font-semibold inline-block">
@@ -195,7 +284,7 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                   {['leads', 'dialler', 'analytics', 'followups', 'admin'].map((permKey) => (
                     <td key={permKey} className="py-4 px-4 text-center">
                       <button
-                        onClick={() => handlePermissionToggle(user.id, permKey)}
+                        onClick={() => handlePermissionToggle(user, permKey)}
                         className={`p-1.5 rounded-lg transition-all ${
                           user.permissions[permKey]
                             ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200'
@@ -223,7 +312,16 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
                       <span>Edit</span>
                     </button>
                     <button
-                      onClick={() => handleStatusToggle(user.id)}
+                      onClick={() => handleResetPassword(user)}
+                      disabled={busyEmail === user.email}
+                      className="px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 disabled:opacity-50"
+                      title="Issue a new temporary password"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Temp Password</span>
+                    </button>
+                    <button
+                      onClick={() => handleStatusToggle(user)}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 ${
                         user.status === 'Suspended'
                           ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-400'
@@ -365,19 +463,76 @@ export default function AdminDashboard({ users, setUsers, currentUser, onClearDa
               <div className="flex justify-end space-x-3 pt-3 border-t border-[var(--glass-border)]">
                 <button
                   type="button"
-                  onClick={() => setIsAddUserModalOpen(false)}
+                  onClick={closeAddUser}
                   className="px-4 py-2 glass-soft text-[var(--text-primary)]/80 rounded-xl text-sm font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium shadow-md"
+                  disabled={creating}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium shadow-md disabled:opacity-70 inline-flex items-center gap-2"
                 >
-                  Create Account
+                  {creating && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {creating ? 'Creating…' : 'Create Account'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Temporary password handover */}
+      {handover && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
+          <div className="w-full max-w-md glass-strong overflow-hidden">
+            <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+              <h3 className="text-lg font-bold">Temporary password ready</h3>
+              <p className="text-xs text-emerald-50 mt-0.5">
+                Give this to {handover.name}. It is shown once and must be replaced at first sign-in.
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Email</div>
+                <div className="font-mono text-sm text-[var(--text-primary)]">{handover.email}</div>
+              </div>
+
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Temporary password</div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 p-3 rounded-xl glass-input font-mono text-sm tracking-wider text-[var(--text-primary)] select-all">
+                    {handover.password}
+                  </code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard?.writeText(handover.password);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="p-2.5 glass-soft rounded-xl text-[var(--text-primary)]/80 hover:bg-white/15"
+                    title="Copy password"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted leading-relaxed">
+                The employee signs in with this password and is taken straight to a screen where they choose their own.
+                If it is lost, issue a new one from the staff table.
+              </p>
+
+              <div className="flex justify-end pt-2 border-t border-[var(--glass-border)]">
+                <button
+                  onClick={() => setHandover(null)}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium shadow-md"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

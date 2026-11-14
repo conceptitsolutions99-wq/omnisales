@@ -21,6 +21,19 @@ export async function signIn(email, password) {
   return data.user;
 }
 
+export async function changePassword(currentPassword, newPassword) {
+  const response = await fetch('/api/auth/change-password', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Password change failed (${response.status}).`);
+  return data.user;
+}
+
 export async function signOut() {
   try {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });

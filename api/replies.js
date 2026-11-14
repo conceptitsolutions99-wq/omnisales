@@ -8,7 +8,7 @@ const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
-  const session = auth.requireSession(req, res);
+  const session = auth.requireActiveSession(req, res);
   if (!session) return;
 
   if (req.method !== 'GET') {

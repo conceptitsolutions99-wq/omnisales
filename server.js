@@ -294,10 +294,14 @@ const writeEmailLog = (entries) => {
 app.post('/api/auth/login', require('./api/auth/login'));
 app.get('/api/auth/me', require('./api/auth/me'));
 app.post('/api/auth/logout', require('./api/auth/logout'));
+app.post('/api/auth/change-password', require('./api/auth/change-password'));
+
+// Local staff-account management (admin only)
+app.all('/api/admin/users', require('./api/admin/users'));
 
 // API: Send an outreach email and record the delivery attempt
 app.post('/api/emails', async (req, res) => {
-  const session = auth.requireSession(req, res);
+  const session = auth.requireActiveSession(req, res);
   if (!session) return;
 
   const { to, subject, body, leadId, leadName, company, sentBy } = req.body || {};
@@ -356,14 +360,14 @@ app.post('/api/emails', async (req, res) => {
 
 // API: Delivery log (most recent first)
 app.get('/api/emails', (req, res) => {
-  const session = auth.requireSession(req, res);
+  const session = auth.requireActiveSession(req, res);
   if (!session) return;
   res.json({ configured: Boolean(transporter), from: mailFrom, sender: smtpUser, emails: readEmailLog() });
 });
 
 // API: customer replies, attributed to the agent who sent the original email
 app.get('/api/replies', async (req, res) => {
-  const session = auth.requireSession(req, res);
+  const session = auth.requireActiveSession(req, res);
   if (!session) return;
 
   if (!transporter) {

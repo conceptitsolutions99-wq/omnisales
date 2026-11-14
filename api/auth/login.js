@@ -1,7 +1,8 @@
 // POST /api/auth/login — verifies credentials on the server and starts a signed session.
 const auth = require('../../lib/auth-core');
+const store = require('../../lib/user-store');
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
   if (req.method !== 'POST') {
@@ -11,7 +12,7 @@ module.exports = (req, res) => {
 
   if (!process.env.AUTH_SECRET) {
     return res.status(503).json({
-      error: 'Sign-in is not configured. Add AUTH_SECRET and ADMIN_EMAIL/ADMIN_PASSWORD (or APP_USERS) to the environment, then redeploy.'
+      error: 'Sign-in is not configured. Add AUTH_SECRET to the environment, then redeploy.'
     });
   }
 
@@ -25,15 +26,18 @@ module.exports = (req, res) => {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
-  const user = auth.findUser(email);
+  const account = await auth.resolveAccount(email);
 
   // Same answer for an unknown account and a wrong password
-  if (!user || user.status === 'Suspended' || !auth.verifyPassword(password, user.passwordHash)) {
+  if (!account || account.status === 'Suspended' || !store.verifyPassword(password, account.passwordHash)) {
     auth.recordFailure(ip);
     return res.status(401).json({ error: 'Email or password is incorrect.' });
   }
 
   auth.clearFailures(ip);
-  res.setHeader('Set-Cookie', auth.cookieFor(req, auth.createSession(user)));
-  return res.status(200).json({ ok: true, user: auth.publicUser(user) });
+  res.setHeader('Set-Cookie', auth.cookieFor(req, auth.createSession(account)));
+  return res.status(200).json({
+    ok: true,
+    user: { ...store.publicUser(account), mustChangePassword: Boolean(account.mustChangePassword) }
+  });
 };
