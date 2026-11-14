@@ -1,6 +1,8 @@
-// Real business leads from OpenStreetMap, fetched straight from the browser so a
-// static deployment needs no backend for search. Nominatim and Overpass both allow
-// cross-origin requests. Data © OpenStreetMap contributors (ODbL).
+// Real business leads, fetched straight from the browser so a static deployment
+// needs no backend. OpenStreetMap's Overpass is tried first because it is free and
+// key-less; when it is overloaded, Geoapify's free plan (3,000 credits/day, no card)
+// takes over. Geoapify requires a browser key to be domain-restricted.
+// Data © OpenStreetMap contributors (ODbL) · Powered by Geoapify.
 
 const JSON_HEADERS = { Accept: 'application/json' };
 
@@ -33,6 +35,18 @@ const LEAD_CATEGORIES = {
   ]
 };
 
+// Geoapify taxonomy equivalents of the same six categories
+const GEOAPIFY_CATEGORIES = {
+  offices: 'office',
+  professional: 'office',
+  retail: 'commercial',
+  food: 'catering',
+  health: 'healthcare',
+  trades: 'service'
+};
+
+const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || '';
+
 // The timer stays armed until the body is read: a response that stalls mid-body
 // would otherwise hang the request forever.
 const requestWithTimeout = async (url, options = {}, timeoutMs = 7000) => {
@@ -44,6 +58,14 @@ const requestWithTimeout = async (url, options = {}, timeoutMs = 7000) => {
     return { ok: response.ok, status: response.status, body };
   } finally {
     clearTimeout(timer);
+  }
+};
+
+const readJson = (body) => {
+  try {
+    return JSON.parse(body);
+  } catch (err) {
+    return null;
   }
 };
 
@@ -59,12 +81,7 @@ const geocodeCity = async (city) => {
   const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 6000);
   if (!response.ok) return null;
 
-  let results;
-  try {
-    results = JSON.parse(response.body);
-  } catch (err) {
-    return null;
-  }
+  const results = readJson(response.body);
   if (!Array.isArray(results) || results.length === 0) return null;
 
   const [south, north, west, east] = results[0].boundingbox.map(Number);
@@ -149,10 +166,8 @@ const queryOverpass = async (query) => {
         continue;
       }
 
-      let payload;
-      try {
-        payload = JSON.parse(response.body);
-      } catch (err) {
+      const payload = readJson(response.body);
+      if (!payload) {
         lastError = 'The map data service returned an unexpected response.';
         continue;
       }
@@ -172,26 +187,121 @@ const queryOverpass = async (query) => {
   throw new Error(lastError);
 };
 
+const searchWithOverpass = async ({ city, category, limit, country, bbox }) => {
+  const query = bbox ? buildBboxQuery(bbox, category, limit) : buildAreaQuery(city, category, limit);
+  const payload = await queryOverpass(query);
+  const elements = Array.isArray(payload.elements) ? payload.elements : [];
+  return elements.map((element) => mapOverpassLead(element, city, country)).filter(Boolean);
+};
+
+// Geoapify Places returns the listings; phone/email/website live in Place Details,
+// so the best few results are expanded (1 credit per place on the free plan).
+const searchWithGeoapify = async ({ city, category, limit, country, bbox }) => {
+  if (!GEOAPIFY_KEY || !bbox) return [];
+
+  const categories = GEOAPIFY_CATEGORIES[category] || 'office';
+  const filter = `rect:${bbox.west},${bbox.south},${bbox.east},${bbox.north}`;
+  const url =
+    `https://api.geoapify.com/v2/places?categories=${encodeURIComponent(categories)}` +
+    `&filter=${encodeURIComponent(filter)}&limit=${Math.min(Math.max(limit, 1), 20)}` +
+    `&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
+
+  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 9000);
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      'Geoapify rejected the API key. Check VITE_GEOAPIFY_API_KEY, and make sure the key allows this site domain.'
+    );
+  }
+  if (!response.ok) return [];
+
+  const data = readJson(response.body);
+  const places = (data?.features || []).map((feature) => feature.properties).filter((place) => place?.place_id);
+
+  const expanded = await Promise.all(
+    places.slice(0, 8).map(async (place) => {
+      const detailUrl =
+        `https://api.geoapify.com/v2/place-details?id=${encodeURIComponent(place.place_id)}` +
+        `&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
+      try {
+        const detail = await requestWithTimeout(detailUrl, { headers: JSON_HEADERS }, 9000);
+        if (!detail.ok) return null;
+        const payload = readJson(detail.body);
+        return payload?.features?.[0]?.properties || null;
+      } catch (err) {
+        return null;
+      }
+    })
+  );
+
+  return expanded.filter((place) => place?.contact?.phone).map((place) => ({
+    id: `geoapify-${place.place_id || place.formatted}`,
+    name: place.name || place.address_line1 || 'Unnamed business',
+    company: place.name || place.address_line1 || 'Unnamed business',
+    phone: String(place.contact.phone).replace(/[^+\d]/g, ''),
+    displayPhone: place.contact.phone,
+    email: place.contact.email || '',
+    website: place.website || '',
+    address: [place.address_line1, place.address_line2].filter(Boolean).join(', '),
+    country: country || (place.country_code ? place.country_code.toUpperCase() : ''),
+    region: place.city || place.state || city,
+    size: 'Unknown',
+    solution: '',
+    status: 'New',
+    value: 0,
+    notes: `Verified listing via Geoapify${place.website ? ' · website on file' : ' · no website listed'}`,
+    createdAt: new Date().toISOString().split('T')[0],
+    lat: place.lat ?? null,
+    lon: place.lon ?? null
+  }));
+};
+
 export async function searchLeads({ city, category = 'offices', limit = 30, country = '' }) {
   const bbox = await geocodeCity(city);
+  const options = { city, category, limit, country, bbox };
 
-  let payload;
-  if (bbox) {
-    try {
-      payload = await queryOverpass(buildBboxQuery(bbox, category, limit));
-    } catch (err) {
-      payload = await queryOverpass(buildAreaQuery(city, category, limit));
-    }
-  } else {
-    payload = await queryOverpass(buildAreaQuery(city, category, limit));
+  let overpassLeads = [];
+  let overpassError = null;
+
+  try {
+    overpassLeads = await searchWithOverpass(options);
+  } catch (err) {
+    overpassError = err;
   }
 
-  const elements = Array.isArray(payload.elements) ? payload.elements : [];
-  const leads = elements.map((element) => mapOverpassLead(element, city, country)).filter(Boolean);
+  if (overpassLeads.length > 0) {
+    return {
+      leads: overpassLeads,
+      count: overpassLeads.length,
+      location: bbox?.label || city,
+      source: 'OpenStreetMap',
+      attribution: '© OpenStreetMap contributors'
+    };
+  }
+
+  // Overpass is busy, timed out, or had nothing: fall back to the keyed provider
+  let geoapifyError = null;
+  try {
+    const geoapifyLeads = await searchWithGeoapify(options);
+    if (geoapifyLeads.length > 0) {
+      return {
+        leads: geoapifyLeads,
+        count: geoapifyLeads.length,
+        location: bbox?.label || city,
+        source: 'Geoapify',
+        attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors'
+      };
+    }
+  } catch (err) {
+    geoapifyError = err;
+  }
+
+  // A bad key is the actionable problem here, so it outranks the map service being busy
+  if (geoapifyError) throw geoapifyError;
+  if (overpassError) throw overpassError;
 
   return {
-    leads,
-    count: leads.length,
+    leads: [],
+    count: 0,
     location: bbox?.label || city,
     source: 'OpenStreetMap',
     attribution: '© OpenStreetMap contributors'
