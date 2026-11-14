@@ -11,7 +11,8 @@ import {
   LogOut,
   Globe,
   Sparkles,
-  Search
+  Search,
+  MailOpen
 } from 'lucide-react';
 
 const initialsOf = (name = '') =>
@@ -24,7 +25,7 @@ const initialsOf = (name = '') =>
     .join('')
     .toUpperCase();
 
-export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode, onOpenPalette }) {
+export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: true },
     { id: 'leads', label: 'Leads', icon: Users, permission: currentUser.permissions.leads },
@@ -91,6 +92,19 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
 
               {/* Controls */}
               <div className="flex items-center gap-2">
+                <button
+                  onClick={onOpenReplies}
+                  className="relative w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  title={repliesUnread > 0 ? `${repliesUnread} new customer ${repliesUnread === 1 ? 'reply' : 'replies'}` : 'Customer replies'}
+                >
+                  <MailOpen className="w-4 h-4" />
+                  {repliesUnread > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg shadow-rose-500/40">
+                      {repliesUnread > 9 ? '9+' : repliesUnread}
+                    </span>
+                  )}
+                </button>
+
                 <button
                   onClick={onOpenPalette}
                   className="flex items-center gap-2 h-9 px-2.5 xl:px-3 rounded-xl glass-soft text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"

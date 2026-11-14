@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { INITIAL_USERS } from './data/initialData';
 import LoginModal from './components/LoginModal';
 import Navbar from './components/Navbar';
@@ -9,6 +9,8 @@ import Analytics from './components/Analytics';
 import FollowUps from './components/FollowUps';
 import AdminDashboard from './components/AdminDashboard';
 import CommandPalette from './components/CommandPalette';
+import RepliesPanel from './components/RepliesPanel';
+import { fetchReplies, markRepliesSeen, isAdminUser } from './lib/replies';
 
 function AmbientBackdrop() {
   return (
@@ -120,6 +122,44 @@ export default function App() {
   const [selectedLeadForCall, setSelectedLeadForCall] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
+  // Customer replies to outreach email
+  const [replies, setReplies] = useState([]);
+  const [repliesOpen, setRepliesOpen] = useState(false);
+  const [repliesLoading, setRepliesLoading] = useState(false);
+  const [repliesError, setRepliesError] = useState('');
+
+  const loadReplies = useCallback(async (user) => {
+    if (!user) return;
+    setRepliesLoading(true);
+    setRepliesError('');
+    try {
+      const loaded = await fetchReplies(user);
+      setReplies(loaded);
+    } catch (err) {
+      setRepliesError(err.message === 'Failed to fetch' ? 'Cannot reach the mail service.' : err.message);
+    } finally {
+      setRepliesLoading(false);
+    }
+  }, []);
+
+  // Check on sign-in and then quietly every two minutes
+  useEffect(() => {
+    if (!currentUser) {
+      setReplies([]);
+      return undefined;
+    }
+    loadReplies(currentUser);
+    const timer = setInterval(() => loadReplies(currentUser), 120000);
+    return () => clearInterval(timer);
+  }, [currentUser, loadReplies]);
+
+  const openReplies = () => {
+    setRepliesOpen(true);
+    markRepliesSeen(replies.map((reply) => reply.id));
+    setReplies((current) => current.map((reply) => ({ ...reply, unread: false })));
+    loadReplies(currentUser);
+  };
+
   // ⌘K / Ctrl+K opens the command palette, Esc closes it
   useEffect(() => {
     const handleShortcut = (event) => {
@@ -213,6 +253,8 @@ export default function App() {
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         onOpenPalette={() => setPaletteOpen(true)}
+        repliesUnread={replies.filter((reply) => reply.unread).length}
+        onOpenReplies={openReplies}
       />
 
       <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-28 lg:pb-12">
@@ -278,6 +320,17 @@ export default function App() {
           )}
         </div>
       </main>
+
+      <RepliesPanel
+        open={repliesOpen}
+        onClose={() => setRepliesOpen(false)}
+        replies={replies}
+        loading={repliesLoading}
+        error={repliesError}
+        isAdmin={isAdminUser(currentUser)}
+        currentUser={currentUser}
+        onRefresh={() => loadReplies(currentUser)}
+      />
 
       <CommandPalette
         open={paletteOpen}

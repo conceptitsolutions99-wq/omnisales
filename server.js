@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const twilio = require('twilio');
 const nodemailer = require('nodemailer');
+const { fetchReplies } = require('./lib/replies-core');
 
 const app = express();
 app.use(express.json());
@@ -324,7 +325,12 @@ app.post('/api/emails', async (req, res) => {
       from: mailFrom,
       to: entry.to,
       subject,
-      text: body
+      text: body,
+      // Lets the reply tracker attribute an answer to the agent who wrote it
+      headers: {
+        'X-Concept-Agent': entry.sentBy,
+        'X-Concept-Lead': entry.leadName || entry.company || ''
+      }
     });
 
     entry.status = 'sent';
@@ -342,6 +348,26 @@ app.post('/api/emails', async (req, res) => {
 // API: Delivery log (most recent first)
 app.get('/api/emails', (req, res) => {
   res.json({ configured: Boolean(transporter), from: mailFrom, sender: smtpUser, emails: readEmailLog() });
+});
+
+// API: customer replies, attributed to the agent who sent the original email
+app.get('/api/replies', async (req, res) => {
+  if (!transporter) {
+    return res.status(503).json({ error: 'Reply tracking is not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD to .env and restart the server.' });
+  }
+
+  const agent = String(req.query.agent || '').trim();
+  const seesEverything = req.query.all === '1';
+
+  try {
+    const replies = await fetchReplies({ user: smtpUser, pass: smtpPass });
+    const visible = seesEverything || !agent
+      ? replies
+      : replies.filter((reply) => reply.agent && reply.agent.toLowerCase() === agent.toLowerCase());
+    res.json({ ok: true, count: visible.length, replies: visible });
+  } catch (err) {
+    res.status(502).json({ error: `Could not read the mailbox: ${err.message}` });
+  }
 });
 
 // Fallback to SPA index.html

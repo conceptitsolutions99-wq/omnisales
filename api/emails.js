@@ -75,7 +75,12 @@ module.exports = async (req, res) => {
       from: mailFrom,
       to: entry.to,
       subject,
-      text: body
+      text: body,
+      // Lets the reply tracker attribute an answer to the agent who wrote it
+      headers: {
+        'X-Concept-Agent': entry.sentBy,
+        'X-Concept-Lead': entry.leadName || entry.company || ''
+      }
     });
 
     entry.status = 'sent';
