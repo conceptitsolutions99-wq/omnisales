@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, RefreshCw, ClipboardList, ChevronDown, Link2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { REQUIREMENT_FORMS, REQUIREMENT_DETAILS } from '../data/requirementForms';
 import { requirementLink } from '../lib/requirements';
+import { buildQuote, quoteSubject, quoteCurrency } from '../lib/quote';
 
 const when = (value) => {
   if (!value) return '';
@@ -64,7 +65,110 @@ function Answers({ request }) {
   );
 }
 
-export default function RequirementsPanel({ open, onClose, requests, loading, error, isAdmin, onRefresh }) {
+// The ticked scope becomes a priced quote the agent can copy or email straight back
+function QuoteBuilder({ request, currentUser }) {
+  const [prices, setPrices] = useState({});
+  const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState('');
+  const quote = buildQuote(request, prices, currentUser?.name || '');
+
+  if (!quote.lines.length) return null;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(quote.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      setStatus('Clipboard unavailable — copy the lines from the form instead.');
+    }
+  };
+
+  const email = async () => {
+    if (!request.leadEmail) {
+      setStatus('This form has no customer email.');
+      return;
+    }
+    setSending(true);
+    setStatus('');
+    try {
+      const response = await fetch('/api/emails', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: request.leadEmail,
+          subject: quoteSubject(request),
+          body: quote.text,
+          leadId: request.leadId ?? null,
+          leadName: request.leadName,
+          company: request.company
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Sending failed (${response.status}).`);
+      setStatus(`Quote sent to ${request.leadEmail}.`);
+    } catch (err) {
+      setStatus(err.message === 'Failed to fetch' ? 'Cannot reach the mail service.' : err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Quote</span>
+        <span className="text-[13px] font-bold text-[var(--text-primary)]">
+          {quote.total ? `${quote.total.toLocaleString()} ${quoteCurrency}` : 'Price each line'}
+        </span>
+      </div>
+
+      {quote.lines.map((line) => (
+        <div key={line.id} className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold text-[var(--text-primary)] truncate">{line.title}</div>
+            <div className="text-[11px] text-muted truncate">{line.options.join(', ')}</div>
+          </div>
+          <input
+            type="number"
+            min="0"
+            step="50"
+            value={prices[line.id] ?? ''}
+            onChange={(event) => setPrices({ ...prices, [line.id]: event.target.value })}
+            placeholder="0"
+            className="w-24 p-1.5 glass-input rounded-lg text-[12px] text-right dark:text-white"
+            aria-label={`${line.title} price`}
+          />
+        </div>
+      ))}
+
+      <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+        <div className="flex gap-2">
+          <button
+            onClick={copy}
+            className="px-2.5 py-1.5 rounded-lg glass-soft text-[11px] font-semibold text-muted hover:text-[var(--text-primary)]"
+          >
+            {copied ? 'Copied' : 'Copy quote'}
+          </button>
+          <button
+            onClick={email}
+            disabled={sending}
+            className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60"
+          >
+            {sending ? 'Sending…' : 'Email quote'}
+          </button>
+        </div>
+        <span className="text-[11px] text-muted truncate max-w-[45%]">{request.leadEmail || 'no email on form'}</span>
+      </div>
+
+      {status && <p className="text-[11px] text-emerald-300">{status}</p>}
+    </div>
+  );
+}
+
+export default function RequirementsPanel({ open, onClose, requests, loading, error, isAdmin, currentUser, onRefresh }) {
   const [expanded, setExpanded] = useState('');
   const [copied, setCopied] = useState('');
 
@@ -194,7 +298,12 @@ export default function RequirementsPanel({ open, onClose, requests, loading, er
                   <p className="mt-2 text-[11px] text-emerald-300 break-all">{requirementLink(request.token)}</p>
                 )}
 
-                {open && (request.submittedAt ? <Answers request={request} /> : (
+                {open && (request.submittedAt ? (
+                  <>
+                    <Answers request={request} />
+                    <QuoteBuilder request={request} currentUser={currentUser} />
+                  </>
+                ) : (
                   <p className="mt-3 border-t border-white/10 pt-3 text-[11px] text-muted">
                     Nothing yet. The link is {requirementLink(request.token)}
                   </p>

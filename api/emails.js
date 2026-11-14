@@ -87,6 +87,7 @@ module.exports = async (req, res) => {
     try {
       const request = await requirementsStore.createRequest({
         type: formType,
+        leadId: entry.leadId ?? null,
         leadEmail: entry.to,
         leadName: entry.leadName,
         company: entry.company,

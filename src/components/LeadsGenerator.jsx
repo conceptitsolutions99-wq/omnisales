@@ -16,7 +16,8 @@ import {
   FileText,
   DollarSign,
   RefreshCw,
-  Database
+  Database,
+  ClipboardList
 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = [
@@ -28,7 +29,16 @@ const CATEGORY_OPTIONS = [
   { value: 'trades', label: 'Trades & repair' },
 ];
 
-export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelectLeadForCall, currentUser, callLogs }) {
+export default function LeadsGenerator({
+  leads,
+  setLeads,
+  setActiveTab,
+  onSelectLeadForCall,
+  currentUser,
+  callLogs,
+  requirementEvents = {},
+  onOpenRequirements
+}) {
   const [searchTerm, setSearchTerm] = useState('');
   const [countryFilter, setCountryFilter] = useState('All');
   const [sizeFilter, setSizeFilter] = useState('All');
@@ -398,6 +408,30 @@ export default function LeadsGenerator({ leads, setLeads, setActiveTab, onSelect
                     </td>
                     <td className="py-4 px-4">
                       {getStatusBadge(lead.status)}
+                      {(() => {
+                        const event =
+                          requirementEvents[`id:${lead.id}`] ||
+                          requirementEvents[`email:${(lead.email || '').toLowerCase()}`];
+                        if (!event) return null;
+                        return (
+                          <button
+                            onClick={onOpenRequirements}
+                            title={
+                              event.submittedAt
+                                ? `Requirements submitted ${new Date(event.submittedAt).toLocaleString()} — open to price a quote`
+                                : 'Requirements form sent, waiting for answers'
+                            }
+                            className={`mt-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold inline-flex items-center gap-1 border ${
+                              event.submittedAt
+                                ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30'
+                                : 'bg-amber-400/15 text-amber-300 border-amber-400/30'
+                            }`}
+                          >
+                            <ClipboardList className="w-3 h-3" />
+                            {event.submittedAt ? 'Requirements in' : 'Form sent'}
+                          </button>
+                        );
+                      })()}
                     </td>
                     <td className="py-4 px-4 text-right">
                       <button

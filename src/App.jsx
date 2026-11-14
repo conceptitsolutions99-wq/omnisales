@@ -361,6 +361,12 @@ function Workspace() {
               onSelectLeadForCall={setSelectedLeadForCall}
               currentUser={currentUser}
               callLogs={callLogs}
+              onOpenRequirements={openRequirements}
+              requirementEvents={requirements.reduce((acc, request) => {
+                if (request.leadId != null) acc[`id:${request.leadId}`] = request;
+                if (request.leadEmail) acc[`email:${request.leadEmail}`] = request;
+                return acc;
+              }, {})}
             />
           )}
 
@@ -414,6 +420,7 @@ function Workspace() {
         loading={requirementsLoading}
         error={requirementsError}
         isAdmin={viewerIsAdmin}
+        currentUser={currentUser}
         onRefresh={loadRequirements}
       />
 
