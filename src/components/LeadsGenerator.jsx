@@ -126,15 +126,25 @@ export default function LeadsGenerator({
     setFetchMessage(`Searching OpenStreetMap for ${categoryLabel} in ${city}…`);
 
     try {
+      // Places already saved never need their details bought again, so the search is told
+      // which ids are on file before it spends anything
       const data = await searchLeads({
         city,
         category: fetchCategory,
         limit: 30,
         country: countryFilter === 'All' ? '' : countryFilter,
         offset: nextSearchOffset(city, fetchCategory),
+        knownIds: new Set(leads.map(lead => lead.id)),
       });
 
       const fetched = Array.isArray(data.leads) ? data.leads : [];
+      if (fetched.length === 0 && data.allKnown) {
+        setFetchMessage(
+          `All ${data.skippedKnown} results for ${city} are already in your list, so no credits were spent. Search again to move to the next page.`
+        );
+        setTimeout(() => setFetchMessage(''), 10000);
+        return;
+      }
       if (fetched.length === 0) {
         setFetchMessage(`No ${categoryLabel.toLowerCase()} with a published phone number were found in ${city}. Try another city or category.`);
         return;
@@ -142,7 +152,7 @@ export default function LeadsGenerator({
 
       const existingPhones = new Set(leads.map(lead => lead.phone));
       const fresh = fetched.filter(lead => !existingPhones.has(lead.phone));
-      const skipped = fetched.length - fresh.length;
+      const skipped = fetched.length - fresh.length + (data.skippedKnown || 0);
 
       if (fresh.length > 0) setLeads(prev => [...fresh, ...prev]);
 

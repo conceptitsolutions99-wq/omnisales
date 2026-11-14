@@ -220,7 +220,7 @@ const geocodeWithGeoapify = async (city) => {
   return { west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: data.results[0].formatted };
 };
 
-const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset = 0 }) => {
+const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset = 0, knownIds }) => {
   if (!GEOAPIFY_KEY) return [];
 
   const area = bbox || (await geocodeWithGeoapify(city));
@@ -247,8 +247,13 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
   const data = readJson(response.body);
   const places = (data?.features || []).map((feature) => feature.properties).filter((place) => place?.place_id);
 
+  // Details cost one credit each, so businesses already in the list are dropped before the
+  // spend instead of after it: a repeat search pays only for places the agent has not seen.
+  const unknown = knownIds ? places.filter((place) => !knownIds.has(`geoapify-${place.place_id}`)) : places;
+  const skippedKnown = places.length - unknown.length;
+
   const expanded = await Promise.all(
-    places.slice(0, 12).map(async (place) => {
+    unknown.slice(0, 12).map(async (place) => {
       const detailUrl =
         `https://api.geoapify.com/v2/place-details?id=${encodeURIComponent(place.place_id)}` +
         `&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
@@ -263,7 +268,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     })
   );
 
-  return expanded.filter((place) => place?.contact?.phone).map((place) => ({
+  const leads = expanded.filter((place) => place?.contact?.phone).map((place) => ({
     id: `geoapify-${place.place_id || place.formatted}`,
     name: place.name || place.address_line1 || 'Unnamed business',
     company: place.name || place.address_line1 || 'Unnamed business',
@@ -283,11 +288,13 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     lat: place.lat ?? null,
     lon: place.lon ?? null
   }));
+
+  return { leads, skippedKnown, hadResults: places.length > 0 };
 };
 
-export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0 }) {
+export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds }) {
   const bbox = await geocodeCity(city);
-  const options = { city, category, limit, country, bbox, offset };
+  const options = { city, category, limit, country, bbox, offset, knownIds };
 
   let overpassLeads = [];
   let overpassError = null;
@@ -304,7 +311,8 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       count: overpassLeads.length,
       location: bbox?.label || city,
       source: 'OpenStreetMap',
-      attribution: '© OpenStreetMap contributors'
+      attribution: '© OpenStreetMap contributors',
+      skippedKnown: 0
     };
   }
 
@@ -316,9 +324,12 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
   }
 
   let geoapifyLeads = [];
+  let geoapifySkipped = 0;
   let geoapifyError = null;
   try {
-    geoapifyLeads = await searchWithGeoapify(options);
+    const result = await searchWithGeoapify(options);
+    geoapifyLeads = result.leads;
+    geoapifySkipped = result.skippedKnown;
   } catch (err) {
     geoapifyError = err;
   }
@@ -329,7 +340,21 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       count: geoapifyLeads.length,
       location: bbox?.label || city,
       source: 'Geoapify',
-      attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors'
+      attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors',
+      skippedKnown: geoapifySkipped
+    };
+  }
+
+  // Every listing on this page is already saved: say so instead of reporting a dead end
+  if (geoapifySkipped > 0) {
+    return {
+      leads: [],
+      count: 0,
+      allKnown: true,
+      location: bbox?.label || city,
+      source: 'Geoapify',
+      attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors',
+      skippedKnown: geoapifySkipped
     };
   }
 
