@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, RefreshCw, MailOpen, Reply, User, AlertTriangle } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, RefreshCw, MailOpen, Reply, User, AlertTriangle, UserCog } from 'lucide-react';
 
 const timeAgo = (value) => {
   if (!value) return '';
@@ -14,10 +14,34 @@ const timeAgo = (value) => {
   return days === 1 ? 'yesterday' : `${days} days ago`;
 };
 
-export default function RepliesPanel({ open, onClose, replies, loading, error, isAdmin, currentUser, onRefresh }) {
+export default function RepliesPanel({
+  open,
+  onClose,
+  replies,
+  loading,
+  error,
+  isAdmin,
+  currentUser,
+  staff = [],
+  storage = 'persistent',
+  onRefresh,
+  onAssign
+}) {
+  const [busyId, setBusyId] = useState('');
+
   if (!open) return null;
 
   const unread = replies.filter((reply) => reply.unread).length;
+
+  const changeAssignee = async (replyId, value) => {
+    if (!onAssign) return;
+    setBusyId(replyId);
+    try {
+      await onAssign(replyId, value === 'auto' ? '' : value);
+    } finally {
+      setBusyId('');
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-xl p-4 sm:p-6 overflow-y-auto">
@@ -37,7 +61,9 @@ export default function RepliesPanel({ open, onClose, replies, loading, error, i
                 )}
               </h2>
               <p className="text-[11px] text-muted">
-                {isAdmin ? 'Every reply across the team' : `Replies to email you sent, ${currentUser?.name || ''}`}
+                {isAdmin
+                  ? 'Every reply across the team · assign any reply to an employee'
+                  : `Replies to email you sent, ${currentUser?.name || ''}`}
               </p>
             </div>
           </div>
@@ -105,7 +131,29 @@ export default function RepliesPanel({ open, onClose, replies, loading, error, i
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[11px] text-muted whitespace-nowrap">{timeAgo(reply.receivedAt)}</div>
-                  {isAdmin && (
+
+                  {isAdmin ? (
+                    <div className="mt-1.5">
+                      <label className="flex items-center justify-end gap-1 text-[10px] text-muted mb-1">
+                        <UserCog className="w-2.5 h-2.5" />
+                        {reply.manual ? 'Assigned by admin' : 'Follow the sender'}
+                      </label>
+                      <select
+                        value={reply.manual ? reply.agentEmail || 'auto' : 'auto'}
+                        disabled={busyId === reply.id}
+                        onChange={(event) => changeAssignee(reply.id, event.target.value)}
+                        className="py-1 px-2 glass-input rounded-lg text-[11px] dark:text-white max-w-[11rem] disabled:opacity-60"
+                        title="Assign this reply to an employee"
+                      >
+                        <option value="auto">Automatic · {reply.agent || 'Unassigned'}</option>
+                        {staff.map((person) => (
+                          <option key={person.email} value={person.email}>
+                            {person.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
                     <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full accent-pill">
                       <User className="w-2.5 h-2.5" />
                       {reply.agent || 'Unassigned'}
@@ -118,7 +166,14 @@ export default function RepliesPanel({ open, onClose, replies, loading, error, i
         </div>
 
         <div className="px-5 py-3 border-t border-white/10 text-[11px] text-muted">
-          Replies are read from {isAdmin ? 'the shared inbox' : 'your sent threads'} · refreshed every two minutes
+          Replies are read from {isAdmin ? 'the shared inbox' : 'your sent threads'} · attributed to whoever sent the
+          original email · refreshed every two minutes
+          {isAdmin && storage === 'memory' && (
+            <span className="mt-1 flex items-center gap-1.5 text-amber-300">
+              <AlertTriangle className="w-3 h-3 shrink-0" />
+              Assignments are held in memory until the Redis variables are set, so they clear on restart.
+            </span>
+          )}
         </div>
       </div>
     </div>

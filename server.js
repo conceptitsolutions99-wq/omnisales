@@ -6,8 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const twilio = require('twilio');
 const nodemailer = require('nodemailer');
-const { fetchReplies } = require('./lib/replies-core');
 const auth = require('./lib/auth-core');
+const sentStore = require('./lib/replies-store');
 
 const app = express();
 app.use(express.json());
@@ -349,6 +349,17 @@ app.post('/api/emails', async (req, res) => {
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
     writeEmailLog([entry, ...readEmailLog()]);
+
+    // Lets the reply tracker attribute an answer to the agent who wrote it
+    await sentStore.rememberSent({
+      messageId: info.messageId,
+      agent: entry.sentBy,
+      agentEmail: session.email,
+      leadName: entry.leadName || entry.company,
+      to: entry.to,
+      subject,
+      sentAt: entry.sentAt
+    });
     res.json({ ok: true, email: entry });
   } catch (err) {
     entry.status = 'failed';
@@ -365,28 +376,8 @@ app.get('/api/emails', (req, res) => {
   res.json({ configured: Boolean(transporter), from: mailFrom, sender: smtpUser, emails: readEmailLog() });
 });
 
-// API: customer replies, attributed to the agent who sent the original email
-app.get('/api/replies', async (req, res) => {
-  const session = auth.requireActiveSession(req, res);
-  if (!session) return;
-
-  if (!transporter) {
-    return res.status(503).json({ error: 'Reply tracking is not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD to .env and restart the server.' });
-  }
-
-  const agent = session.name;
-  const seesEverything = auth.isAdmin(session);
-
-  try {
-    const replies = await fetchReplies({ user: smtpUser, pass: smtpPass });
-    const visible = seesEverything || !agent
-      ? replies
-      : replies.filter((reply) => reply.agent && reply.agent.toLowerCase() === agent.toLowerCase());
-    res.json({ ok: true, count: visible.length, replies: visible });
-  } catch (err) {
-    res.status(502).json({ error: `Could not read the mailbox: ${err.message}` });
-  }
-});
+// API: customer replies, attribution and admin reassignment (shared with the deployment)
+app.all('/api/replies', require('./api/replies'));
 
 // Fallback to SPA index.html
 app.get('*', (req, res) => {

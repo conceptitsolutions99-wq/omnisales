@@ -12,8 +12,9 @@ import AdminDashboard from './components/AdminDashboard';
 import CommandPalette from './components/CommandPalette';
 import RepliesPanel from './components/RepliesPanel';
 import SetupChecklist from './components/SetupChecklist';
-import { fetchReplies, markRepliesSeen, isAdminUser } from './lib/replies';
+import { fetchReplies, markRepliesSeen, isAdminUser, assignReply } from './lib/replies';
 import { getSession, signIn, signOut } from './lib/session';
+import { listStaff } from './lib/staff';
 
 function AmbientBackdrop() {
   return (
@@ -129,6 +130,7 @@ export default function App() {
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [repliesLoading, setRepliesLoading] = useState(false);
   const [repliesError, setRepliesError] = useState('');
+  const [repliesStorage, setRepliesStorage] = useState('persistent');
   const [setupOpen, setSetupOpen] = useState(false);
 
   const loadReplies = useCallback(async (user) => {
@@ -137,13 +139,41 @@ export default function App() {
     setRepliesError('');
     try {
       const loaded = await fetchReplies(user);
-      setReplies(loaded);
+      setReplies(loaded.replies);
+      setRepliesStorage(loaded.storage);
     } catch (err) {
       setRepliesError(err.message === 'Failed to fetch' ? 'Cannot reach the mail service.' : err.message);
     } finally {
       setRepliesLoading(false);
     }
   }, []);
+
+  // Admins need the roster to hand a reply to a specific employee
+  const [staff, setStaff] = useState([]);
+  const viewerIsAdmin = isAdminUser(currentUser);
+
+  useEffect(() => {
+    if (!viewerIsAdmin) {
+      setStaff([]);
+      return;
+    }
+    listStaff()
+      .then((data) => setStaff(Array.isArray(data.users) ? data.users : []))
+      .catch(() => setStaff([]));
+  }, [viewerIsAdmin]);
+
+  const assignReplyTo = useCallback(
+    async (replyId, email) => {
+      setRepliesError('');
+      try {
+        await assignReply(replyId, email);
+        await loadReplies(currentUser);
+      } catch (err) {
+        setRepliesError(err.message);
+      }
+    },
+    [currentUser, loadReplies]
+  );
 
   // Check on sign-in and then quietly every two minutes
   useEffect(() => {
@@ -349,9 +379,21 @@ export default function App() {
         replies={replies}
         loading={repliesLoading}
         error={repliesError}
-        isAdmin={isAdminUser(currentUser)}
+        isAdmin={viewerIsAdmin}
         currentUser={currentUser}
+        staff={
+          currentUser
+            ? [
+                { name: `${currentUser.name} (you)`, email: currentUser.email },
+                ...staff.filter(
+                  (person) => person.email.toLowerCase() !== String(currentUser.email || '').toLowerCase()
+                )
+              ]
+            : staff
+        }
+        storage={repliesStorage}
         onRefresh={() => loadReplies(currentUser)}
+        onAssign={assignReplyTo}
       />
 
       <CommandPalette

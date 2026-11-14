@@ -2,6 +2,7 @@
 // The app password only ever lives in environment variables, never in the browser bundle.
 const nodemailer = require('nodemailer');
 const auth = require('../lib/auth-core');
+const sentStore = require('../lib/replies-store');
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const configuredPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
@@ -90,6 +91,18 @@ module.exports = async (req, res) => {
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
     deliveries.unshift(entry);
+
+    // Record who sent what, so the reply can be attributed even if the IMAP scan misses it
+    await sentStore.rememberSent({
+      messageId: info.messageId,
+      agent: entry.sentBy,
+      agentEmail: session.email,
+      leadName: entry.leadName || entry.company,
+      to: entry.to,
+      subject,
+      sentAt: entry.sentAt
+    });
+
     return res.status(200).json({ ok: true, email: entry });
   } catch (err) {
     entry.status = 'failed';

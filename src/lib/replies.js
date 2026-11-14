@@ -35,5 +35,22 @@ export async function fetchReplies(currentUser) {
   const replies = Array.isArray(data.replies) ? data.replies : [];
   const seen = readSeen();
 
-  return replies.map((reply) => ({ ...reply, unread: !seen.has(reply.id) }));
+  return {
+    replies: replies.map((reply) => ({ ...reply, unread: !seen.has(reply.id) })),
+    storage: data.storage === 'memory' ? 'memory' : 'persistent'
+  };
+}
+
+// Admins hand a reply to a specific employee; an empty email returns it to automatic attribution
+export async function assignReply(replyId, email) {
+  const response = await fetch('/api/replies', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: replyId, email: email || '' })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Could not assign the reply (${response.status}).`);
+  return data;
 }
