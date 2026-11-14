@@ -171,7 +171,7 @@ export default function RepliesPanel({
           {isAdmin && storage === 'memory' && (
             <span className="mt-1 flex items-center gap-1.5 text-amber-300">
               <AlertTriangle className="w-3 h-3 shrink-0" />
-              Assignments are held in memory until the Redis variables are set, so they clear on restart.
+              Assignments are held in memory until DATABASE_URL is set, so they clear on restart.
             </span>
           )}
         </div>

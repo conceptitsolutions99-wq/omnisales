@@ -203,7 +203,7 @@ export default function AdminDashboard({ currentUser, onClearDatabase }) {
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-px" />
           <span>
             Accounts created here are held in memory only: they disappear when the server restarts or redeploys.
-            Add the two database variables to keep them.
+            Set DATABASE_URL to keep them.
           </span>
         </div>
       )}
