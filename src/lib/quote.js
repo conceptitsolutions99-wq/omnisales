@@ -7,7 +7,8 @@ const money = (value) => {
   return number.toLocaleString(undefined, { maximumFractionDigits: 0 });
 };
 
-export const quoteCurrency = 'CAD';
+// The printed forms ask for a budget in EGP, so quotes are priced in the same currency
+export const quoteCurrency = 'EGP';
 
 export function buildQuote(request, prices = {}, preparedBy = '') {
   const form = REQUIREMENT_FORMS[request?.type];
