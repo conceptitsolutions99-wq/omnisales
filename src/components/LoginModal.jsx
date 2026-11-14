@@ -30,8 +30,6 @@ export default function LoginModal({ users, onLogin }) {
     onLogin(user);
   };
 
-  const selectedUser = users.find(u => u.email === selectedEmail);
-
   return (
     <div className="relative w-full max-w-[26rem] rise">
       <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-indigo-500/30 via-violet-500/20 to-cyan-400/25 blur-3xl pointer-events-none" />
@@ -81,11 +79,6 @@ export default function LoginModal({ users, onLogin }) {
           <div className="space-y-1.5">
             <label className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted">
               <span>Account password</span>
-              {selectedUser && (
-                <span className="font-mono text-[10px] normal-case tracking-normal accent-text">
-                  demo · {selectedUser.password}
-                </span>
-              )}
             </label>
             <div className="relative">
               <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
