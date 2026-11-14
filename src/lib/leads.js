@@ -47,6 +47,9 @@ const GEOAPIFY_CATEGORIES = {
 
 const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || '';
 
+// Exposed so the setup screen can report whether the fallback is wired into this build
+export const hasGeoapifyKey = Boolean(GEOAPIFY_KEY);
+
 // The timer stays armed until the body is read: a response that stalls mid-body
 // would otherwise hang the request forever.
 const requestWithTimeout = async (url, options = {}, timeoutMs = 7000) => {

@@ -10,6 +10,7 @@ import FollowUps from './components/FollowUps';
 import AdminDashboard from './components/AdminDashboard';
 import CommandPalette from './components/CommandPalette';
 import RepliesPanel from './components/RepliesPanel';
+import SetupChecklist from './components/SetupChecklist';
 import { fetchReplies, markRepliesSeen, isAdminUser } from './lib/replies';
 
 function AmbientBackdrop() {
@@ -127,6 +128,7 @@ export default function App() {
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [repliesLoading, setRepliesLoading] = useState(false);
   const [repliesError, setRepliesError] = useState('');
+  const [setupOpen, setSetupOpen] = useState(false);
 
   const loadReplies = useCallback(async (user) => {
     if (!user) return;
@@ -255,6 +257,7 @@ export default function App() {
         onOpenPalette={() => setPaletteOpen(true)}
         repliesUnread={replies.filter((reply) => reply.unread).length}
         onOpenReplies={openReplies}
+        onOpenSetup={() => setSetupOpen(true)}
       />
 
       <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-28 lg:pb-12">
@@ -320,6 +323,8 @@ export default function App() {
           )}
         </div>
       </main>
+
+      <SetupChecklist open={setupOpen} onClose={() => setSetupOpen(false)} />
 
       <RepliesPanel
         open={repliesOpen}

@@ -12,7 +12,8 @@ import {
   Globe,
   Sparkles,
   Search,
-  MailOpen
+  MailOpen,
+  Settings
 } from 'lucide-react';
 
 const initialsOf = (name = '') =>
@@ -25,7 +26,7 @@ const initialsOf = (name = '') =>
     .join('')
     .toUpperCase();
 
-export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies }) {
+export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenSetup }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: true },
     { id: 'leads', label: 'Leads', icon: Users, permission: currentUser.permissions.leads },
@@ -115,6 +116,14 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
                   <kbd className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold border border-[var(--glass-border)]">
                     ⌘K
                   </kbd>
+                </button>
+
+                <button
+                  onClick={onOpenSetup}
+                  className="w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors shrink-0"
+                  title="Setup status"
+                >
+                  <Settings className="w-4 h-4" />
                 </button>
 
                 <button
