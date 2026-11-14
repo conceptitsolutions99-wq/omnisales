@@ -3,6 +3,7 @@
 const nodemailer = require('nodemailer');
 const auth = require('../lib/auth-core');
 const sentStore = require('../lib/replies-store');
+const requirementsStore = require('../lib/requirements-store');
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const configuredPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
@@ -47,7 +48,7 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Use GET or POST.' });
   }
 
-  const { to, subject, body, leadId, leadName, company, sentBy } = req.body || {};
+  const { to, subject, body, leadId, leadName, company, sentBy, requirements } = req.body || {};
 
   if (!to || !subject || !body) {
     return res.status(400).json({ error: 'Recipient, subject and message are all required.' });
@@ -75,12 +76,36 @@ module.exports = async (req, res) => {
     error: null
   };
 
+  // Email clients strip real form controls, so the requirements form travels as a link that
+  // carries its own token; the customer's answers come back into the app.
+  const formType = String(requirements || '').trim();
+  const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
+  let requirementsUrl = null;
+  let messageBody = body;
+
+  if (requirementsStore.TYPES.includes(formType)) {
+    try {
+      const request = await requirementsStore.createRequest({
+        type: formType,
+        leadEmail: entry.to,
+        leadName: entry.leadName,
+        company: entry.company,
+        agent: entry.sentBy,
+        agentEmail: session.email
+      });
+      requirementsUrl = `${origin}/#/requirements/${request.token}`;
+      messageBody = `${body}\n\n---\nProject requirements form\nTell us exactly what you need - open the link, tick the options and send it back:\n${requirementsUrl}\n\nIf you prefer, reply to this email with your answers and we will fill it in for you.\n`;
+    } catch (err) {
+      console.error('Could not create the requirements link:', err.message);
+    }
+  }
+
   try {
     const info = await transporter.sendMail({
       from: mailFrom,
       to: entry.to,
       subject,
-      text: body,
+      text: messageBody,
       // Lets the reply tracker attribute an answer to the agent who wrote it
       headers: {
         'X-Concept-Agent': entry.sentBy,
@@ -90,6 +115,7 @@ module.exports = async (req, res) => {
 
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
+    entry.requirementsUrl = requirementsUrl;
     deliveries.unshift(entry);
 
     // Record who sent what, so the reply can be attributed even if the IMAP scan misses it

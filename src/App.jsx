@@ -11,10 +11,13 @@ import FollowUps from './components/FollowUps';
 import AdminDashboard from './components/AdminDashboard';
 import CommandPalette from './components/CommandPalette';
 import RepliesPanel from './components/RepliesPanel';
+import RequirementsPanel from './components/RequirementsPanel';
+import PublicRequirementPage from './components/PublicRequirementPage';
 import SetupChecklist from './components/SetupChecklist';
 import { fetchReplies, markRepliesSeen, isAdminUser, assignReply } from './lib/replies';
 import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
+import { listRequirements } from './lib/requirements';
 
 function AmbientBackdrop() {
   return (
@@ -35,7 +38,7 @@ const renameLegacyUser = (user) => {
   return name === user.name ? user : { ...user, name };
 };
 
-export default function App() {
+function Workspace() {
   // The session is an HttpOnly cookie verified by the server, never a local flag
   const [currentUser, setCurrentUser] = useState(null);
   const [sessionChecked, setSessionChecked] = useState(false);
@@ -132,6 +135,35 @@ export default function App() {
   const [repliesError, setRepliesError] = useState('');
   const [repliesStorage, setRepliesStorage] = useState('persistent');
   const [setupOpen, setSetupOpen] = useState(false);
+
+  // Requirements forms sent to customers, and the answers that come back
+  const [requirements, setRequirements] = useState([]);
+  const [requirementsOpen, setRequirementsOpen] = useState(false);
+  const [requirementsLoading, setRequirementsLoading] = useState(false);
+  const [requirementsError, setRequirementsError] = useState('');
+
+  const loadRequirements = useCallback(async () => {
+    setRequirementsLoading(true);
+    setRequirementsError('');
+    try {
+      const data = await listRequirements();
+      setRequirements(Array.isArray(data.requests) ? data.requests : []);
+    } catch (err) {
+      setRequirementsError(err.message === 'Failed to fetch' ? 'Cannot reach the server.' : err.message);
+    } finally {
+      setRequirementsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) loadRequirements();
+    else setRequirements([]);
+  }, [currentUser, loadRequirements]);
+
+  const openRequirements = () => {
+    setRequirementsOpen(true);
+    loadRequirements();
+  };
 
   const loadReplies = useCallback(async (user) => {
     if (!user) return;
@@ -303,6 +335,8 @@ export default function App() {
         setDarkMode={setDarkMode}
         onOpenPalette={() => setPaletteOpen(true)}
         repliesUnread={replies.filter((reply) => reply.unread).length}
+        onOpenRequirements={openRequirements}
+        requirementsPending={requirements.filter((request) => !request.submittedAt).length}
         onOpenReplies={openReplies}
         onOpenSetup={() => setSetupOpen(true)}
       />
@@ -373,6 +407,16 @@ export default function App() {
 
       <SetupChecklist open={setupOpen} onClose={() => setSetupOpen(false)} />
 
+      <RequirementsPanel
+        open={requirementsOpen}
+        onClose={() => setRequirementsOpen(false)}
+        requests={requirements}
+        loading={requirementsLoading}
+        error={requirementsError}
+        isAdmin={viewerIsAdmin}
+        onRefresh={loadRequirements}
+      />
+
       <RepliesPanel
         open={repliesOpen}
         onClose={() => setRepliesOpen(false)}
@@ -407,4 +451,17 @@ export default function App() {
       />
     </div>
   );
+}
+
+// The requirements page a customer opens from the emailed link is public: it renders before
+// any session check, so the customer never meets the sign-in screen.
+const requirementTokenFromUrl = () => {
+  const match = window.location.hash.match(/^#\/requirements\/([A-Za-z0-9_-]+)/);
+  return match ? match[1] : null;
+};
+
+export default function App() {
+  const [requirementToken] = useState(requirementTokenFromUrl);
+  if (requirementToken) return <PublicRequirementPage token={requirementToken} />;
+  return <Workspace />;
 }

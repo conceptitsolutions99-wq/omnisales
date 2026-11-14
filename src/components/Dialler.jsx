@@ -150,6 +150,8 @@ export default function Dialler({
   const [emailConfigured, setEmailConfigured] = useState(true);
   const [emailSender, setEmailSender] = useState('');
   const [emailTemplate, setEmailTemplate] = useState('intro');
+  // Optional requirements form the customer fills in from the email
+  const [emailRequirements, setEmailRequirements] = useState('');
 
   // Timer effect
   useEffect(() => {
@@ -210,6 +212,7 @@ export default function Dialler({
     if (!activeLead) return;
     setEmailTo(activeLead.email || '');
     setEmailCopied(false);
+    setEmailRequirements('');
     applyEmailTemplate('intro');
     setShowEmailCompose(true);
   };
@@ -269,6 +272,7 @@ export default function Dialler({
           to: emailTo.trim(),
           subject: emailSubject,
           body: emailBody,
+          requirements: emailRequirements,
           leadId: activeLead?.id ?? null,
           leadName: activeLead?.name || '',
           company: activeLead?.company || '',
@@ -281,7 +285,9 @@ export default function Dialler({
 
       setEmailStatus({
         type: 'success',
-        message: `Email sent to ${emailTo.trim()}${data.email?.providerId ? ` · id ${data.email.providerId}` : ''}`
+        message: `Email sent to ${emailTo.trim()}${data.email?.providerId ? ` · id ${data.email.providerId}` : ''}${
+          data.email?.requirementsUrl ? ' · requirements form attached' : ''
+        }`
       });
 
       // Record the send in the shared outreach history
@@ -942,6 +948,26 @@ export default function Dialler({
                   onChange={(e) => setEmailSubject(e.target.value)}
                   className="w-full px-3 py-2.5 glass-input rounded-xl text-sm"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">
+                  Requirements form
+                </label>
+                <select
+                  value={emailRequirements}
+                  onChange={(e) => setEmailRequirements(e.target.value)}
+                  className="w-full px-3 py-2.5 glass-input rounded-xl text-sm dark:text-white"
+                >
+                  <option value="">No form — plain email</option>
+                  <option value="website">Website project requirements</option>
+                  <option value="mobile">Mobile app requirements</option>
+                  <option value="desktop">Desktop app requirements</option>
+                </select>
+                <p className="mt-1.5 text-[11px] text-muted leading-relaxed">
+                  The customer gets a link in the email to tick exactly what they need. Their answers appear under
+                  Requirements, ready for a quote.
+                </p>
               </div>
 
               <div>

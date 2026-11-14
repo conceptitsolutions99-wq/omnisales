@@ -13,6 +13,7 @@ import {
   Sparkles,
   Search,
   MailOpen,
+  ClipboardList,
   Settings
 } from 'lucide-react';
 
@@ -26,7 +27,7 @@ const initialsOf = (name = '') =>
     .join('')
     .toUpperCase();
 
-export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenSetup }) {
+export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenRequirements, requirementsPending = 0, onOpenSetup }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: true },
     { id: 'leads', label: 'Leads', icon: Users, permission: currentUser.permissions.leads },
@@ -102,6 +103,19 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
                   {repliesUnread > 0 && (
                     <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg shadow-rose-500/40">
                       {repliesUnread > 9 ? '9+' : repliesUnread}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={onOpenRequirements}
+                  className="relative w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  title={requirementsPending > 0 ? `${requirementsPending} requirements form${requirementsPending === 1 ? '' : 's'} awaiting answers` : 'Requirements forms'}
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  {requirementsPending > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg shadow-amber-500/40">
+                      {requirementsPending > 9 ? '9+' : requirementsPending}
                     </span>
                   )}
                 </button>
