@@ -468,7 +468,16 @@ const requirementTokenFromUrl = () => {
 };
 
 export default function App() {
-  const [requirementToken] = useState(requirementTokenFromUrl);
-  if (requirementToken) return <PublicRequirementPage token={requirementToken} />;
+  const [requirementToken, setRequirementToken] = useState(requirementTokenFromUrl);
+
+  // A second form link can be opened in the same tab, which only changes the hash; without
+  // this the page would keep showing the form it first loaded.
+  useEffect(() => {
+    const sync = () => setRequirementToken(requirementTokenFromUrl());
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  if (requirementToken) return <PublicRequirementPage key={requirementToken} token={requirementToken} />;
   return <Workspace />;
 }
