@@ -109,7 +109,7 @@ function QuoteBuilder({ request, currentUser, setLeads }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `Sending failed (${response.status}).`);
-      markLeadContacted(setLeads, { leadId: request.leadId, email: request.leadEmail });
+      markLeadContacted(setLeads, { leadId: request.leadId, email: request.leadEmail, by: currentUser?.name });
       setStatus(`Quote sent to ${request.leadEmail}.`);
     } catch (err) {
       setStatus(err.message === 'Failed to fetch' ? 'Cannot reach the mail service.' : err.message);

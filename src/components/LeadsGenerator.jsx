@@ -270,10 +270,10 @@ export default function LeadsGenerator({
     setTimeout(() => setEmailLookupMessage(''), 12000);
   };
 
-  // Role-based filtering: Admin sees all leads, employees see only leads they've called
+  // The list is shared, so everyone works from the same leads: an employee can see that a
+  // colleague already emailed a business instead of writing to it twice
   const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
-  const userLeadIds = new Set(callLogs.filter(log => log.caller === currentUser.name).map(log => log.leadId));
-  const visibleLeads = isAdmin ? leads : leads.filter(l => userLeadIds.has(l.id));
+  const visibleLeads = leads;
 
   // Filter logic
   const filteredLeads = visibleLeads.filter(lead => {
@@ -329,8 +329,8 @@ export default function LeadsGenerator({
           </h1>
           <p className="text-sm text-muted mt-1">
             {isAdmin
-              ? 'Admin View: All company leads in Canada and USA for IT solutions (Websites, Web Portals, Mobile Apps).'
-              : `Personal View: Showing only leads you've contacted. Logged in as ${currentUser.name}.`}
+              ? 'Admin View: the team\'s shared leads for Canada and the USA (Websites, Web Portals, Mobile Apps), with each contact credited to the employee who made it.'
+              : `Team View: the same shared leads the admins see. Logged in as ${currentUser.name}.`}
           </p>
         </div>
 
@@ -626,6 +626,12 @@ export default function LeadsGenerator({
                     </td>
                     <td className="py-4 px-4">
                       {getStatusBadge(lead.status)}
+                      {lead.contactedBy && (
+                        <div className="text-[10px] text-muted mt-1">
+                          {lead.contactedBy}
+                          {lead.contactedAt ? ` · ${new Date(lead.contactedAt).toLocaleDateString()}` : ''}
+                        </div>
+                      )}
                       {(() => {
                         const event =
                           requirementEvents[`id:${lead.id}`] ||

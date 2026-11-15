@@ -222,7 +222,7 @@ export default function Dialler({
   // every screen agrees
   const markContacted = (lead) => {
     if (!lead) return;
-    markLeadContacted(setLeads, { leadId: lead.id, email: lead.email });
+    markLeadContacted(setLeads, { leadId: lead.id, email: lead.email, by: currentUser.name });
   };
 
   // Build a ready-to-send outreach draft from the active lead and a template
@@ -443,8 +443,17 @@ export default function Dialler({
 
     // Update lead status
     const updatedLeads = leads.map(l => {
-      if (l.id === activeLead.id) {
-        return { ...l, status: callOutcome };
+      if (String(l.id) === String(activeLead.id)) {
+        const at = new Date().toISOString();
+        return {
+          ...l,
+          status: callOutcome,
+          contactedAt: at,
+          contactedBy: currentUser.name,
+          statusBy: currentUser.name,
+          statusAt: at,
+          updatedAt: at
+        };
       }
       return l;
     });

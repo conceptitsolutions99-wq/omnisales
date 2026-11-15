@@ -9,6 +9,7 @@ const auth = require('./lib/auth-core');
 const sentStore = require('./lib/replies-store');
 const requirementsStore = require('./lib/requirements-store');
 const { findEmails } = require('./lib/find-email');
+const leadsStore = require('./lib/leads-store');
 
 const app = express();
 app.use(express.json());
@@ -171,38 +172,8 @@ const mapOverpassLead = (element, fallbackCity, country) => {
   };
 };
 
-// API: Search real local businesses that publish a phone number
-app.get('/api/leads', async (req, res) => {
-  const city = String(req.query.city || '').trim();
-  const category = String(req.query.category || 'offices').toLowerCase();
-  const country = String(req.query.country || '').trim();
-  const requestedLimit = Number.parseInt(req.query.limit, 10);
-  const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 50) : 25;
-
-  if (city.length < 2) {
-    return res.status(400).json({ error: 'Enter a city or region to search.' });
-  }
-
-  try {
-    const bbox = await geocodeCity(city);
-    const payload = await queryOverpass(buildOverpassQuery(bbox, category, limit));
-    const elements = Array.isArray(payload.elements) ? payload.elements : [];
-    const leads = elements
-      .map((element) => mapOverpassLead(element, city, country))
-      .filter(Boolean);
-
-    res.json({
-      ok: true,
-      count: leads.length,
-      source: 'OpenStreetMap',
-      location: bbox.label,
-      attribution: '© OpenStreetMap contributors',
-      leads
-    });
-  } catch (err) {
-    res.status(502).json({ error: err.message });
-  }
-});
+// The lead search itself runs in the browser (src/lib/leads.js); /api/leads is the shared
+// team list, registered further down.
 
 /* ─────────────────────────  Transactional email (Gmail SMTP)  ───────────────────────── */
 
@@ -252,6 +223,29 @@ app.post('/api/auth/change-password', require('./api/auth/change-password'));
 app.all('/api/admin/users', require('./api/admin/users'));
 
 // API: Send an outreach email and record the delivery attempt
+// API: the team's shared lead list. Everyone signed in reads the same list, and every status
+// change is recorded against the employee who made it.
+app.get('/api/leads', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const session = auth.requireActiveSession(req, res);
+  if (!session) return;
+
+  const leads = await leadsStore.listLeads();
+  res.json({ ok: true, count: leads.length, leads, storage: leadsStore.configured() ? 'persistent' : 'memory' });
+});
+
+app.post('/api/leads', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const session = auth.requireActiveSession(req, res);
+  if (!session) return;
+
+  const { leads } = req.body || {};
+  if (!Array.isArray(leads)) return res.status(400).json({ error: 'Send the leads as an array.' });
+
+  const merged = await leadsStore.upsertLeads(leads, { name: session.name, email: session.email });
+  res.json({ ok: true, count: merged.length, leads: merged });
+});
+
 // API: read a lead's contact address from the lead's own website. Browsers cannot fetch
 // another site's HTML, so the lookup runs here and only the addresses come back.
 app.post('/api/find-email', async (req, res) => {

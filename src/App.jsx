@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { INITIAL_USERS } from './data/initialData';
 import LoginModal from './components/LoginModal';
 import ForcePasswordChange from './components/ForcePasswordChange';
@@ -18,6 +18,8 @@ import { fetchReplies, markRepliesSeen, isAdminUser, assignReply } from './lib/r
 import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
 import { listRequirements } from './lib/requirements';
+import { listSharedLeads, pushSharedLeads } from './lib/leads-api';
+import { mergeLeadLists } from './lib/lead-key';
 
 function AmbientBackdrop() {
   return (
@@ -124,6 +126,73 @@ function Workspace() {
     }
     return [];
   });
+
+  // The lead list is the team's, kept on the server; the browser copy is a cache so the page
+  // still works offline. Each change is pushed, and the list is refreshed so an employee's
+  // contact shows up in front of the admin without a reload.
+  const leadsRef = useRef(leads);
+  const leadsSynced = useRef(false);
+  const leadsPushTimer = useRef(null);
+
+  useEffect(() => {
+    leadsRef.current = leads;
+  }, [leads]);
+
+  // Adopt the server's copy without re-rendering when nothing actually differs
+  const applySharedLeads = useCallback((shared) => {
+    setLeads(prev => {
+      const merged = mergeLeadLists(prev, shared);
+      return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      leadsSynced.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        // Leads this browser already had are uploaded first, so the first sign-in on a new
+        // device does not start from an empty list
+        const merged = await pushSharedLeads(leadsRef.current);
+        if (!cancelled) applySharedLeads(merged);
+      } catch (err) {
+        /* offline or not deployed yet: the cached list keeps working */
+      } finally {
+        if (!cancelled) leadsSynced.current = true;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, applySharedLeads]);
+
+  useEffect(() => {
+    if (!currentUser || !leadsSynced.current) return;
+
+    clearTimeout(leadsPushTimer.current);
+    leadsPushTimer.current = setTimeout(() => {
+      pushSharedLeads(leadsRef.current)
+        .then(merged => applySharedLeads(merged))
+        .catch(() => {});
+    }, 1200);
+
+    return () => clearTimeout(leadsPushTimer.current);
+  }, [leads, currentUser, applySharedLeads]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const timer = setInterval(() => {
+      listSharedLeads()
+        .then(shared => applySharedLeads(shared))
+        .catch(() => {});
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [currentUser, applySharedLeads]);
 
   const [selectedLeadForCall, setSelectedLeadForCall] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);

@@ -5,7 +5,7 @@ export const CONTACTED = 'Contacted';
 
 const isUntouched = (lead) => !lead.status || lead.status === 'New';
 
-export const markLeadContacted = (setLeads, { leadId, email } = {}) => {
+export const markLeadContacted = (setLeads, { leadId, email, by } = {}) => {
   if (!setLeads) return;
 
   const address = String(email || '').trim().toLowerCase();
@@ -20,7 +20,16 @@ export const markLeadContacted = (setLeads, { leadId, email } = {}) => {
       if (!(matchesId || matchesEmail) || !isUntouched(lead)) return lead;
 
       changed = true;
-      return { ...lead, status: CONTACTED, contactedAt: new Date().toISOString() };
+      const at = new Date().toISOString();
+      return {
+        ...lead,
+        status: CONTACTED,
+        contactedAt: at,
+        contactedBy: by || lead.contactedBy || '',
+        statusBy: by || lead.statusBy || '',
+        statusAt: at,
+        updatedAt: at
+      };
     });
     return changed ? next : prev;
   });
