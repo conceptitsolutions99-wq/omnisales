@@ -1,15 +1,20 @@
 // The browser keeps its own copy of the outreach history for offline work; this folds the
 // server's copy in.
-// One event is one row: a send that appears both in this browser's copy and in the server's
-// copy is the same event, even though only the server's copy knows which employee made it.
-// Channel, lead, subject and the minute identify it.
-const eventKey = (entry) =>
-  [
+// A send appears twice — once in this browser's copy, once in the copy the server returned —
+// and those two copies share the entry's id, so the id identifies the event. Two separate
+// sends have different ids and both stay, even within the same minute.
+const eventKey = (entry) => {
+  const id = entry.id;
+  if (id !== undefined && id !== null && id !== '') {
+    return `id:${id}|${String(entry.leadName || entry.company || '').toLowerCase()}`;
+  }
+  return [
     String(entry.channel || '').toLowerCase(),
     String(entry.leadName || entry.company || '').toLowerCase(),
     String(entry.notes || entry.subject || '').toLowerCase(),
     String(entry.timestamp || entry.recordedAt || '').slice(0, 16)
   ].join('|');
+};
 
 export const mergeActivity = (local, remote) => {
   const byKey = new Map();

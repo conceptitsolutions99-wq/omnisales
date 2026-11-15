@@ -510,6 +510,20 @@ export default function Dialler({
   // A lead found by its email alone has no number, so calling has to be offered only when there is one
   const activePhoneDigits = String(activeLead?.phone || '').replace(/\D/g, '');
 
+  // Sending the same message to one address again within minutes is what gets mail filtered,
+  // so the compose card says when this lead was last written to
+  const lastEmailToLead = activeLead
+    ? callLogs.find(
+        log =>
+          (log.channel || 'Call') === 'Email' &&
+          (String(log.leadId) === String(activeLead.id) ||
+            (log.leadName && log.leadName === activeLead.name))
+      )
+    : null;
+  const minutesSinceLastEmail = lastEmailToLead
+    ? Math.max(0, Math.round((Date.now() - new Date(String(lastEmailToLead.timestamp).replace(' ', 'T')).getTime()) / 60000))
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -980,6 +994,13 @@ export default function Dialler({
                 {activeLead?.company} · {activeLead?.country} · {activeLead?.solution}
               </p>
             </div>
+
+            {minutesSinceLastEmail !== null && minutesSinceLastEmail <= 1440 && (
+              <div className="px-6 py-2 bg-amber-400/10 border-b border-amber-400/25 text-[11px] text-amber-600 dark:text-amber-300">
+                Already emailed {minutesSinceLastEmail <= 1 ? 'less than a minute ago' : `${minutesSinceLastEmail} minutes ago`}. The
+                same subject and wording again this soon usually ends up in spam — change the subject or wait before sending.
+              </div>
+            )}
 
             <form onSubmit={handleSendEmail} className="p-6 space-y-4">
               <div>
