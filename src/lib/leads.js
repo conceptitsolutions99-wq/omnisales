@@ -249,8 +249,27 @@ const distanceInMetres = (a, b) => {
 // a name that closely, so the radius only has to absorb that drift
 const SAME_PLACE_METRES = 250;
 
-const isAlreadySaved = (place, knownIds, knownPlaces) => {
+// Numbers are written many ways ("+1-416-967-1800" / "+1 416 967 1800"), and the country code
+// is not always stored, so the last ten digits are what gets compared.
+const normalPhone = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 7 ? digits.slice(-10) : '';
+};
+
+// Geoapify keeps the original OpenStreetMap object in every listing, which identifies a business
+// even when the two providers spell its name differently
+const OSM_TYPE = { n: 'node', w: 'way', r: 'relation' };
+
+const isAlreadySaved = (place, knownIds, knownPlaces, knownPhones) => {
   if (knownIds?.has(`geoapify-${place.place_id}`)) return true;
+
+  const listingPhone = normalPhone(place.contact?.phone || place.datasource?.raw?.phone);
+  if (listingPhone && knownPhones?.has(listingPhone)) return true;
+
+  const raw = place.datasource?.raw;
+  const osmId = raw?.osm_id && OSM_TYPE[raw.osm_type] ? `osm-${OSM_TYPE[raw.osm_type]}-${raw.osm_id}` : '';
+  if (osmId && knownIds?.has(osmId)) return true;
+
   const name = normalName(place.name);
   if (!name || !knownPlaces?.length) return false;
   return knownPlaces.some(
@@ -258,7 +277,7 @@ const isAlreadySaved = (place, knownIds, knownPlaces) => {
   );
 };
 
-const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset = 0, knownIds, knownPlaces }) => {
+const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset = 0, knownIds, knownPlaces, knownPhones }) => {
   if (!GEOAPIFY_KEY) return [];
 
   const area = bbox || (await geocodeWithGeoapify(city));
@@ -287,7 +306,10 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
 
   // Details cost one credit each, so businesses already in the list are dropped before the
   // spend instead of after it: a repeat search pays only for places the agent has not seen.
-  const unknown = places.filter((place) => !isAlreadySaved(place, knownIds, knownPlaces));
+  // Saved numbers arrive in whatever format the list holds, so they are reduced once here
+  const phoneIndex = new Set([...(knownPhones || [])].map(normalPhone).filter(Boolean));
+
+  const unknown = places.filter((place) => !isAlreadySaved(place, knownIds, knownPlaces, phoneIndex));
   const skippedKnown = places.length - unknown.length;
 
   const expanded = await Promise.all(
@@ -330,9 +352,9 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
   return { leads, skippedKnown, hadResults: places.length > 0 };
 };
 
-export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds, knownPlaces }) {
+export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds, knownPlaces, knownPhones }) {
   const bbox = await geocodeCity(city);
-  const options = { city, category, limit, country, bbox, offset, knownIds, knownPlaces };
+  const options = { city, category, limit, country, bbox, offset, knownIds, knownPlaces, knownPhones };
 
   let overpassLeads = [];
   let overpassError = null;

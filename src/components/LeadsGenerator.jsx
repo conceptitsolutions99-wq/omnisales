@@ -138,6 +138,8 @@ export default function LeadsGenerator({
         // A business saved from OpenStreetMap comes back with a Geoapify id, so its name and
         // position travel too and it is recognised before its details are bought
         knownPlaces: leads.map(lead => ({ name: lead.name || lead.company, lat: lead.lat, lon: lead.lon })),
+        // A saved number identifies the same business even when its name reaches us differently
+        knownPhones: new Set(leads.map(lead => lead.phone).filter(Boolean)),
       });
 
       const fetched = Array.isArray(data.leads) ? data.leads : [];
