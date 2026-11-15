@@ -44,6 +44,7 @@ export default function LeadsGenerator({
   const [sizeFilter, setSizeFilter] = useState('All');
   const [solutionFilter, setSolutionFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [websiteFilter, setWebsiteFilter] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
@@ -194,9 +195,14 @@ export default function LeadsGenerator({
     const matchesSize = sizeFilter === 'All' || lead.size === sizeFilter;
     const matchesSolution = solutionFilter === 'All' || lead.solution === solutionFilter;
     const matchesStatus = statusFilter === 'All' || lead.status === statusFilter;
+    const matchesWebsite =
+      websiteFilter === 'All' ||
+      (websiteFilter === 'NoWebsite' ? !lead.website : Boolean(lead.website));
 
-    return matchesSearch && matchesCountry && matchesSize && matchesSolution && matchesStatus;
+    return matchesSearch && matchesCountry && matchesSize && matchesSolution && matchesStatus && matchesWebsite;
   });
+
+  const noWebsiteCount = visibleLeads.filter(lead => !lead.website).length;
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -334,11 +340,27 @@ export default function LeadsGenerator({
               <option value="Mobile App">Mobile App</option>
             </select>
           </div>
+
+          {/* Website Filter: a business with no site is the easiest website sale */}
+          <div>
+            <select
+              value={websiteFilter}
+              onChange={(e) => setWebsiteFilter(e.target.value)}
+              className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
+            >
+              <option value="All">Any Website Status</option>
+              <option value="NoWebsite">No website — best prospects</option>
+              <option value="HasWebsite">Already has a website</option>
+            </select>
+          </div>
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-[var(--glass-border)] text-xs text-muted">
           <span>
             Showing <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads
+            {noWebsiteCount > 0 && (
+              <span className="text-amber-400/90"> · <strong>{noWebsiteCount}</strong> have no website</span>
+            )}
             <span className="opacity-60"> · lead data © OpenStreetMap contributors</span>
           </span>
           <div className="flex items-center space-x-2">
@@ -415,7 +437,13 @@ export default function LeadsGenerator({
                           website on file
                         </a>
                       ) : (
-                        <span className="text-[10px] text-muted">no website listed</span>
+                        <span
+                          title="No website on file — the strongest prospect for a website project"
+                          className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30"
+                        >
+                          <Globe className="w-3 h-3" />
+                          No website
+                        </span>
                       )}
                     </td>
                     <td className="py-4 px-4 font-semibold text-[var(--text-primary)]">
