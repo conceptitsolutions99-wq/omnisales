@@ -135,6 +135,9 @@ export default function LeadsGenerator({
         country: countryFilter === 'All' ? '' : countryFilter,
         offset: nextSearchOffset(city, fetchCategory),
         knownIds: new Set(leads.map(lead => lead.id)),
+        // A business saved from OpenStreetMap comes back with a Geoapify id, so its name and
+        // position travel too and it is recognised before its details are bought
+        knownPlaces: leads.map(lead => ({ name: lead.name || lead.company, lat: lead.lat, lon: lead.lon })),
       });
 
       const fetched = Array.isArray(data.leads) ? data.leads : [];

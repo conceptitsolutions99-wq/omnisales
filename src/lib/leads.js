@@ -220,7 +220,45 @@ const geocodeWithGeoapify = async (city) => {
   return { west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: data.results[0].formatted };
 };
 
-const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset = 0, knownIds }) => {
+// The same business has a different id on each provider, so a listing saved from OpenStreetMap
+// is recognised by its name together with its position before any detail credit is spent.
+// Legal forms differ between listings for one business ("Alpha Ltd" vs "Alpha"), so they are
+// dropped; the proximity check still has to agree before anything is treated as saved.
+const LEGAL_SUFFIXES = /\b(ltd|limited|llc|inc|incorporated|corp|corporation|plc|gmbh|pty|sarl|srl|bv)\b/g;
+
+const normalName = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(LEGAL_SUFFIXES, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const distanceInMetres = (a, b) => {
+  const values = [a.lat, a.lon, b.lat, b.lon].map(Number);
+  if (!values.every(Number.isFinite)) return Infinity;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const [aLat, aLon, bLat, bLon] = values;
+  const dLat = toRad(bLat - aLat);
+  const dLon = toRad(bLon - aLon);
+  const x = dLon * Math.cos(toRad((aLat + bLat) / 2));
+  return Math.sqrt(dLat * dLat + x * x) * 6371000;
+};
+
+// Two listings of one business can be a few doors apart, but two different businesses rarely share
+// a name that closely, so the radius only has to absorb that drift
+const SAME_PLACE_METRES = 250;
+
+const isAlreadySaved = (place, knownIds, knownPlaces) => {
+  if (knownIds?.has(`geoapify-${place.place_id}`)) return true;
+  const name = normalName(place.name);
+  if (!name || !knownPlaces?.length) return false;
+  return knownPlaces.some(
+    (saved) => normalName(saved.name) === name && distanceInMetres(saved, place) <= SAME_PLACE_METRES
+  );
+};
+
+const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset = 0, knownIds, knownPlaces }) => {
   if (!GEOAPIFY_KEY) return [];
 
   const area = bbox || (await geocodeWithGeoapify(city));
@@ -249,7 +287,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
 
   // Details cost one credit each, so businesses already in the list are dropped before the
   // spend instead of after it: a repeat search pays only for places the agent has not seen.
-  const unknown = knownIds ? places.filter((place) => !knownIds.has(`geoapify-${place.place_id}`)) : places;
+  const unknown = places.filter((place) => !isAlreadySaved(place, knownIds, knownPlaces));
   const skippedKnown = places.length - unknown.length;
 
   const expanded = await Promise.all(
@@ -292,9 +330,9 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
   return { leads, skippedKnown, hadResults: places.length > 0 };
 };
 
-export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds }) {
+export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds, knownPlaces }) {
   const bbox = await geocodeCity(city);
-  const options = { city, category, limit, country, bbox, offset, knownIds };
+  const options = { city, category, limit, country, bbox, offset, knownIds, knownPlaces };
 
   let overpassLeads = [];
   let overpassError = null;
