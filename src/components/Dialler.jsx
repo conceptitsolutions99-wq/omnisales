@@ -188,11 +188,33 @@ export default function Dialler({
     }
   };
 
+  // wa.me needs the full international number, so a bare ten-digit North American number gets
+  // its country code; anything else is passed through as the lead stores it
+  const whatsappNumber = (lead) => {
+    const digits = String(lead.phone || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length === 10 && /^(canada|usa|united states)$/i.test(lead.country || '')) return `1${digits}`;
+    return digits.replace(/^00/, '');
+  };
+
+  // The opening message is written from what the app already knows about the lead: a business
+  // with no site gets the website angle, one with a site gets an improvement angle
+  const WHATSAPP_OFFERS = { Website: 'websites', 'Web Portal': 'web portals', 'Mobile App': 'mobile apps' };
+
+  const buildWhatsAppMessage = (lead) => {
+    const firstName = String(lead.name || '').split(' ')[0] || 'there';
+    const offer = WHATSAPP_OFFERS[lead.solution] || 'websites and apps';
+    const pitch = lead.website
+      ? `I had a quick look at ${lead.company}'s website and have two ideas that could bring in more enquiries — is now a good time for two minutes?`
+      : `I noticed ${lead.company} doesn't have a website yet. We build ${offer} for businesses in ${lead.region || lead.country || 'your area'} — can I send you two examples?`;
+    return `Hi ${firstName}, this is ${currentUser.name} from Concept IT Solutions. ${pitch}`;
+  };
+
   const handleWhatsAppCall = () => {
     if (!activeLead) return;
-    const cleanPhone = (activeLead.phone || '').replace(/[^\d]/g, '');
-    const message = `Hello ${activeLead.name}, calling from Concept IT Solutions regarding our IT solutions.`;
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+    const number = whatsappNumber(activeLead);
+    if (!number) return;
+    window.open(`https://wa.me/${number}?text=${encodeURIComponent(buildWhatsAppMessage(activeLead))}`, '_blank');
   };
 
   // A desktop browser cannot always open a tel: link, so the number can also be pasted into
@@ -580,21 +602,21 @@ export default function Dialler({
 
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
-                      onClick={handleStartCall}
+                      onClick={handleWhatsAppCall}
                       disabled={!activeLead}
-                      className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
+                      className="px-6 py-3.5 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center space-x-2 text-sm"
                     >
-                      <PhoneCall className="w-5 h-5" />
-                      <span>Device / Phone Link Call</span>
+                      <MessageSquare className="w-5 h-5" />
+                      <span>WhatsApp First</span>
                     </button>
 
                     <button
-                      onClick={handleWhatsAppCall}
+                      onClick={handleStartCall}
                       disabled={!activeLead}
-                      className="px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
+                      className="px-6 py-3.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
                     >
-                      <MessageSquare className="w-5 h-5" />
-                      <span>WhatsApp Call</span>
+                      <PhoneCall className="w-5 h-5" />
+                      <span>Device / Phone Link Call</span>
                     </button>
 
                     <button
@@ -615,6 +637,12 @@ export default function Dialler({
                       <span>Email Prospect</span>
                     </button>
                   </div>
+
+                  <p className="text-[11px] text-muted max-w-md mx-auto">
+                    WhatsApp opens the chat with a message already written for this lead. WhatsApp does not
+                    let a website see whether a number is registered on it, so if the chat does not open, use
+                    the phone button.
+                  </p>
                 </div>
               )}
             </div>
