@@ -18,7 +18,8 @@ import {
   RefreshCw,
   Database,
   ClipboardList,
-  AtSign
+  AtSign,
+  ExternalLink
 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = [
@@ -535,7 +536,37 @@ export default function LeadsGenerator({
                           {emailBusy[lead.id] ? 'Looking…' : 'Find email'}
                         </button>
                       ) : (
-                        <div className="text-[10px] text-muted mt-1">no email · no website to check</div>
+                        <div className="text-[10px] text-muted mt-1">
+                          {lead.facebook || lead.instagram
+                            ? 'no email on file · check the social page'
+                            : 'no email · no website to check'}
+                        </div>
+                      )}
+                      {(lead.facebook || lead.instagram) && (
+                        <div className="flex items-center gap-2 mt-1 text-[10px] font-semibold">
+                          {lead.facebook && (
+                            <a
+                              href={lead.facebook.startsWith('http') ? lead.facebook : `https://${lead.facebook}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Open the Facebook page — its About tab shows contact details"
+                              className="text-blue-500 hover:underline inline-flex items-center"
+                            >
+                              <ExternalLink className="w-3 h-3 mr-0.5" /> Facebook
+                            </a>
+                          )}
+                          {lead.instagram && (
+                            <a
+                              href={lead.instagram.startsWith('http') ? lead.instagram : `https://${lead.instagram}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Open the Instagram profile — the bio often lists an email"
+                              className="text-pink-500 hover:underline inline-flex items-center"
+                            >
+                              <ExternalLink className="w-3 h-3 mr-0.5" /> Instagram
+                            </a>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="py-4 px-4">

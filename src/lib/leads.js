@@ -154,6 +154,10 @@ const mapOverpassLead = (element, fallbackCity, country) => {
   if (!name || (!rawPhone && !email)) return null;
 
   const website = tags.website || tags['contact:website'] || '';
+  // Facebook and Instagram cannot be read by a server (they answer with a login wall or a 400),
+  // so their addresses travel with the lead and the agent opens them, signed in, themselves
+  const facebook = tags['contact:facebook'] || tags.facebook || '';
+  const instagram = tags['contact:instagram'] || tags.instagram || '';
   const street = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
   const city = tags['addr:city'] || fallbackCity;
 
@@ -165,6 +169,8 @@ const mapOverpassLead = (element, fallbackCity, country) => {
     displayPhone: rawPhone || 'No phone on file',
     email,
     website,
+    facebook,
+    instagram,
     address: [street, city].filter(Boolean).join(', '),
     country,
     region: city,
@@ -363,6 +369,8 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     displayPhone: place.contact?.phone || 'No phone on file',
     email: place.contact?.email || '',
     website: place.website || '',
+    facebook: place.contact?.facebook || place.datasource?.raw?.['contact:facebook'] || '',
+    instagram: place.contact?.instagram || place.datasource?.raw?.['contact:instagram'] || '',
     address: [place.address_line1, place.address_line2].filter(Boolean).join(', '),
     country: country || (place.country_code ? place.country_code.toUpperCase() : ''),
     region: place.city || place.state || city,
