@@ -125,7 +125,7 @@ export default function LeadsGenerator({
     const categoryLabel = CATEGORY_OPTIONS.find(option => option.value === fetchCategory)?.label || 'businesses';
 
     if (city.length < 2) {
-      setFetchMessage('Enter a city or region to search, for example Toronto or Dallas.');
+      setFetchMessage('Enter a city or region to search, for example Toronto, Dallas or Cairo.');
       return;
     }
 
@@ -336,7 +336,7 @@ export default function LeadsGenerator({
           </h1>
           <p className="text-sm text-muted mt-1">
             {isAdmin
-              ? 'Admin View: the team\'s shared leads for Canada and the USA (Websites, Web Portals, Mobile Apps), with each contact credited to the employee who made it.'
+              ? 'Admin View: the team\'s shared leads for Canada, the USA and Egypt (Websites, Web Portals, Mobile Apps), with each contact credited to the employee who made it.'
               : `Team View: the same shared leads the admins see. Logged in as ${currentUser.name}.`}
           </p>
         </div>
@@ -351,7 +351,7 @@ export default function LeadsGenerator({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleFetchLiveLeads();
               }}
-              placeholder="City (e.g. Toronto)"
+              placeholder="City (e.g. Toronto, Cairo)"
               className="w-44 pl-8 pr-3 py-2.5 glass-input rounded-xl text-sm"
             />
           </div>
@@ -427,9 +427,10 @@ export default function LeadsGenerator({
               onChange={(e) => setCountryFilter(e.target.value)}
               className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
             >
-              <option value="All">All Countries (USA & CA)</option>
+              <option value="All">All Countries</option>
               <option value="Canada">Canada</option>
               <option value="USA">USA</option>
+              <option value="Egypt">Egypt</option>
             </select>
           </div>
 
@@ -773,6 +774,7 @@ export default function LeadsGenerator({
                   >
                     <option value="Canada">Canada</option>
                     <option value="USA">USA</option>
+                    <option value="Egypt">Egypt</option>
                   </select>
                 </div>
                 <div>

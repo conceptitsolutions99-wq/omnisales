@@ -442,7 +442,7 @@ export default function Analytics({ leads, callLogs, currentUser }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-muted">Active Pipeline Leads</p>
           <div className="flex items-baseline justify-between mt-2">
             <h3 className="text-3xl font-bold text-[var(--text-primary)]">{leads.length}</h3>
-            <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-full">CA & USA</span>
+            <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-full">CA · USA · EG</span>
           </div>
         </div>
       </div>
@@ -549,7 +549,7 @@ export default function Analytics({ leads, callLogs, currentUser }) {
           <div className="pt-4 border-t border-[var(--glass-border)] flex items-center justify-between text-xs text-muted">
             <span>Market Region Split:</span>
             <span className="font-semibold text-[var(--text-primary)]">
-              USA: {countryCounts['USA'] || 0} | Canada: {countryCounts['Canada'] || 0}
+              USA: {countryCounts['USA'] || 0} | Canada: {countryCounts['Canada'] || 0} | Egypt: {countryCounts['Egypt'] || 0}
             </span>
           </div>
         </div>

@@ -23,6 +23,11 @@ import {
 import { markLeadContacted } from '../lib/lead-status';
 
 const SIGNATURE_SERVICE_LINE = 'Websites · Web Portals · Mobile Apps';
+
+// The outreach copy names the market the prospect is in, so an Egyptian lead is not told about
+// work "across Canada and the USA"
+const marketLine = (lead) =>
+  /egypt/i.test(String(lead?.country || '')) ? 'Egypt' : 'Canada and the USA';
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
 // One signature block, applied to every template
@@ -51,7 +56,7 @@ const EMAIL_TEMPLATES = [
         body: [
           `Hi ${firstName},`,
           '',
-          `I'm ${agent.name}, ${agent.role || 'Sales Agent'} at Concept IT Solutions — we build ${solution}s, web portals and mobile apps for businesses across Canada and the USA.`,
+          `I'm ${agent.name}, ${agent.role || 'Sales Agent'} at Concept IT Solutions — we build ${solution}s, web portals and mobile apps for businesses across ${marketLine(lead)}.`,
           '',
           `I had a quick idea for ${company}: a modern ${solution} that brings in qualified inbound leads and removes some of the manual work your team does today.`,
           '',

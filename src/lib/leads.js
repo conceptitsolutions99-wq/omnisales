@@ -12,6 +12,11 @@ const OVERPASS_ENDPOINTS = [
   'https://lz4.overpass-api.de/api/interpreter'
 ];
 
+// The public Overpass instances regularly take 15–25s for a city-sized query, so a short ceiling
+// abandoned searches that would have succeeded and pushed every request onto the paid provider.
+// Both endpoints serve the same database, so they are asked at once and the first answer wins.
+const OVERPASS_TIMEOUT_MS = 14000;
+
 // Each category maps to OSM selectors that require a published phone number
 // Each category asks for a published phone or a published email. Most listings carry a phone,
 // but an email is what outreach actually needs, so the email tag is searched in its own right
@@ -69,6 +74,20 @@ const GEOAPIFY_CATEGORIES = {
 };
 
 const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || '';
+
+// A search can run without a country chosen, and the listings still need one for filtering and
+// for the outreach copy, so the geocoded place name and Geoapify's country code fill it in.
+const COUNTRY_NAMES = { eg: 'Egypt', ca: 'Canada', us: 'USA' };
+
+const countryFromCode = (code) => COUNTRY_NAMES[String(code || '').toLowerCase()] || String(code || '').toUpperCase();
+
+const countryFromLabel = (label) => {
+  const text = String(label || '');
+  if (/egypt/i.test(text)) return 'Egypt';
+  if (/united states|\busa\b/i.test(text)) return 'USA';
+  if (/canada/i.test(text)) return 'Canada';
+  return '';
+};
 
 // Exposed so the setup screen can report whether the fallback is wired into this build
 export const hasGeoapifyKey = Boolean(GEOAPIFY_KEY);
@@ -185,46 +204,44 @@ const mapOverpassLead = (element, fallbackCity, country) => {
   };
 };
 
-const queryOverpass = async (query) => {
-  let lastError = 'The map data service could not be reached.';
+const askOverpass = async (endpoint, query) => {
+  const response = await requestWithTimeout(endpoint, {
+    method: 'POST',
+    headers: { ...JSON_HEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `data=${encodeURIComponent(query)}`
+  }, OVERPASS_TIMEOUT_MS);
 
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const response = await requestWithTimeout(endpoint, {
-        method: 'POST',
-        headers: { ...JSON_HEADERS, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `data=${encodeURIComponent(query)}`
-      }, 4500);
-
-      if ([429, 502, 503, 504].includes(response.status)) {
-        lastError = 'The map service is busy right now. Please try again in a minute.';
-        continue;
-      }
-
-      if (!response.ok) {
-        lastError = `The map data service returned ${response.status}.`;
-        continue;
-      }
-
-      const payload = readJson(response.body);
-      if (!payload) {
-        lastError = 'The map data service returned an unexpected response.';
-        continue;
-      }
-
-      // An empty payload can mean limited coverage on a mirror - try the next one
-      if ((payload.elements || []).length === 0 && endpoint !== OVERPASS_ENDPOINTS[OVERPASS_ENDPOINTS.length - 1]) {
-        lastError = 'No businesses with a published phone number were found in that area.';
-        continue;
-      }
-
-      return payload;
-    } catch (err) {
-      lastError = err.name === 'AbortError' ? 'The map data service timed out. Try again shortly.' : err.message;
-    }
+  if ([429, 502, 503, 504].includes(response.status)) {
+    throw new Error('The map service is busy right now. Please try again in a minute.');
   }
+  if (!response.ok) throw new Error(`The map data service returned ${response.status}.`);
 
-  throw new Error(lastError);
+  const payload = readJson(response.body);
+  if (!payload) throw new Error('The map data service returned an unexpected response.');
+  return payload;
+};
+
+const queryOverpass = async (query) => {
+  const attempts = OVERPASS_ENDPOINTS.map((endpoint) =>
+    askOverpass(endpoint, query).then(
+      (payload) => ({ ok: true, payload }),
+      (error) => ({ ok: false, error })
+    )
+  );
+
+  const results = await Promise.all(attempts);
+  const answered = results.filter((result) => result.ok);
+
+  // A mirror with partial coverage can answer with nothing while the main instance has the city,
+  // so an empty answer is only accepted when no endpoint had anything
+  const withData = answered.find((result) => (result.payload.elements || []).length > 0);
+  if (withData) return withData.payload;
+  if (answered.length > 0) return answered[0].payload;
+
+  const failure = results.find((result) => !result.ok)?.error;
+  throw failure?.name === 'AbortError'
+    ? new Error('The map data service timed out. Try again shortly.')
+    : failure || new Error('The map data service could not be reached.');
 };
 
 const searchWithOverpass = async ({ city, category, limit, country, bbox }) => {
@@ -372,7 +389,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     facebook: place.contact?.facebook || place.datasource?.raw?.['contact:facebook'] || '',
     instagram: place.contact?.instagram || place.datasource?.raw?.['contact:instagram'] || '',
     address: [place.address_line1, place.address_line2].filter(Boolean).join(', '),
-    country: country || (place.country_code ? place.country_code.toUpperCase() : ''),
+    country: country || countryFromCode(place.country_code),
     region: place.city || place.state || city,
     size: 'Unknown',
     solution: '',
@@ -389,7 +406,8 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
 
 export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds, knownPlaces, knownPhones }) {
   const bbox = await geocodeCity(city);
-  const options = { city, category, limit, country, bbox, offset, knownIds, knownPlaces, knownPhones };
+  const resolvedCountry = country || countryFromLabel(bbox?.label);
+  const options = { city, category, limit, country: resolvedCountry, bbox, offset, knownIds, knownPlaces, knownPhones };
 
   let overpassLeads = [];
   let overpassError = null;
