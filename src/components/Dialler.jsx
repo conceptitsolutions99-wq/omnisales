@@ -172,8 +172,6 @@ export default function Dialler({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const [phoneCopied, setPhoneCopied] = useState(false);
-
   const handleStartCall = () => {
     if (!activeLead) return;
     setIsCalling(true);
@@ -215,19 +213,6 @@ export default function Dialler({
     const number = whatsappNumber(activeLead);
     if (!number) return;
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(buildWhatsAppMessage(activeLead))}`, '_blank');
-  };
-
-  // A desktop browser cannot always open a tel: link, so the number can also be pasted into
-  // whichever free softphone the agent already has (Phone Link, Google Voice, WhatsApp Web)
-  const handleCopyPhone = async () => {
-    if (!activeLead) return;
-    try {
-      await navigator.clipboard.writeText(activeLead.displayPhone || activeLead.phone || '');
-      setPhoneCopied(true);
-      setTimeout(() => setPhoneCopied(false), 2000);
-    } catch (err) {
-      console.log('Clipboard unavailable:', err);
-    }
   };
 
   // Build a ready-to-send outreach draft from the active lead and a template
@@ -617,15 +602,6 @@ export default function Dialler({
                     >
                       <PhoneCall className="w-5 h-5" />
                       <span>Device / Phone Link Call</span>
-                    </button>
-
-                    <button
-                      onClick={handleCopyPhone}
-                      disabled={!activeLead}
-                      className="px-6 py-3.5 glass-soft disabled:opacity-50 text-[var(--text-primary)] font-bold rounded-xl transition-all flex items-center space-x-2 text-sm"
-                    >
-                      {phoneCopied ? <Check className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
-                      <span>{phoneCopied ? 'Number Copied' : 'Copy Number'}</span>
                     </button>
 
                     <button
