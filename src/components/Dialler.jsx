@@ -148,6 +148,7 @@ export default function Dialler({
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
   const [emailLog, setEmailLog] = useState([]);
+  const [whatsAppIssue, setWhatsAppIssue] = useState('');
   const [emailConfigured, setEmailConfigured] = useState(true);
   const [emailSender, setEmailSender] = useState('');
   const [emailTemplate, setEmailTemplate] = useState('intro');
@@ -188,14 +189,44 @@ export default function Dialler({
     }
   };
 
-  // wa.me needs the full international number, so a bare ten-digit North American number gets
-  // its country code; anything else is passed through as the lead stores it
-  const whatsappNumber = (lead) => {
-    const digits = String(lead.phone || '').replace(/\D/g, '');
-    if (!digits) return '';
-    if (digits.length === 10 && /^(canada|usa|united states)$/i.test(lead.country || '')) return `1${digits}`;
-    return digits.replace(/^00/, '');
+  // WhatsApp needs the number in international form. Leads carry the number as it was typed,
+  // sometimes with a leading 0 and sometimes with the wrong country, so the trunk prefix is
+  // removed and a dialling code is only added when the pattern is recognisable — a guess here
+  // opens WhatsApp on a blank page with an invalid number, which is worse than saying so.
+  const COUNTRY_DIAL_CODES = {
+    canada: '1',
+    usa: '1',
+    'united states': '1',
+    egypt: '20',
+    'saudi arabia': '966',
+    'united arab emirates': '971',
+    uae: '971',
+    qatar: '974',
+    kuwait: '965',
+    'united kingdom': '44',
+    uk: '44'
   };
+
+  // Egyptian mobiles: 010/011/012/015 followed by eight digits
+  const EGYPT_MOBILE = /^01[0125]\d{8}$/;
+
+  const whatsappNumber = (lead) => {
+    const raw = String(lead?.phone || '').trim();
+    const typedInternational = raw.startsWith('+');
+    let digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('00')) digits = digits.slice(2);
+    if (typedInternational) return digits;
+    if (EGYPT_MOBILE.test(digits)) return `20${digits.slice(1)}`;
+
+    const code = COUNTRY_DIAL_CODES[String(lead?.country || '').toLowerCase().trim()];
+    if (code === '1' && digits.length === 10) return `1${digits}`;
+    if (code && code !== '1' && digits.startsWith('0')) return `${code}${digits.slice(1)}`;
+    return digits;
+  };
+
+  // A usable WhatsApp number is 8–15 digits and never starts with the 0 trunk prefix
+  const usableWhatsAppNumber = (number) => /^[1-9]\d{7,14}$/.test(number);
 
   // The opening message is written from what the app already knows about the lead: a business
   // with no site gets the website angle, one with a site gets an improvement angle
@@ -213,7 +244,17 @@ export default function Dialler({
   const handleWhatsAppCall = () => {
     if (!activeLead) return;
     const number = whatsappNumber(activeLead);
-    if (!number) return;
+
+    if (!usableWhatsAppNumber(number)) {
+      setWhatsAppIssue(
+        number
+          ? `WhatsApp needs a number with its country code, and ${activeLead.displayPhone || activeLead.phone} does not have a usable one — correct the lead's phone number first.`
+          : 'This lead has no phone number to message on WhatsApp.'
+      );
+      return;
+    }
+
+    setWhatsAppIssue('');
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(buildWhatsAppMessage(activeLead))}`, '_blank');
     markContacted(activeLead);
   };
@@ -682,6 +723,10 @@ export default function Dialler({
                       <span>Email Prospect</span>
                     </button>
                   </div>
+
+                  {whatsAppIssue && (
+                    <p className="text-[11px] text-amber-500 max-w-md mx-auto">{whatsAppIssue}</p>
+                  )}
 
                   {activeLead && !activePhoneDigits && (
                     <p className="text-[11px] text-amber-500">This lead has no phone number on file, so only email is available.</p>
