@@ -51,7 +51,7 @@ const EMAIL_TEMPLATES = [
         body: [
           `Hi ${firstName},`,
           '',
-          `I'm ${agent.name} from Concept IT Solutions — we build ${solution}s, web portals and mobile apps for businesses across Canada and the USA.`,
+          `I'm ${agent.name}, ${agent.role || 'Sales Agent'} at Concept IT Solutions — we build ${solution}s, web portals and mobile apps for businesses across Canada and the USA.`,
           '',
           `I had a quick idea for ${company}: a modern ${solution} that brings in qualified inbound leads and removes some of the manual work your team does today.`,
           '',
@@ -761,7 +761,7 @@ export default function Dialler({
             <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
               <div className="p-3 glass-soft border-emerald-400/25 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
                 <strong className="text-emerald-700 dark:text-emerald-300 block mb-1">1. Introduction & Hook</strong>
-                "Hello {activeLead?.name || 'there'}, my name is {currentUser.name} with Concept IT Solutions. We specialize in empowering {activeLead?.country || 'North American'} businesses like {activeLead?.company || 'your company'} with high-performance {activeLead?.solution || 'websites and portals'}."
+                "Hello {activeLead?.name || 'there'}, my name is {currentUser.name}, {currentUser.role} at Concept IT Solutions. We specialize in empowering {activeLead?.country || 'North American'} businesses like {activeLead?.company || 'your company'} with high-performance {activeLead?.solution || 'websites and portals'}."
               </div>
 
               <div className="p-3 glass-soft">
