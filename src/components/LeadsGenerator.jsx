@@ -47,6 +47,7 @@ export default function LeadsGenerator({
   const [solutionFilter, setSolutionFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [websiteFilter, setWebsiteFilter] = useState('All');
+  const [emailFilter, setEmailFilter] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
@@ -289,7 +290,11 @@ export default function LeadsGenerator({
       websiteFilter === 'All' ||
       (websiteFilter === 'NoWebsite' ? !lead.website : Boolean(lead.website));
 
-    return matchesSearch && matchesCountry && matchesSize && matchesSolution && matchesStatus && matchesWebsite;
+    const matchesEmail =
+      emailFilter === 'All' ||
+      (emailFilter === 'WithEmail' ? Boolean(lead.email) : !lead.email);
+
+    return matchesSearch && matchesCountry && matchesSize && matchesSolution && matchesStatus && matchesWebsite && matchesEmail;
   });
 
   const noWebsiteCount = visibleLeads.filter(lead => !lead.website).length;
@@ -459,6 +464,19 @@ export default function LeadsGenerator({
               <option value="All">Any Website Status</option>
               <option value="NoWebsite">No website — best prospects</option>
               <option value="HasWebsite">Already has a website</option>
+            </select>
+          </div>
+
+          {/* Email Filter: narrows the list to the leads outreach can actually reach */}
+          <div>
+            <select
+              value={emailFilter}
+              onChange={(e) => setEmailFilter(e.target.value)}
+              className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
+            >
+              <option value="All">Any Email Status</option>
+              <option value="WithEmail">Has an email — ready to write</option>
+              <option value="NoEmail">No email yet</option>
             </select>
           </div>
         </div>
