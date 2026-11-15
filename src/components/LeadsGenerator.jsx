@@ -48,6 +48,7 @@ export default function LeadsGenerator({
   const [statusFilter, setStatusFilter] = useState('All');
   const [websiteFilter, setWebsiteFilter] = useState('All');
   const [emailFilter, setEmailFilter] = useState('All');
+  const [contactFilter, setContactFilter] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
@@ -293,9 +294,15 @@ export default function LeadsGenerator({
     const matchesEmail =
       emailFilter === 'All' ||
       (emailFilter === 'WithEmail' ? Boolean(lead.email) : !lead.email);
+    const matchesContact =
+      contactFilter === 'All' ||
+      (contactFilter === 'None' ? !lead.contactedBy : lead.contactedBy === contactFilter);
 
-    return matchesSearch && matchesCountry && matchesSize && matchesSolution && matchesStatus && matchesWebsite && matchesEmail;
+    return matchesSearch && matchesCountry && matchesSize && matchesSolution && matchesStatus && matchesWebsite && matchesEmail && matchesContact;
   });
+
+  // The employees who have contacted someone in this list, so the filter only offers real names
+  const contactedByNames = [...new Set(visibleLeads.map(lead => lead.contactedBy).filter(Boolean))].sort();
 
   const noWebsiteCount = visibleLeads.filter(lead => !lead.website).length;
   const emailCount = visibleLeads.filter(lead => lead.email).length;
@@ -477,6 +484,21 @@ export default function LeadsGenerator({
               <option value="All">Any Email Status</option>
               <option value="WithEmail">Has an email — ready to write</option>
               <option value="NoEmail">No email yet</option>
+            </select>
+          </div>
+
+          {/* Contact Filter: whose last contact this was, so a manager can review one person */}
+          <div>
+            <select
+              value={contactFilter}
+              onChange={(e) => setContactFilter(e.target.value)}
+              className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
+            >
+              <option value="All">Contacted by anyone</option>
+              <option value="None">Not contacted yet</option>
+              {contactedByNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
             </select>
           </div>
         </div>
