@@ -370,6 +370,7 @@ app.get('/api/emails', (req, res) => {
 // API: customer replies, attribution and admin reassignment (shared with the deployment)
 app.all('/api/replies', require('./api/replies'));
 app.all('/api/requirements', require('./api/requirements'));
+app.all('/api/activity', require('./api/activity'));
 
 // Fallback to SPA index.html. An unknown /api/ path is a missing endpoint, not a page, so it
 // answers 404 instead of quietly serving the app's HTML.

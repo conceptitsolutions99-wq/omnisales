@@ -18,8 +18,9 @@ import { fetchReplies, markRepliesSeen, isAdminUser, assignReply } from './lib/r
 import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
 import { listRequirements } from './lib/requirements';
-import { listSharedLeads, pushSharedLeads } from './lib/leads-api';
+import { listSharedLeads, pushSharedLeads, listActivity, pushActivity } from './lib/leads-api';
 import { mergeLeadLists } from './lib/lead-key';
+import { mergeActivity } from './lib/activity-merge';
 
 function AmbientBackdrop() {
   return (
@@ -184,15 +185,84 @@ function Workspace() {
     return () => clearTimeout(leadsPushTimer.current);
   }, [leads, currentUser, applySharedLeads]);
 
+  // Outreach history follows the same rule as the leads: shared for the admin, own for an
+  // employee, with this browser's copy kept as a cache
+  const callLogsRef = useRef(callLogs);
+  const activitySynced = useRef(false);
+  const activityPushTimer = useRef(null);
+
+  useEffect(() => {
+    callLogsRef.current = callLogs;
+  }, [callLogs]);
+
+  // Only this employee's own entries are sent back: the rest arrived from the server and
+  // pushing them again would copy them under the wrong name
+  const ownActivity = useCallback(
+    (entries) =>
+      entries.filter(
+        entry =>
+          !entry.callerEmail ||
+          String(entry.callerEmail).toLowerCase() === String(currentUser?.email || '').toLowerCase()
+      ),
+    [currentUser?.email]
+  );
+
+  const applySharedActivity = useCallback((shared) => {
+    setCallLogs(prev => {
+      const merged = mergeActivity(prev, shared);
+      return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      activitySynced.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const merged = await pushActivity(ownActivity(callLogsRef.current));
+        if (!cancelled) applySharedActivity(merged);
+      } catch (err) {
+        /* offline: the cached history keeps working */
+      } finally {
+        if (!cancelled) activitySynced.current = true;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, applySharedActivity, ownActivity]);
+
+  useEffect(() => {
+    if (!currentUser || !activitySynced.current) return;
+
+    clearTimeout(activityPushTimer.current);
+    activityPushTimer.current = setTimeout(() => {
+      pushActivity(ownActivity(callLogsRef.current))
+        .then(merged => applySharedActivity(merged))
+        .catch(() => {});
+    }, 1200);
+
+    return () => clearTimeout(activityPushTimer.current);
+  }, [callLogs, currentUser, applySharedActivity, ownActivity]);
+
+  // Both lists are refreshed together, so a colleague's contact and its history arrive
   useEffect(() => {
     if (!currentUser) return;
     const timer = setInterval(() => {
       listSharedLeads()
         .then(shared => applySharedLeads(shared))
         .catch(() => {});
+      listActivity()
+        .then(shared => applySharedActivity(shared))
+        .catch(() => {});
     }, 20000);
     return () => clearInterval(timer);
-  }, [currentUser, applySharedLeads]);
+  }, [currentUser, applySharedLeads, applySharedActivity]);
 
   const [selectedLeadForCall, setSelectedLeadForCall] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
