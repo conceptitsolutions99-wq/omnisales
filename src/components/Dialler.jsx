@@ -174,6 +174,7 @@ export default function Dialler({
 
   const handleStartCall = () => {
     if (!activeLead) return;
+    if (!String(activeLead.phone || '').replace(/\D/g, '')) return;
     setIsCalling(true);
     setCallDuration(0);
 
@@ -457,6 +458,9 @@ export default function Dialler({
     return matchesPermission && matchesSearch && matchesChannel;
   });
 
+  // A lead found by its email alone has no number, so calling has to be offered only when there is one
+  const activePhoneDigits = String(activeLead?.phone || '').replace(/\D/g, '');
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -588,7 +592,7 @@ export default function Dialler({
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
                       onClick={handleWhatsAppCall}
-                      disabled={!activeLead}
+                      disabled={!activeLead || !activePhoneDigits}
                       className="px-6 py-3.5 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center space-x-2 text-sm"
                     >
                       <MessageSquare className="w-5 h-5" />
@@ -597,7 +601,7 @@ export default function Dialler({
 
                     <button
                       onClick={handleStartCall}
-                      disabled={!activeLead}
+                      disabled={!activeLead || !activePhoneDigits}
                       className="px-6 py-3.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 text-sm"
                     >
                       <PhoneCall className="w-5 h-5" />
@@ -613,6 +617,17 @@ export default function Dialler({
                       <span>Email Prospect</span>
                     </button>
                   </div>
+
+                  {activeLead && !activePhoneDigits && (
+                    <p className="text-[11px] text-amber-500">This lead has no phone number on file, so only email is available.</p>
+                  )}
+
+                  {activeLead && !activeLead.email && (
+                    <p className="text-[11px] text-amber-500">
+                      No email on file for this lead — use “Find email” in the Leads list, or type the address into
+                      the email card.
+                    </p>
+                  )}
 
                   <p className="text-[11px] text-muted max-w-md mx-auto">
                     WhatsApp opens the chat with a message already written for this lead. WhatsApp does not

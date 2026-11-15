@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const auth = require('./lib/auth-core');
 const sentStore = require('./lib/replies-store');
 const requirementsStore = require('./lib/requirements-store');
+const { findEmails } = require('./lib/find-email');
 
 const app = express();
 app.use(express.json());
@@ -251,6 +252,25 @@ app.post('/api/auth/change-password', require('./api/auth/change-password'));
 app.all('/api/admin/users', require('./api/admin/users'));
 
 // API: Send an outreach email and record the delivery attempt
+// API: read a lead's contact address from the lead's own website. Browsers cannot fetch
+// another site's HTML, so the lookup runs here and only the addresses come back.
+app.post('/api/find-email', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const session = auth.requireActiveSession(req, res);
+  if (!session) return;
+
+  const { website } = req.body || {};
+  if (!website) return res.status(400).json({ error: 'A website address is required.' });
+
+  try {
+    const result = await findEmails(website);
+    if (result.error) return res.status(400).json(result);
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(502).json({ error: 'That website could not be read.' });
+  }
+});
+
 app.post('/api/emails', async (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;

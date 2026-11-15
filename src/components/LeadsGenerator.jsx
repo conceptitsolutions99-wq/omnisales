@@ -17,7 +17,8 @@ import {
   DollarSign,
   RefreshCw,
   Database,
-  ClipboardList
+  ClipboardList,
+  AtSign
 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = [
@@ -50,6 +51,8 @@ export default function LeadsGenerator({
   const [fetchMessage, setFetchMessage] = useState('');
   const [fetchCity, setFetchCity] = useState('Toronto');
   const [fetchCategory, setFetchCategory] = useState('offices');
+  const [emailBusy, setEmailBusy] = useState({});
+  const [emailLookupMessage, setEmailLookupMessage] = useState('');
 
   // New lead form state
   const [newLead, setNewLead] = useState({
@@ -152,12 +155,15 @@ export default function LeadsGenerator({
         return;
       }
       if (fetched.length === 0) {
-        setFetchMessage(`No ${categoryLabel.toLowerCase()} with a published phone number were found in ${city}. Try another city or category.`);
+                  setFetchMessage(`No ${categoryLabel.toLowerCase()} with a published phone or email were found in ${city}. Try another city or category.`);
         return;
       }
 
-      const existingPhones = new Set(leads.map(lead => lead.phone));
-      const fresh = fetched.filter(lead => !existingPhones.has(lead.phone));
+      // Businesses that publish an email but no phone have no number to compare, so the email
+      // stands in for it when deciding what is already in the list
+      const leadKey = (lead) => (lead.phone ? `phone:${lead.phone}` : `email:${String(lead.email || '').toLowerCase()}`);
+      const existingKeys = new Set(leads.map(leadKey));
+      const fresh = fetched.filter(lead => !existingKeys.has(leadKey(lead)));
       const skipped = fetched.length - fresh.length + (data.skippedKnown || 0);
 
       if (fresh.length > 0) setLeads(prev => [...fresh, ...prev]);
@@ -180,6 +186,88 @@ export default function LeadsGenerator({
     }
   };
 
+  // Reads the contact address off the lead's own website. The fetch runs on the server because
+  // a page on another domain cannot be read from the browser.
+  const lookupEmail = async (website) => {
+    const response = await fetch('/api/find-email', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ website })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'That website could not be read.');
+    return Array.isArray(data.emails) ? data.emails : [];
+  };
+
+  const handleFindEmail = async (lead) => {
+    if (!lead.website || emailBusy[lead.id]) return;
+    setEmailBusy(prev => ({ ...prev, [lead.id]: true }));
+    try {
+      const emails = await lookupEmail(lead.website);
+      if (emails.length === 0) {
+        setEmailLookupMessage(`${lead.company} does not publish an email address on ${lead.website}.`);
+      } else {
+        setLeads(prev =>
+          prev.map(item => (item.id === lead.id ? { ...item, email: emails[0], altEmails: emails.slice(1) } : item))
+        );
+        setEmailLookupMessage(`Added ${emails[0]} for ${lead.company}.`);
+      }
+    } catch (err) {
+      setEmailLookupMessage(err.message);
+    } finally {
+      setEmailBusy(prev => {
+        const next = { ...prev };
+        delete next[lead.id];
+        return next;
+      });
+      setTimeout(() => setEmailLookupMessage(''), 9000);
+    }
+  };
+
+  // Every visible lead that has a website but no address yet, four sites at a time
+  const handleFindMissingEmails = async () => {
+    const targets = visibleLeads.filter(lead => !lead.email && lead.website);
+    if (targets.length === 0) {
+      setEmailLookupMessage('Every lead with a website already has an email address.');
+      return;
+    }
+
+    setEmailLookupMessage(`Checking ${targets.length} website${targets.length === 1 ? '' : 's'} for contact addresses…`);
+    let found = 0;
+    let checked = 0;
+
+    for (let i = 0; i < targets.length; i += 4) {
+      const chunk = targets.slice(i, i + 4);
+      const results = await Promise.all(
+        chunk.map(async (lead) => {
+          try {
+            return { lead, emails: await lookupEmail(lead.website) };
+          } catch (err) {
+            return { lead, emails: [] };
+          }
+        })
+      );
+
+      const withEmail = results.filter(result => result.emails.length > 0);
+      if (withEmail.length > 0) {
+        const byId = new Map(withEmail.map(result => [result.lead.id, result.emails]));
+        setLeads(prev =>
+          prev.map(item => {
+            const emails = byId.get(item.id);
+            return emails ? { ...item, email: emails[0], altEmails: emails.slice(1) } : item;
+          })
+        );
+        found += withEmail.length;
+      }
+      checked += chunk.length;
+      setEmailLookupMessage(`Checked ${checked} of ${targets.length} websites — ${found} email${found === 1 ? '' : 's'} found.`);
+    }
+
+    setEmailLookupMessage(`Finished: ${found} email${found === 1 ? '' : 's'} found on ${checked} website${checked === 1 ? '' : 's'}.`);
+    setTimeout(() => setEmailLookupMessage(''), 12000);
+  };
+
   // Role-based filtering: Admin sees all leads, employees see only leads they've called
   const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
   const userLeadIds = new Set(callLogs.filter(log => log.caller === currentUser.name).map(log => log.leadId));
@@ -190,7 +278,8 @@ export default function LeadsGenerator({
     const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           lead.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           lead.phone.includes(searchTerm) ||
-                          lead.region.toLowerCase().includes(searchTerm.toLowerCase());
+                          lead.region.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (lead.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCountry = countryFilter === 'All' || lead.country === countryFilter;
     const matchesSize = sizeFilter === 'All' || lead.size === sizeFilter;
     const matchesSolution = solutionFilter === 'All' || lead.solution === solutionFilter;
@@ -203,6 +292,8 @@ export default function LeadsGenerator({
   });
 
   const noWebsiteCount = visibleLeads.filter(lead => !lead.website).length;
+  const emailCount = visibleLeads.filter(lead => lead.email).length;
+  const missingEmailCount = visibleLeads.filter(lead => !lead.email && lead.website).length;
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -269,6 +360,15 @@ export default function LeadsGenerator({
             <span>{isFetchingLive ? 'Searching...' : 'Fetch Real Business Leads'}</span>
           </button>
           <button
+            onClick={handleFindMissingEmails}
+            disabled={missingEmailCount === 0}
+            title="Read the contact address published on each lead's own website"
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium rounded-xl shadow-md transition-all flex items-center space-x-2 text-sm"
+          >
+            <AtSign className="w-4 h-4" />
+            <span>Find Missing Emails ({missingEmailCount})</span>
+          </button>
+          <button
             onClick={() => setIsAddModalOpen(true)}
             className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-md transition-all flex items-center space-x-2 text-sm"
           >
@@ -282,6 +382,13 @@ export default function LeadsGenerator({
         <div className="p-4 accent-pill border border-blue-200 dark:border-blue-900 rounded-2xl text-xs text-blue-800 dark:text-blue-300 font-medium flex items-center space-x-2">
           <Database className="w-4 h-4 text-blue-600 animate-pulse" />
           <span>{fetchMessage}</span>
+        </div>
+      )}
+
+      {emailLookupMessage && (
+        <div className="p-4 accent-pill border border-emerald-200 dark:border-emerald-900 rounded-2xl text-xs text-emerald-800 dark:text-emerald-300 font-medium flex items-center space-x-2">
+          <AtSign className="w-4 h-4 text-emerald-600" />
+          <span>{emailLookupMessage}</span>
         </div>
       )}
 
@@ -358,6 +465,7 @@ export default function LeadsGenerator({
         <div className="flex items-center justify-between pt-2 border-t border-[var(--glass-border)] text-xs text-muted">
           <span>
             Showing <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads
+            <span className="text-emerald-500/90"> · <strong>{emailCount}</strong> with an email</span>
             {noWebsiteCount > 0 && (
               <span className="text-amber-400/90"> · <strong>{noWebsiteCount}</strong> have no website</span>
             )}
@@ -411,6 +519,24 @@ export default function LeadsGenerator({
                       <div className="text-xs text-muted flex items-center mt-0.5">
                         <Building2 className="w-3 h-3 mr-1 text-muted" /> {lead.company}
                       </div>
+                      {lead.email ? (
+                        <div className="text-xs mt-1 flex items-center text-emerald-600 dark:text-emerald-400">
+                          <AtSign className="w-3 h-3 mr-1 shrink-0" />
+                          <span className="truncate max-w-[190px]" title={lead.email}>{lead.email}</span>
+                        </div>
+                      ) : lead.website ? (
+                        <button
+                          onClick={() => handleFindEmail(lead)}
+                          disabled={Boolean(emailBusy[lead.id])}
+                          title={`Read the contact address published on ${lead.website}`}
+                          className="mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-400/30 bg-amber-400/15 text-amber-300 inline-flex items-center disabled:opacity-60"
+                        >
+                          <AtSign className="w-3 h-3 mr-1" />
+                          {emailBusy[lead.id] ? 'Looking…' : 'Find email'}
+                        </button>
+                      ) : (
+                        <div className="text-[10px] text-muted mt-1">no email · no website to check</div>
+                      )}
                     </td>
                     <td className="py-4 px-4">
                       <div className="font-mono text-xs font-medium text-[var(--text-primary)]">{lead.displayPhone || lead.phone}</div>

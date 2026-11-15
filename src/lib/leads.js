@@ -13,25 +13,48 @@ const OVERPASS_ENDPOINTS = [
 ];
 
 // Each category maps to OSM selectors that require a published phone number
+// Each category asks for a published phone or a published email. Most listings carry a phone,
+// but an email is what outreach actually needs, so the email tag is searched in its own right
+// instead of only being read off places that happened to have a number.
 const LEAD_CATEGORIES = {
-  offices: ['nwr["office"]["phone"]', 'nwr["office"]["contact:phone"]'],
+  offices: [
+    'nwr["office"]["phone"]',
+    'nwr["office"]["contact:phone"]',
+    'nwr["office"]["email"]',
+    'nwr["office"]["contact:email"]'
+  ],
   professional: [
     'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["phone"]',
-    'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["contact:phone"]'
+    'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["contact:phone"]',
+    'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["email"]',
+    'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["contact:email"]'
   ],
-  retail: ['nwr["shop"]["phone"]', 'nwr["shop"]["contact:phone"]'],
+  retail: [
+    'nwr["shop"]["phone"]',
+    'nwr["shop"]["contact:phone"]',
+    'nwr["shop"]["email"]',
+    'nwr["shop"]["contact:email"]'
+  ],
   food: [
     'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["phone"]',
-    'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["contact:phone"]'
+    'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["contact:phone"]',
+    'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["email"]',
+    'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["contact:email"]'
   ],
   health: [
     'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["phone"]',
-    'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["contact:phone"]'
+    'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["contact:phone"]',
+    'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["email"]',
+    'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["contact:email"]'
   ],
   trades: [
     'nwr["craft"]["phone"]',
+    'nwr["craft"]["email"]',
+    'nwr["craft"]["contact:email"]',
     'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["phone"]',
-    'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["contact:phone"]'
+    'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["contact:phone"]',
+    'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["email"]',
+    'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["contact:email"]'
   ]
 };
 
@@ -125,8 +148,10 @@ out tags center ${limit};`;
 const mapOverpassLead = (element, fallbackCity, country) => {
   const tags = element.tags || {};
   const rawPhone = tags.phone || tags['contact:phone'] || '';
+  const email = tags.email || tags['contact:email'] || '';
   const name = tags.name || tags['operator'];
-  if (!name || !rawPhone) return null;
+  // A business that publishes only an email is still worth outreach
+  if (!name || (!rawPhone && !email)) return null;
 
   const website = tags.website || tags['contact:website'] || '';
   const street = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
@@ -137,8 +162,8 @@ const mapOverpassLead = (element, fallbackCity, country) => {
     name,
     company: name,
     phone: rawPhone.replace(/[^+\d]/g, ''),
-    displayPhone: rawPhone,
-    email: tags.email || tags['contact:email'] || '',
+    displayPhone: rawPhone || 'No phone on file',
+    email,
     website,
     address: [street, city].filter(Boolean).join(', '),
     country,
@@ -147,7 +172,7 @@ const mapOverpassLead = (element, fallbackCity, country) => {
     solution: '',
     status: 'New',
     value: 0,
-    notes: `Real OpenStreetMap listing${website ? ' · website on file' : ' · no website listed'}`,
+    notes: `Real OpenStreetMap listing${website ? ' · website on file' : ' · no website listed'}${email ? ' · email published' : ''}`,
     createdAt: new Date().toISOString().split('T')[0],
     lat: element.lat ?? element.center?.lat ?? null,
     lon: element.lon ?? element.center?.lon ?? null
@@ -328,13 +353,15 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     })
   );
 
-  const leads = expanded.filter((place) => place?.contact?.phone).map((place) => ({
+  const leads = expanded
+    .filter((place) => place?.contact?.phone || place?.contact?.email)
+    .map((place) => ({
     id: `geoapify-${place.place_id || place.formatted}`,
     name: place.name || place.address_line1 || 'Unnamed business',
     company: place.name || place.address_line1 || 'Unnamed business',
-    phone: String(place.contact.phone).replace(/[^+\d]/g, ''),
-    displayPhone: place.contact.phone,
-    email: place.contact.email || '',
+    phone: String(place.contact?.phone || '').replace(/[^+\d]/g, ''),
+    displayPhone: place.contact?.phone || 'No phone on file',
+    email: place.contact?.email || '',
     website: place.website || '',
     address: [place.address_line1, place.address_line2].filter(Boolean).join(', '),
     country: country || (place.country_code ? place.country_code.toUpperCase() : ''),
@@ -347,7 +374,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     createdAt: new Date().toISOString().split('T')[0],
     lat: place.lat ?? null,
     lon: place.lon ?? null
-  }));
+    }));
 
   return { leads, skippedKnown, hadResults: places.length > 0 };
 };
