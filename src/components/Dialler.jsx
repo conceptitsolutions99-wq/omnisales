@@ -20,6 +20,7 @@ import {
   Check,
   AtSign
 } from 'lucide-react';
+import { markLeadContacted } from '../lib/lead-status';
 
 const SIGNATURE_SERVICE_LINE = 'Websites · Web Portals · Mobile Apps';
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
@@ -214,20 +215,14 @@ export default function Dialler({
     const number = whatsappNumber(activeLead);
     if (!number) return;
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(buildWhatsAppMessage(activeLead))}`, '_blank');
-    markContacted(activeLead.id);
+    markContacted(activeLead);
   };
 
-  // Reaching a lead by email or WhatsApp moves it off "New". A lead that is further along
-  // (qualified, considering, closed) is never pushed back to Contacted.
-  const markContacted = (leadId) => {
-    if (leadId === null || leadId === undefined) return;
-    setLeads(prev =>
-      prev.map(lead => {
-        if (lead.id !== leadId) return lead;
-        if (lead.status && lead.status !== 'New') return lead;
-        return { ...lead, status: 'Contacted' };
-      })
-    );
+  // Reaching a lead by email or WhatsApp moves it off "New"; the rule lives in one place so
+  // every screen agrees
+  const markContacted = (lead) => {
+    if (!lead) return;
+    markLeadContacted(setLeads, { leadId: lead.id, email: lead.email });
   };
 
   // Build a ready-to-send outreach draft from the active lead and a template
@@ -370,7 +365,7 @@ export default function Dialler({
         providerId: data.email?.providerId || null
       };
       setCallLogs([emailLogEntry, ...callLogs]);
-      markContacted(activeLead?.id);
+      markContacted(activeLead);
 
       writeLocalEmailLog([
         {
@@ -528,9 +523,11 @@ export default function Dialler({
               </label>
               <select
                 disabled={isCalling}
-                value={activeLead?.id || ''}
+                value={String(activeLead?.id ?? '')}
                 onChange={(e) => {
-                  const lead = leads.find(l => l.id === Number(e.target.value));
+                  // Generated leads carry string ids (osm-node-…, geoapify-…), so the value is
+                  // compared as text or they could never be picked
+                  const lead = leads.find(l => String(l.id) === e.target.value);
                   if (lead) setActiveLead(lead);
                 }}
                 className="w-full p-3 glass-input rounded-xl text-sm font-medium dark:text-white disabled:opacity-50"

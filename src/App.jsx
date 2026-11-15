@@ -422,6 +422,7 @@ function Workspace() {
         isAdmin={viewerIsAdmin}
         currentUser={currentUser}
         onRefresh={loadRequirements}
+        setLeads={setLeads}
       />
 
       <RepliesPanel

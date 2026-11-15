@@ -3,6 +3,7 @@ import { X, RefreshCw, ClipboardList, ChevronDown, Link2, CheckCircle2, Clock, A
 import { REQUIREMENT_FORMS, REQUIREMENT_DETAILS } from '../data/requirementForms';
 import { requirementLink } from '../lib/requirements';
 import { buildQuote, quoteSubject, quoteCurrency } from '../lib/quote';
+import { markLeadContacted } from '../lib/lead-status';
 
 const when = (value) => {
   if (!value) return '';
@@ -66,7 +67,7 @@ function Answers({ request }) {
 }
 
 // The ticked scope becomes a priced quote the agent can copy or email straight back
-function QuoteBuilder({ request, currentUser }) {
+function QuoteBuilder({ request, currentUser, setLeads }) {
   const [prices, setPrices] = useState({});
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
@@ -108,6 +109,7 @@ function QuoteBuilder({ request, currentUser }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `Sending failed (${response.status}).`);
+      markLeadContacted(setLeads, { leadId: request.leadId, email: request.leadEmail });
       setStatus(`Quote sent to ${request.leadEmail}.`);
     } catch (err) {
       setStatus(err.message === 'Failed to fetch' ? 'Cannot reach the mail service.' : err.message);
@@ -168,7 +170,7 @@ function QuoteBuilder({ request, currentUser }) {
   );
 }
 
-export default function RequirementsPanel({ open, onClose, requests, loading, error, isAdmin, currentUser, onRefresh }) {
+export default function RequirementsPanel({ open, onClose, requests, loading, error, isAdmin, currentUser, onRefresh, setLeads }) {
   const [expanded, setExpanded] = useState('');
   const [copied, setCopied] = useState('');
 
@@ -301,7 +303,7 @@ export default function RequirementsPanel({ open, onClose, requests, loading, er
                 {open && (request.submittedAt ? (
                   <>
                     <Answers request={request} />
-                    <QuoteBuilder request={request} currentUser={currentUser} />
+                    <QuoteBuilder request={request} currentUser={currentUser} setLeads={setLeads} />
                   </>
                 ) : (
                   <p className="mt-3 border-t border-white/10 pt-3 text-[11px] text-muted">
