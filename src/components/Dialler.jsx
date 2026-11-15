@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   PhoneCall,
   PhoneOff,
@@ -313,10 +313,15 @@ export default function Dialler({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A second click can arrive before the state has re-rendered, so the guard is a ref: one
+  // click must mean one email and one history entry
+  const sendingRef = useRef(false);
+
   const handleSendEmail = async (e) => {
     e.preventDefault();
-    if (!emailTo.trim() || emailSending) return;
+    if (!emailTo.trim() || emailSending || sendingRef.current) return;
 
+    sendingRef.current = true;
     setEmailSending(true);
     setEmailStatus(null);
 
@@ -392,6 +397,7 @@ export default function Dialler({
             : err.message
       });
     } finally {
+      sendingRef.current = false;
       setEmailSending(false);
     }
   };
