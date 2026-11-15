@@ -214,6 +214,20 @@ export default function Dialler({
     const number = whatsappNumber(activeLead);
     if (!number) return;
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(buildWhatsAppMessage(activeLead))}`, '_blank');
+    markContacted(activeLead.id);
+  };
+
+  // Reaching a lead by email or WhatsApp moves it off "New". A lead that is further along
+  // (qualified, considering, closed) is never pushed back to Contacted.
+  const markContacted = (leadId) => {
+    if (leadId === null || leadId === undefined) return;
+    setLeads(prev =>
+      prev.map(lead => {
+        if (lead.id !== leadId) return lead;
+        if (lead.status && lead.status !== 'New') return lead;
+        return { ...lead, status: 'Contacted' };
+      })
+    );
   };
 
   // Build a ready-to-send outreach draft from the active lead and a template
@@ -280,6 +294,30 @@ export default function Dialler({
     fetchEmailLog();
   }, []);
 
+  // An email sent before this rule existed still leaves its lead on New, so the delivery log is
+  // replayed once on mount and those leads catch up
+  useEffect(() => {
+    const sentNames = new Set(
+      readLocalEmailLog()
+        .filter(entry => entry.status === 'sent' && entry.leadName)
+        .map(entry => String(entry.leadName).toLowerCase())
+    );
+    if (sentNames.size === 0) return;
+
+    setLeads(prev => {
+      let changed = false;
+      const next = prev.map(lead => {
+        if (lead.status && lead.status !== 'New') return lead;
+        if (!sentNames.has(String(lead.name || '').toLowerCase())) return lead;
+        changed = true;
+        return { ...lead, status: 'Contacted' };
+      });
+      return changed ? next : prev;
+    });
+    // Runs once: the point is to reconcile history that predates the rule, not to watch it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSendEmail = async (e) => {
     e.preventDefault();
     if (!emailTo.trim() || emailSending) return;
@@ -332,6 +370,7 @@ export default function Dialler({
         providerId: data.email?.providerId || null
       };
       setCallLogs([emailLogEntry, ...callLogs]);
+      markContacted(activeLead?.id);
 
       writeLocalEmailLog([
         {
