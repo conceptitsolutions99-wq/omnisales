@@ -54,8 +54,26 @@ export default function LeadsGenerator({
   const [fetchMessage, setFetchMessage] = useState('');
   const [fetchCity, setFetchCity] = useState('Toronto');
   const [fetchCategory, setFetchCategory] = useState('offices');
+  // Picking a country can pre-select the category that country's listings are richest in, but
+  // only until the agent chooses a category themselves
+  const [categoryChosenByAgent, setCategoryChosenByAgent] = useState(false);
   const [emailBusy, setEmailBusy] = useState({});
   const [emailLookupMessage, setEmailLookupMessage] = useState('');
+
+  // Egyptian OpenStreetMap coverage is thin for offices and dense for shops and restaurants, so
+  // choosing Egypt moves the search there; leaving it restores offices unless the agent picked
+  // a category of their own in the meantime
+  const EGYPT_SEARCH_CATEGORY = 'retail';
+
+  const handleCountryChange = (value) => {
+    setCountryFilter(value);
+    if (value === 'Egypt') {
+      setFetchCategory(EGYPT_SEARCH_CATEGORY);
+      setCategoryChosenByAgent(false);
+      return;
+    }
+    if (!categoryChosenByAgent && fetchCategory === EGYPT_SEARCH_CATEGORY) setFetchCategory('offices');
+  };
 
   // New lead form state
   const [newLead, setNewLead] = useState({
@@ -357,7 +375,11 @@ export default function LeadsGenerator({
           </div>
           <select
             value={fetchCategory}
-            onChange={(e) => setFetchCategory(e.target.value)}
+            onChange={(e) => {
+              setFetchCategory(e.target.value);
+              setCategoryChosenByAgent(true);
+            }}
+            title={countryFilter === 'Egypt' ? 'Shops, restaurants and clinics are the best covered listings in Egypt' : undefined}
             className="py-2.5 px-3 glass-input rounded-xl text-sm"
           >
             {CATEGORY_OPTIONS.map((option) => (
@@ -389,6 +411,13 @@ export default function LeadsGenerator({
             <span>Add Lead Manually</span>
           </button>
         </div>
+
+        {countryFilter === 'Egypt' && (
+          <p className="text-[11px] text-muted">
+            Egyptian listings are richest in shops, restaurants and clinics, so the search starts on
+            {' '}<span className="font-semibold text-[var(--text-primary)]">Retail &amp; shops</span>. Choose another category above to override it.
+          </p>
+        )}
       </div>
 
       {fetchMessage && (
@@ -424,7 +453,7 @@ export default function LeadsGenerator({
           <div>
             <select
               value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
+              onChange={(e) => handleCountryChange(e.target.value)}
               className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
             >
               <option value="All">All Countries</option>
