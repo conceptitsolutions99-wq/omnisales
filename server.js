@@ -218,6 +218,7 @@ app.post('/api/auth/login', require('./api/auth/login'));
 app.get('/api/auth/me', require('./api/auth/me'));
 app.post('/api/auth/logout', require('./api/auth/logout'));
 app.post('/api/auth/change-password', require('./api/auth/change-password'));
+app.post('/api/auth/profile', require('./api/auth/profile'));
 
 // Local staff-account management (admin only)
 app.all('/api/admin/users', require('./api/admin/users'));

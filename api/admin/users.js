@@ -54,6 +54,8 @@ module.exports = async (req, res) => {
       if (action === 'update') {
         const { name, role, permissions } = req.body || {};
         await store.updateUser(email, { name, role, permissions });
+        // An admin rename must win over a name the person chose for themselves
+        if (typeof name === 'string' && name.trim()) await store.clearProfile(email);
         return res.status(200).json({ ok: true });
       }
 

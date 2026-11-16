@@ -14,6 +14,7 @@ import RepliesPanel from './components/RepliesPanel';
 import RequirementsPanel from './components/RequirementsPanel';
 import PublicRequirementPage from './components/PublicRequirementPage';
 import SetupChecklist from './components/SetupChecklist';
+import ProfileModal from './components/ProfileModal';
 import { fetchReplies, markRepliesSeen, isAdminUser, assignReply } from './lib/replies';
 import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
@@ -266,6 +267,7 @@ function Workspace() {
 
   const [selectedLeadForCall, setSelectedLeadForCall] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // Customer replies to outreach email
   const [replies, setReplies] = useState([]);
@@ -470,6 +472,7 @@ function Workspace() {
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onOpenProfile={() => setProfileOpen(true)}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         onOpenPalette={() => setPaletteOpen(true)}
@@ -551,6 +554,14 @@ function Workspace() {
       </main>
 
       <SetupChecklist open={setupOpen} onClose={() => setSetupOpen(false)} />
+
+      {profileOpen && (
+        <ProfileModal
+          user={currentUser}
+          onClose={() => setProfileOpen(false)}
+          onSaved={(user) => setCurrentUser(user ? renameLegacyUser(user) : currentUser)}
+        />
+      )}
 
       <RequirementsPanel
         open={requirementsOpen}

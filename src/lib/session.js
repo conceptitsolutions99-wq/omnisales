@@ -34,6 +34,20 @@ export async function changePassword(currentPassword, newPassword) {
   return data.user;
 }
 
+// Name and outreach title belong to the person, so they edit them without the admin
+export async function saveProfile({ name, title }) {
+  const response = await fetch('/api/auth/profile', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, title })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Saving your profile failed (${response.status}).`);
+  return data.user;
+}
+
 export async function signOut() {
   try {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });

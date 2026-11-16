@@ -14,7 +14,8 @@ import {
   Search,
   MailOpen,
   ClipboardList,
-  Settings
+  Settings,
+  UserRound
 } from 'lucide-react';
 
 const initialsOf = (name = '') =>
@@ -27,7 +28,7 @@ const initialsOf = (name = '') =>
     .join('')
     .toUpperCase();
 
-export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenRequirements, requirementsPending = 0, onOpenSetup }) {
+export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, onOpenProfile, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenRequirements, requirementsPending = 0, onOpenSetup }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: true },
     { id: 'leads', label: 'Leads', icon: Users, permission: currentUser.permissions.leads },
@@ -148,15 +149,29 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
                   {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
                 </button>
 
-                <div className="hidden sm:flex items-center gap-2.5 pl-2.5 border-l border-white/10">
+                <button
+                  onClick={onOpenProfile}
+                  className="hidden sm:flex items-center gap-2.5 pl-2.5 border-l border-white/10 text-left rounded-xl hover:opacity-90 transition-opacity"
+                  title="Edit my name and outreach title"
+                >
                   <div className="text-right leading-tight">
                     <div className="text-[13px] font-semibold whitespace-nowrap">{currentUser.name}</div>
-                    <div className="text-[11px] font-medium accent-text whitespace-nowrap">{currentUser.role}</div>
+                    <div className="text-[11px] font-medium accent-text whitespace-nowrap">
+                      {currentUser.title || currentUser.role}
+                    </div>
                   </div>
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-400 to-indigo-500 text-[11px] font-bold text-white flex items-center justify-center shadow-md shadow-cyan-500/25">
                     {initialsOf(currentUser.name)}
                   </div>
-                </div>
+                </button>
+
+                <button
+                  onClick={onOpenProfile}
+                  className="sm:hidden w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  title="Edit my name and outreach title"
+                >
+                  <UserRound className="w-4 h-4" />
+                </button>
 
                 <button
                   onClick={onLogout}
