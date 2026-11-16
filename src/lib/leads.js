@@ -114,6 +114,35 @@ const readJson = (body) => {
   }
 };
 
+// A geocoder answers with the whole municipality: Cairo's box is about 160 km across, and a map
+// query over that much ground takes a minute or is refused outright. The search is bounded to a
+// window around the city centre instead, which is where a city's businesses are, and the result
+// says the area was limited so the agent knows why the list is town-centre shaped.
+const MAX_SEARCH_SPAN_DEGREES = 0.25;
+
+const limitBox = (bbox) => {
+  if (!bbox) return null;
+
+  const latSpan = bbox.north - bbox.south;
+  const lonSpan = bbox.east - bbox.west;
+  const limited = latSpan > MAX_SEARCH_SPAN_DEGREES || lonSpan > MAX_SEARCH_SPAN_DEGREES;
+  if (!limited) return { ...bbox, limited: false };
+
+  const latCentre = (bbox.north + bbox.south) / 2;
+  const lonCentre = (bbox.east + bbox.west) / 2;
+  const latHalf = Math.min(latSpan, MAX_SEARCH_SPAN_DEGREES) / 2;
+  const lonHalf = Math.min(lonSpan, MAX_SEARCH_SPAN_DEGREES) / 2;
+
+  return {
+    south: latCentre - latHalf,
+    north: latCentre + latHalf,
+    west: lonCentre - lonHalf,
+    east: lonCentre + lonHalf,
+    label: bbox.label,
+    limited: true
+  };
+};
+
 // Resolve the city to a bounding box so matching does not depend on exact OSM names
 const geocodeCache = new Map();
 
@@ -136,7 +165,7 @@ const geocodeCity = async (city) => {
   if (!Array.isArray(results) || results.length === 0) return null;
 
   const [south, north, west, east] = results[0].boundingbox.map(Number);
-  const bbox = { south, west, north, east, label: results[0].display_name };
+  const bbox = limitBox({ south, north, west, east, label: results[0].display_name });
   geocodeCache.set(key, { at: Date.now(), bbox });
   return bbox;
 };
@@ -265,7 +294,7 @@ const geocodeWithGeoapify = async (city) => {
   const box = data?.results?.[0]?.bbox;
   if (!box) return null;
 
-  return { west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: data.results[0].formatted };
+  return limitBox({ west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: data.results[0].formatted });
 };
 
 // The same business has a different id on each provider, so a listing saved from OpenStreetMap
@@ -407,6 +436,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
 export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds, knownPlaces, knownPhones }) {
   const bbox = await geocodeCity(city);
   const resolvedCountry = country || countryFromLabel(bbox?.label);
+  const areaLimited = Boolean(bbox?.limited);
   const options = { city, category, limit, country: resolvedCountry, bbox, offset, knownIds, knownPlaces, knownPhones };
 
   let overpassLeads = [];
@@ -425,6 +455,7 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       location: bbox?.label || city,
       source: 'OpenStreetMap',
       attribution: '© OpenStreetMap contributors',
+      areaLimited,
       skippedKnown: 0
     };
   }
@@ -454,6 +485,7 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       location: bbox?.label || city,
       source: 'Geoapify',
       attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors',
+      areaLimited,
       skippedKnown: geoapifySkipped
     };
   }
@@ -467,6 +499,7 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       location: bbox?.label || city,
       source: 'Geoapify',
       attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors',
+      areaLimited,
       skippedKnown: geoapifySkipped
     };
   }

@@ -189,10 +189,13 @@ export default function LeadsGenerator({
 
       if (fresh.length > 0) setLeads(prev => [...fresh, ...prev]);
 
+      const areaNote = data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name for another part of the city.' : '';
+
       setFetchMessage(
         fresh.length > 0
           ? `Added ${fresh.length} real business leads from ${city} (${data.attribution || '© OpenStreetMap contributors'}).` +
-              (skipped ? ` ${skipped} already in your list were skipped.` : '')
+              (skipped ? ` ${skipped} already in your list were skipped.` : '') +
+              areaNote
           : `No new businesses this time: all ${skipped} results are already in your list. Search again to move on to the next page, or switch category.`
       );
       setTimeout(() => setFetchMessage(''), 10000);
