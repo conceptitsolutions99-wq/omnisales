@@ -170,13 +170,17 @@ export default function LeadsGenerator({
       const fetched = Array.isArray(data.leads) ? data.leads : [];
       if (fetched.length === 0 && data.allKnown) {
         setFetchMessage(
-          `All ${data.skippedKnown} results for ${city} are already in your list, so no credits were spent. Search again to move to the next page.`
+          `All ${data.skippedKnown} results for ${city} are already in your list, so no credits were spent. Search again to move to the next page.` +
+            (data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name to cover another part of the city.' : '')
         );
         setTimeout(() => setFetchMessage(''), 10000);
         return;
       }
       if (fetched.length === 0) {
-                  setFetchMessage(`No ${categoryLabel.toLowerCase()} with a published phone or email were found in ${city}. Try another city or category.`);
+        setFetchMessage(
+          `No ${categoryLabel.toLowerCase()} with a published phone or email were found in ${city}. Try another city or category.` +
+            (data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name to cover another part of the city.' : '')
+        );
         return;
       }
 
