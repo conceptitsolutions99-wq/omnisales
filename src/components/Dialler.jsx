@@ -24,6 +24,9 @@ import { markLeadContacted } from '../lib/lead-status';
 
 const SIGNATURE_SERVICE_LINE = 'Websites · Web Portals · Mobile Apps';
 
+// A single reference so every customer email points back to the company's own site
+const COMPANY_SITE = 'https://company-website-n9ba.vercel.app';
+
 // The outreach copy names the market the prospect is in, so an Egyptian lead is not told about
 // work "across Canada and the USA"
 const marketLine = (lead) =>
@@ -37,6 +40,8 @@ const buildSignature = (agent = {}) =>
     agent.name || 'Concept IT Solutions Team',
     agent.title || agent.role || 'Sales Agent',
     `Concept IT Solutions — ${SIGNATURE_SERVICE_LINE}`,
+    ``,
+    `Our own site: ${COMPANY_SITE}`,
   ].join('\n');
 
 // Selectable outreach templates for the email compose window
