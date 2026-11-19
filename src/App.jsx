@@ -21,7 +21,7 @@ import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
 import { listRequirements } from './lib/requirements';
 import { listSharedLeads, pushSharedLeads, listActivity, pushActivity } from './lib/leads-api';
-import { mergeLeadLists } from './lib/lead-key';
+import { leadKey, mergeLeadLists } from './lib/lead-key';
 import { mergeActivity } from './lib/activity-merge';
 
 function AmbientBackdrop() {
@@ -143,10 +143,14 @@ function Workspace() {
     leadsRef.current = leads;
   }, [leads]);
 
-  // Adopt the server's copy without re-rendering when nothing actually differs
-  const applySharedLeads = useCallback((shared) => {
+  // Adopt the server's copy without re-rendering when nothing actually differs. The server is
+  // also the truth about which leads still exist: keys an admin deleted are dropped from this
+  // browser's copy before the merge, so a stale tab cannot push a deleted lead back.
+  const applySharedLeads = useCallback((shared, deleted = []) => {
     setLeads(prev => {
-      const merged = mergeLeadLists(prev, shared);
+      const gone = new Set(deleted || []);
+      const kept = gone.size > 0 ? prev.filter(lead => !gone.has(leadKey(lead))) : prev;
+      const merged = mergeLeadLists(kept, shared);
       return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged;
     });
   }, []);
@@ -162,8 +166,8 @@ function Workspace() {
       try {
         // Leads this browser already had are uploaded first, so the first sign-in on a new
         // device does not start from an empty list
-        const merged = await pushSharedLeads(leadsRef.current);
-        if (!cancelled) applySharedLeads(merged);
+        const synced = await pushSharedLeads(leadsRef.current);
+        if (!cancelled) applySharedLeads(synced.leads, synced.deleted);
       } catch (err) {
         /* offline or not deployed yet: the cached list keeps working */
       } finally {
@@ -182,7 +186,7 @@ function Workspace() {
     clearTimeout(leadsPushTimer.current);
     leadsPushTimer.current = setTimeout(() => {
       pushSharedLeads(leadsRef.current)
-        .then(merged => applySharedLeads(merged))
+        .then(synced => applySharedLeads(synced.leads, synced.deleted))
         .catch(() => {});
     }, 1200);
 
@@ -259,7 +263,7 @@ function Workspace() {
     if (!currentUser) return;
     const timer = setInterval(() => {
       listSharedLeads()
-        .then(shared => applySharedLeads(shared))
+        .then(synced => applySharedLeads(synced.leads, synced.deleted))
         .catch(() => {});
       listActivity()
         .then(shared => applySharedActivity(shared))

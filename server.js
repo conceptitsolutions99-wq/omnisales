@@ -257,7 +257,30 @@ app.get('/api/leads', async (req, res) => {
   if (!session) return;
 
   const leads = await leadsStore.listLeads();
-  res.json({ ok: true, count: leads.length, leads, storage: leadsStore.configured() ? 'persistent' : 'memory' });
+  res.json({
+    ok: true,
+    count: leads.length,
+    leads,
+    deleted: await leadsStore.listDeleted(),
+    storage: leadsStore.configured() ? 'persistent' : 'memory'
+  });
+});
+
+// Deleting removes a lead for the whole team, so only an admin may do it
+app.delete('/api/leads', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const session = auth.requireActiveSession(req, res);
+  if (!session) return;
+
+  if (!auth.isAdmin(session)) return res.status(403).json({ error: 'Only an admin can delete leads.' });
+
+  const { leads } = req.body || {};
+  if (!Array.isArray(leads) || leads.length === 0) {
+    return res.status(400).json({ error: 'Send the leads to delete as an array.' });
+  }
+
+  const remaining = await leadsStore.deleteLeads(leads);
+  res.json({ ok: true, count: remaining.length, leads: remaining, deleted: await leadsStore.listDeleted() });
 });
 
 app.post('/api/leads', async (req, res) => {
@@ -269,7 +292,7 @@ app.post('/api/leads', async (req, res) => {
   if (!Array.isArray(leads)) return res.status(400).json({ error: 'Send the leads as an array.' });
 
   const merged = await leadsStore.upsertLeads(leads, { name: session.name, email: session.email });
-  res.json({ ok: true, count: merged.length, leads: merged });
+  res.json({ ok: true, count: merged.length, leads: merged, deleted: await leadsStore.listDeleted() });
 });
 
 // API: read a lead's contact address from the lead's own website. Browsers cannot fetch

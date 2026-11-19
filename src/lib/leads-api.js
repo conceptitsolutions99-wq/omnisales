@@ -4,7 +4,11 @@ const parse = async (pending) => {
   const response = await pending;
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `Lead sync failed (${response.status}).`);
-  return Array.isArray(data.leads) ? data.leads : [];
+  return {
+    leads: Array.isArray(data.leads) ? data.leads : [],
+    // Keys of leads an admin deleted: every browser drops its copy instead of pushing it back
+    deleted: Array.isArray(data.deleted) ? data.deleted : []
+  };
 };
 
 export const listSharedLeads = async () => parse(fetch('/api/leads', { credentials: 'same-origin' }));
@@ -33,6 +37,17 @@ export const pushSharedLeads = async (leads) =>
   parse(
     fetch('/api/leads', {
       method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leads })
+    })
+  );
+
+// Admin only on the server: the leads are removed for the whole team
+export const deleteSharedLeads = async (leads) =>
+  parse(
+    fetch('/api/leads', {
+      method: 'DELETE',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ leads })

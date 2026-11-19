@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { searchLeads } from '../lib/leads';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
+import { deleteSharedLeads } from '../lib/leads-api';
 import {
   Users,
   MapPin,
@@ -21,7 +22,8 @@ import {
   ClipboardList,
   AtSign,
   ExternalLink,
-  MessageCircle
+  MessageCircle,
+  Trash2
 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = [
@@ -64,6 +66,9 @@ export default function LeadsGenerator({
   const [categoryChosenByAgent, setCategoryChosenByAgent] = useState(false);
   const [emailBusy, setEmailBusy] = useState({});
   const [emailLookupMessage, setEmailLookupMessage] = useState('');
+  // Deleting is an admin action, and it applies to the whole team's list
+  const [selectedLeadIds, setSelectedLeadIds] = useState([]);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Egyptian OpenStreetMap coverage is thin for offices and dense for shops and restaurants, so
   // choosing Egypt moves the search there; leaving it restores offices unless the agent picked
@@ -375,6 +380,34 @@ export default function LeadsGenerator({
   // The list is shared, so everyone works from the same leads: an employee can see that a
   // colleague already emailed a business instead of writing to it twice
   const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
+
+  const selectedLeads = leads.filter(lead => selectedLeadIds.includes(String(lead.id)));
+
+  const toggleLeadSelection = (id) => {
+    const key = String(id);
+    setSelectedLeadIds(prev => (prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key]));
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!isAdmin || selectedLeads.length === 0 || isDeleting) return;
+
+    const label = selectedLeads.length === 1 ? `“${selectedLeads[0].name}”` : `${selectedLeads.length} leads`;
+    if (!window.confirm(`Delete ${label}? It is removed from the team's list for everyone.`)) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteSharedLeads(selectedLeads);
+      const gone = new Set(selectedLeads.map(lead => String(lead.id)));
+      setLeads(prev => prev.filter(lead => !gone.has(String(lead.id))));
+      setSelectedLeadIds([]);
+      setFetchMessage(`Deleted ${selectedLeads.length} lead${selectedLeads.length === 1 ? '' : 's'}.`);
+      setTimeout(() => setFetchMessage(''), 8000);
+    } catch (err) {
+      setFetchMessage(err.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
   const visibleLeads = leads;
 
   // Filter logic
@@ -414,6 +447,20 @@ export default function LeadsGenerator({
       matchesChannel
     );
   });
+
+  // Select-all covers exactly what the filters show, so a country or channel can be cleaned up
+  // without touching the rest of the team's list
+  const allFilteredSelected =
+    filteredLeads.length > 0 && filteredLeads.every(lead => selectedLeadIds.includes(String(lead.id)));
+
+  const toggleSelectAllVisible = () => {
+    if (allFilteredSelected) {
+      const visibleIds = new Set(filteredLeads.map(lead => String(lead.id)));
+      setSelectedLeadIds(prev => prev.filter(id => !visibleIds.has(id)));
+      return;
+    }
+    setSelectedLeadIds(prev => [...new Set([...prev, ...filteredLeads.map(lead => String(lead.id))])]);
+  };
 
   // The employees who have contacted someone in this list, so the filter only offers real names
   const contactedByNames = [...new Set(visibleLeads.map(lead => lead.contactedBy).filter(Boolean))].sort();
@@ -510,6 +557,17 @@ export default function LeadsGenerator({
             <Plus className="w-4 h-4" />
             <span>Add Lead Manually</span>
           </button>
+          {isAdmin && (
+            <button
+              onClick={handleDeleteSelected}
+              disabled={selectedLeads.length === 0 || isDeleting}
+              title="Delete the selected leads from the team's list"
+              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white font-medium rounded-xl shadow-md transition-all flex items-center space-x-2 text-sm"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>{isDeleting ? 'Deleting…' : `Delete Selected (${selectedLeads.length})`}</span>
+            </button>
+          )}
         </div>
 
         {countryFilter === 'Egypt' && (
@@ -684,6 +742,18 @@ export default function LeadsGenerator({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="glass-head text-xs font-semibold uppercase tracking-wider text-muted">
+                {isAdmin && (
+                  <th className="py-3.5 px-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllVisible}
+                      aria-label="Select all leads shown"
+                      title="Select every lead the current filters show"
+                      className="h-4 w-4 rounded accent-blue-600 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-3.5 px-4">Contact & Company</th>
                 <th className="py-3.5 px-4">Phone & Region</th>
                 <th className="py-3.5 px-4">Size & Solution</th>
@@ -695,13 +765,24 @@ export default function LeadsGenerator({
             <tbody className="divide-y divide-white/[0.07] text-sm">
               {filteredLeads.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-12 text-muted">
+                  <td colSpan={isAdmin ? 7 : 6} className="text-center py-12 text-muted">
                     No leads found matching your filters. Click "Fetch Live Business Leads (API)" to ingest live leads.
                   </td>
                 </tr>
               ) : (
                 filteredLeads.map((lead) => (
                   <tr key={lead.id} className="row-hover transition-colors">
+                    {isAdmin && (
+                      <td className="py-4 px-3 align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedLeadIds.includes(String(lead.id))}
+                          onChange={() => toggleLeadSelection(lead.id)}
+                          aria-label={`Select ${lead.name}`}
+                          className="mt-1 h-4 w-4 rounded accent-blue-600 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="py-4 px-4">
                       <div className="font-semibold text-[var(--text-primary)]">{lead.name}</div>
                       <div className="text-xs text-muted flex items-center mt-0.5">
