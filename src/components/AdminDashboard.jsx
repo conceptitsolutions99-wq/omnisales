@@ -18,7 +18,7 @@ import {
   Loader2,
   AlertTriangle
 } from 'lucide-react';
-import { listStaff, createStaff, resetStaffPassword, setStaffStatus, updateStaff } from '../lib/staff';
+import { listStaff, createStaff, resetStaffPassword, setStaffStatus, updateStaff, deleteStaff } from '../lib/staff';
 
 export default function AdminDashboard({ currentUser, onClearDatabase }) {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
@@ -90,6 +90,18 @@ export default function AdminDashboard({ currentUser, onClearDatabase }) {
     if (busyEmail) return;
     const nextStatus = user.status === 'Suspended' ? 'Active' : 'Suspended';
     runAction(user.email, () => setStaffStatus(user.email, nextStatus));
+  };
+
+  // Deleting is irreversible, so it asks first and names what stays behind in the history
+  const handleDeleteUser = (user) => {
+    if (busyEmail) return;
+    if (
+      !window.confirm(
+        `Delete ${user.name}'s account (${user.email})?\n\nThey will no longer be able to sign in. Past calls, emails and quotes stay in the history.`
+      )
+    )
+      return;
+    runAction(user.email, () => deleteStaff(user.email));
   };
 
   const handleResetPassword = (user) => {
@@ -331,6 +343,15 @@ export default function AdminDashboard({ currentUser, onClearDatabase }) {
                     >
                       {user.status === 'Suspended' ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
                       <span>{user.status === 'Suspended' ? 'Unsuspend' : 'Suspend'}</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(user)}
+                      disabled={busyEmail === user.email || user.email === currentUser?.email}
+                      className="px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 disabled:opacity-40"
+                      title={user.email === currentUser?.email ? 'You cannot delete your own account' : 'Delete Account'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
                     </button>
                   </td>
                 </tr>

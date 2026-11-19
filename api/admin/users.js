@@ -70,6 +70,30 @@ module.exports = async (req, res) => {
         return res.status(200).json({ ok: true });
       }
 
+      if (action === 'delete') {
+        const users = await store.listUsers();
+        const address = String(email || '').trim().toLowerCase();
+        const target = users.find((user) => String(user.email).toLowerCase() === address);
+        if (!target) return res.status(400).json({ error: 'No account with that email.' });
+        if (address === String(session.email).toLowerCase()) {
+          return res.status(400).json({ error: 'You cannot delete your own account.' });
+        }
+
+        // Removing the last admin would leave nobody able to manage staff. The bootstrap admin
+        // (ADMIN_EMAIL) lives outside this list, so it still counts as a way back in.
+        const bootstrap = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+        const storedAdmins = users.filter((user) => user.permissions?.admin || user.role === 'Admin');
+        const adminCount =
+          storedAdmins.length +
+          (bootstrap && !users.some((user) => String(user.email).toLowerCase() === bootstrap) ? 1 : 0);
+        if ((target.permissions?.admin || target.role === 'Admin') && adminCount <= 1) {
+          return res.status(400).json({ error: 'The last admin account cannot be deleted.' });
+        }
+
+        await store.deleteUser(address);
+        return res.status(200).json({ ok: true });
+      }
+
       return res.status(400).json({ error: 'Unknown action.' });
     }
 

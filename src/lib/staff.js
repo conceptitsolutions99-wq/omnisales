@@ -23,3 +23,5 @@ export const setStaffStatus = (email, status) =>
 
 export const updateStaff = (email, patch) =>
   request({ method: 'PATCH', body: JSON.stringify({ email, action: 'update', ...patch }) });
+export const deleteStaff = (email) =>
+  request({ method: 'PATCH', body: JSON.stringify({ email, action: 'delete' }) });
