@@ -195,6 +195,11 @@ export default function Dialler({
   // The From the server actually used, and whether MAIL_FROM was ignored in favour of the account
   const [emailFrom, setEmailFrom] = useState('');
   const [emailFromOverridden, setEmailFromOverridden] = useState(false);
+  // The deliverability test is an admin action: it sends one real message to the admin's own
+  // address and reports the From, mode and message id the provider actually used
+  const [testEmailBusy, setTestEmailBusy] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState(null);
+  const canSendTest = currentUser.role === 'Admin' || Boolean(currentUser.permissions?.admin);
   // The postal identity and opt-out the server would add, so the signature can carry them once
   const [companySignature, setCompanySignature] = useState({ address: '', disclosure: '', optOut: '' });
   const [emailTemplate, setEmailTemplate] = useState('intro');
@@ -507,6 +512,38 @@ export default function Dialler({
     } finally {
       sendingRef.current = false;
       setEmailSending(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (testEmailBusy) return;
+
+    setTestEmailBusy(true);
+    setTestEmailResult(null);
+    try {
+      const response = await fetch('/api/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ test: true })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `The test email failed (${response.status}).`);
+
+      setTestEmailResult({
+        ok: true,
+        to: data.email?.to || '',
+        from: data.from || data.email?.from || '',
+        mode: data.fromMode || data.email?.fromMode || '',
+        messageId: data.messageId || data.email?.providerId || ''
+      });
+      fetchEmailLog();
+    } catch (err) {
+      setTestEmailResult({
+        ok: false,
+        error: err.message === 'Failed to fetch' ? 'Cannot reach the mail service.' : err.message
+      });
+    } finally {
+      setTestEmailBusy(false);
     }
   };
 
@@ -996,10 +1033,23 @@ export default function Dialler({
             <Mail className="w-5 h-5 mr-2 text-indigo-400" />
             Email Delivery Log ({emailLog.length})
           </h3>
-          <div className="text-[11px] text-muted sm:text-right">
-            {emailConfigured
-              ? `Sending as ${emailFrom || emailSender || 'your Gmail account'} · newest first`
-              : 'Sending not configured — add GMAIL_USER and GMAIL_APP_PASSWORD to the environment variables'}
+          <div className="text-[11px] text-muted sm:text-right space-y-1">
+            {canSendTest && (
+              <button
+                onClick={handleSendTestEmail}
+                disabled={testEmailBusy || !emailConfigured}
+                title="Send one real test through the configured mail path, addressed only to your own account"
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[11px] font-semibold inline-flex items-center gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5" />
+                {testEmailBusy ? 'Sending test…' : 'Send test to myself'}
+              </button>
+            )}
+            <div>
+              {emailConfigured
+                ? `Sending as ${emailFrom || emailSender || 'your Gmail account'} · newest first`
+                : 'Sending not configured — add GMAIL_USER and GMAIL_APP_PASSWORD to the environment variables'}
+            </div>
             {emailConfigured && emailFromOverridden && (
               <p className="text-amber-500 mt-0.5 max-w-xs">
                 MAIL_FROM was ignored: Gmail only sends as the signed-in account. Set
@@ -1008,6 +1058,37 @@ export default function Dialler({
             )}
           </div>
         </div>
+
+        {testEmailResult && (
+          <div
+            className={`p-3 rounded-xl border text-[11px] font-medium ${
+              testEmailResult.ok
+                ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
+                : 'border-rose-400/30 bg-rose-400/10 text-rose-300'
+            }`}
+          >
+            {testEmailResult.ok ? (
+              <span>
+                Test email sent to <strong>{testEmailResult.to}</strong>
+                {testEmailResult.from && (
+                  <>
+                    {' · From '}
+                    <strong className="font-mono">{testEmailResult.from}</strong>
+                  </>
+                )}
+                {testEmailResult.mode && <> · {SENDER_MODES[testEmailResult.mode]?.label || testEmailResult.mode}</>}
+                {testEmailResult.messageId && (
+                  <>
+                    {' · id '}
+                    <span className="font-mono">{testEmailResult.messageId}</span>
+                  </>
+                )}
+              </span>
+            ) : (
+              <span>{testEmailResult.error}</span>
+            )}
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">

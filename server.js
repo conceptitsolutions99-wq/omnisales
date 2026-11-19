@@ -9,6 +9,7 @@ const auth = require('./lib/auth-core');
 const sentStore = require('./lib/replies-store');
 const requirementsStore = require('./lib/requirements-store');
 const { findEmails } = require('./lib/find-email');
+const testMail = require('./lib/deliverability-test');
 const leadsStore = require('./lib/leads-store');
 
 const app = express();
@@ -318,7 +319,68 @@ app.post('/api/emails', async (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
 
-  const { to, subject, body, leadId, leadName, company, sentBy, requirements } = req.body || {};
+  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test } = req.body || {};
+
+  // A test goes only to the admin who asked for it, through the same transport and From as a real
+  // outreach email, so a delivered test proves the path that outreach actually uses
+  if (test) {
+    if (!auth.isAdmin(session)) {
+      return res.status(403).json({ error: 'Only an admin can send a deliverability test.' });
+    }
+    if (!transporter) {
+      return res.status(503).json({
+        error: `Email sending is not configured. Add GMAIL_APP_PASSWORD for ${smtpUser} to .env and restart the server.`
+      });
+    }
+
+    const entry = {
+      id: `em_test_${Date.now()}`,
+      to: session.email,
+      subject: testMail.TEST_SUBJECT,
+      from: SENDER.from,
+      fromMode: SENDER.mode,
+      leadId: null,
+      leadName: 'Deliverability test',
+      company: 'Concept IT Solutions',
+      sentBy: session.name || 'Admin',
+      sentAt: new Date().toISOString(),
+      status: 'sending',
+      providerId: null,
+      error: null,
+      test: true
+    };
+
+    try {
+      const result = await testMail.sendTestEmail({ transporter, session, sender: SENDER });
+      entry.subject = result.subject;
+      entry.sentAt = result.sentAt;
+      entry.status = 'sent';
+      entry.providerId = result.messageId;
+      writeEmailLog([entry, ...readEmailLog()]);
+      logSender('email_test_sent', { to: entry.to, messageId: entry.providerId });
+      return res.json({
+        ok: true,
+        test: true,
+        email: entry,
+        from: SENDER.from,
+        fromMode: SENDER.mode,
+        messageId: entry.providerId,
+        accepted: result.accepted,
+        rejected: result.rejected
+      });
+    } catch (err) {
+      entry.status = 'failed';
+      entry.error = err.message || 'The test email could not be sent.';
+      writeEmailLog([entry, ...readEmailLog()]);
+      logSender('email_test_failed', { to: entry.to, error: entry.error });
+      return res.status(502).json({
+        error: entry.error,
+        email: entry,
+        from: SENDER.from,
+        fromMode: SENDER.mode
+      });
+    }
+  }
 
   if (!to || !subject || !body) {
     return res.status(400).json({ error: 'Recipient, subject and message are all required.' });
