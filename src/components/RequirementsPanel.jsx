@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, RefreshCw, ClipboardList, ChevronDown, Link2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { X, RefreshCw, ClipboardList, ChevronDown, Link2, CheckCircle2, Clock, AlertTriangle, Trash2 } from 'lucide-react';
 import { REQUIREMENT_FORMS, REQUIREMENT_DETAILS } from '../data/requirementForms';
-import { requirementLink } from '../lib/requirements';
+import { requirementLink, deleteRequirementForms } from '../lib/requirements';
 import { buildQuote, quoteSubject, quoteCurrency } from '../lib/quote';
 import { buildSignature } from '../lib/signature';
 import { markLeadContacted } from '../lib/lead-status';
@@ -176,8 +176,49 @@ function QuoteBuilder({ request, currentUser, setLeads }) {
 export default function RequirementsPanel({ open, onClose, requests, loading, error, isAdmin, canReview = false, currentUser, onRefresh, setLeads }) {
   const [expanded, setExpanded] = useState('');
   const [copied, setCopied] = useState('');
+  // Admin-only selection, so several forms can be cleared out in one go
+  const [selected, setSelected] = useState(() => new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   if (!open) return null;
+
+  const allSelected = requests.length > 0 && requests.every((request) => selected.has(request.token));
+
+  const toggleSelected = (token) => {
+    setDeleteError('');
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(token)) next.delete(token);
+      else next.add(token);
+      return next;
+    });
+  };
+
+  // Deleting a form also kills the customer's link, so it asks first and says so
+  const deleteSelected = async () => {
+    if (!selected.size || deleting) return;
+    const count = selected.size;
+    if (
+      !window.confirm(
+        `Delete ${count} requirement form${count === 1 ? '' : 's'}?\n\nThe customer's link stops working and the answers are removed. This cannot be undone.`
+      )
+    )
+      return;
+
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await deleteRequirementForms([...selected]);
+      setSelected(new Set());
+      setExpanded('');
+      await onRefresh?.();
+    } catch (err) {
+      setDeleteError(err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const copy = async (token) => {
     try {
@@ -249,12 +290,53 @@ export default function RequirementsPanel({ open, onClose, requests, loading, er
             </p>
           )}
 
+          {isAdmin && requests.length > 0 && (
+            <div className="flex items-center justify-between gap-2 px-1 pb-1">
+              <label className="inline-flex items-center gap-2 text-[11px] font-semibold text-muted">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={(e) =>
+                    setSelected(e.target.checked ? new Set(requests.map((item) => item.token)) : new Set())
+                  }
+                  className="w-3.5 h-3.5 accent-rose-500"
+                />
+                Select all
+              </label>
+              <button
+                onClick={deleteSelected}
+                disabled={deleting || selected.size === 0}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-40 inline-flex items-center gap-1.5"
+                title="Delete the chosen forms; their links stop working"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deleting ? 'Deleting…' : `Delete selected${selected.size ? ` (${selected.size})` : ''}`}
+              </button>
+            </div>
+          )}
+
+          {deleteError && <p className="px-1 pb-1 text-[11px] text-rose-400">{deleteError}</p>}
+
           {requests.map((request) => {
             const form = REQUIREMENT_FORMS[request.type];
             const open = expanded === request.token;
             return (
-              <div key={request.token} className="rounded-xl border border-white/10 glass-soft p-3.5">
+              <div
+                key={request.token}
+                className={`rounded-xl border glass-soft p-3.5 ${
+                  selected.has(request.token) ? 'border-rose-400/40 bg-rose-500/5' : 'border-white/10'
+                }`}
+              >
                 <div className="flex items-start justify-between gap-3">
+                  {isAdmin && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(request.token)}
+                      onChange={() => toggleSelected(request.token)}
+                      className="mt-1 w-3.5 h-3.5 accent-rose-500 shrink-0"
+                      aria-label={`Select the form for ${request.leadName || request.leadEmail || 'customer'}`}
+                    />
+                  )}
                   <button
                     onClick={() => setExpanded(open ? '' : request.token)}
                     className="min-w-0 text-left flex-1"

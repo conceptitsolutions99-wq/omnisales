@@ -21,4 +21,15 @@ export const submitRequirementForm = (token, payload) =>
 
 export const listRequirements = () => json(fetch('/api/requirements', { credentials: 'same-origin' }));
 
+// Admin only: the server refuses this for anyone else
+export const deleteRequirementForms = (tokens) =>
+  json(
+    fetch('/api/requirements', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokens })
+    })
+  );
+
 export const requirementLink = (token) => `${window.location.origin}/#/requirements/${token}`;

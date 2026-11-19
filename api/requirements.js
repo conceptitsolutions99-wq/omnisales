@@ -49,8 +49,23 @@ module.exports = async (req, res) => {
     });
   }
 
+  // ── admin: delete chosen forms, which also retires their public links ──
+  if (req.method === 'DELETE') {
+    if (!auth.isAdmin(session)) {
+      return res.status(403).json({ error: 'Only an admin can delete requirements forms.' });
+    }
+
+    const tokens = Array.isArray(req.body?.tokens)
+      ? req.body.tokens.map((value) => clean(value, 64)).filter(Boolean).slice(0, 400)
+      : [];
+    if (!tokens.length) return res.status(400).json({ error: 'Choose at least one form to delete.' });
+
+    const removed = await store.deleteRequests(tokens);
+    return res.status(200).json({ ok: true, removed, requested: tokens.length });
+  }
+
   if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET, POST');
-    return res.status(405).json({ error: 'Use GET or POST.' });
+    res.setHeader('Allow', 'GET, POST, DELETE');
+    return res.status(405).json({ error: 'Use GET, POST or DELETE.' });
   }
 };
