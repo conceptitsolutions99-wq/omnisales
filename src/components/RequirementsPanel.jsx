@@ -3,6 +3,7 @@ import { X, RefreshCw, ClipboardList, ChevronDown, Link2, CheckCircle2, Clock, A
 import { REQUIREMENT_FORMS, REQUIREMENT_DETAILS } from '../data/requirementForms';
 import { requirementLink } from '../lib/requirements';
 import { buildQuote, quoteSubject, quoteCurrency } from '../lib/quote';
+import { buildSignature } from '../lib/signature';
 import { markLeadContacted } from '../lib/lead-status';
 
 const when = (value) => {
@@ -101,7 +102,9 @@ function QuoteBuilder({ request, currentUser, setLeads }) {
         body: JSON.stringify({
           to: request.leadEmail,
           subject: quoteSubject(request),
-          body: quote.text,
+          // A quote closes with the same signature block as an outreach note; the disclosure
+          // and opt-out stay server-side, so this adds one sign-off and not a second one
+          body: `${quote.text}\n\n${buildSignature(currentUser)}`,
           leadId: request.leadId ?? null,
           leadName: request.leadName,
           company: request.company

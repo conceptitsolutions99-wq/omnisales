@@ -23,12 +23,8 @@ import {
 } from 'lucide-react';
 import { markLeadContacted } from '../lib/lead-status';
 import { whatsappNumberFor } from '../lib/contact-channels';
+import { buildSignature, SIGNATURE_SERVICE_LINE, COMPANY_SITE } from '../lib/signature';
 import WhatsAppProofModal from './WhatsAppProofModal';
-
-const SIGNATURE_SERVICE_LINE = 'Websites · Web Portals · Mobile Apps';
-
-// A single reference so every customer email points back to the company's own site
-const COMPANY_SITE = 'https://company-website-n9ba.vercel.app';
 
 // The outreach copy names the market the prospect is in, so an Egyptian lead is not told about
 // work "across Canada and the USA"
@@ -53,24 +49,6 @@ const SENDER_MODES = {
     className: 'bg-sky-400/15 text-sky-300',
     hint: 'MAIL_FROM sent through the configured relay host'
   }
-};
-
-// One signature block, applied to every template. The disclosure and the opt-out are the last
-// lines of this block, so the email ends with a single sign-off rather than a second one. The
-// company's postal address is deliberately not part of it.
-const buildSignature = (agent = {}, company = {}) => {
-  const lines = [
-    'Best regards,',
-    agent.name || 'Concept IT Solutions Team',
-    agent.title || agent.role || 'Sales Agent',
-    `Concept IT Solutions — ${SIGNATURE_SERVICE_LINE}`,
-    `Our own site: ${COMPANY_SITE}`
-  ];
-
-  if (company.disclosure && company.optOut) lines.push(`${company.disclosure} ${company.optOut}`);
-  else if (company.optOut) lines.push(company.optOut);
-
-  return lines.join('\n');
 };
 
 // Selectable outreach templates for the email compose window
