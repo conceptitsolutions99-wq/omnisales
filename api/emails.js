@@ -7,6 +7,7 @@ const sentStore = require('../lib/replies-store');
 const requirementsStore = require('../lib/requirements-store');
 const testMail = require('../lib/deliverability-test');
 const suppression = require('../lib/suppression-store');
+const emailLogStore = require('../lib/email-log-store');
 const unsubscribe = require('../lib/unsubscribe-page');
 const { createUnsubscribeToken } = require('../lib/unsubscribe-token');
 
@@ -55,8 +56,29 @@ const transporter = smtpPass && smtpUser
     })
   : null;
 
-// Warm instances only: serverless has no writable disk, so the browser keeps its own copy
+// A warm instance answers fastest, but the shared store is what survives a cold start and what
+// a second device reads; the in-memory list only fills the gap while that store is unreachable
 const deliveries = [];
+
+const recordDelivery = async (entry) => {
+  deliveries.unshift(entry);
+  try {
+    await emailLogStore.record(entry);
+  } catch (err) {
+    console.error('Could not persist the delivery:', err.message);
+  }
+};
+
+// The shared log is the history; a warm entry for the same id carries the latest status
+const mergeDeliveryLog = (stored, warm) => {
+  const byId = new Map();
+  for (const entry of stored) byId.set(entry.id, entry);
+  for (const entry of warm) {
+    const existing = byId.get(entry.id);
+    byId.set(entry.id, existing ? { ...existing, ...entry } : entry);
+  }
+  return [...byId.values()].sort((a, b) => String(b.sentAt || '').localeCompare(String(a.sentAt || '')));
+};
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -82,6 +104,7 @@ module.exports = async (req, res) => {
     origin ? `${origin}/api/emails?unsubscribe=${encodeURIComponent(createUnsubscribeToken(address))}` : '';
 
   if (req.method === 'GET') {
+    const stored = await emailLogStore.list(100);
     return res.status(200).json({
       configured: Boolean(transporter),
       from: SENDER.from,
@@ -89,7 +112,7 @@ module.exports = async (req, res) => {
       fromOverridden: SENDER.overridden,
       signature: deliverability.signatureFooter(),
       sender: smtpUser,
-      emails: deliveries.slice(0, 50)
+      emails: mergeDeliveryLog(stored, deliveries).slice(0, 50)
     });
   }
 
@@ -140,7 +163,7 @@ module.exports = async (req, res) => {
       entry.sentAt = result.sentAt;
       entry.status = 'sent';
       entry.providerId = result.messageId;
-      deliveries.unshift(entry);
+      await recordDelivery(entry);
       logSender('email_test_sent', { to: entry.to, messageId: entry.providerId });
       return res.status(200).json({
         ok: true,
@@ -155,7 +178,7 @@ module.exports = async (req, res) => {
     } catch (err) {
       entry.status = 'failed';
       entry.error = err.message || 'The test email could not be sent.';
-      deliveries.unshift(entry);
+      await recordDelivery(entry);
       logSender('email_test_failed', { to: entry.to, error: entry.error });
       return res.status(502).json({
         error: entry.error,
@@ -254,7 +277,7 @@ module.exports = async (req, res) => {
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
     entry.requirementsUrl = requirementsUrl;
-    deliveries.unshift(entry);
+    await recordDelivery(entry);
     logSender('email_sent', { agent: entry.sentBy, lead: entry.leadName || entry.company || '' });
 
     // Record who sent what, so the reply can be attributed even if the IMAP scan misses it
@@ -272,7 +295,7 @@ module.exports = async (req, res) => {
   } catch (err) {
     entry.status = 'failed';
     entry.error = err.message || 'Sending failed.';
-    deliveries.unshift(entry);
+    await recordDelivery(entry);
     logSender('email_failed', { agent: entry.sentBy, error: entry.error });
     return res.status(502).json({ error: entry.error, email: entry });
   }

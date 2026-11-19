@@ -11,6 +11,7 @@ const requirementsStore = require('./lib/requirements-store');
 const { findEmails } = require('./lib/find-email');
 const testMail = require('./lib/deliverability-test');
 const suppression = require('./lib/suppression-store');
+const emailLogStore = require('./lib/email-log-store');
 const unsubscribe = require('./lib/unsubscribe-page');
 const { createUnsubscribeToken } = require('./lib/unsubscribe-token');
 const leadsStore = require('./lib/leads-store');
@@ -242,6 +243,28 @@ const writeEmailLog = (entries) => {
   }
 };
 
+// Every send goes to the shared log as well as the local file, so the history follows the team
+// between devices and survives a restart
+const persistEmailEntry = async (entry) => {
+  writeEmailLog([entry, ...readEmailLog()]);
+  try {
+    await emailLogStore.record(entry);
+  } catch (err) {
+    console.error('Could not share the delivery:', err.message);
+  }
+};
+
+// The shared log is the history; a local entry for the same id carries the latest status
+const mergeEmailLogs = (stored, local) => {
+  const byId = new Map();
+  for (const entry of stored) byId.set(entry.id, entry);
+  for (const entry of local) {
+    const existing = byId.get(entry.id);
+    byId.set(entry.id, existing ? { ...existing, ...entry } : entry);
+  }
+  return [...byId.values()].sort((a, b) => String(b.sentAt || '').localeCompare(String(a.sentAt || '')));
+};
+
 // Local auth endpoints share the same handlers the deployment uses
 app.post('/api/auth/login', require('./api/auth/login'));
 app.get('/api/auth/me', require('./api/auth/me'));
@@ -394,7 +417,7 @@ app.post('/api/emails', async (req, res) => {
       entry.sentAt = result.sentAt;
       entry.status = 'sent';
       entry.providerId = result.messageId;
-      writeEmailLog([entry, ...readEmailLog()]);
+      await persistEmailEntry(entry);
       logSender('email_test_sent', { to: entry.to, messageId: entry.providerId });
       return res.json({
         ok: true,
@@ -409,7 +432,7 @@ app.post('/api/emails', async (req, res) => {
     } catch (err) {
       entry.status = 'failed';
       entry.error = err.message || 'The test email could not be sent.';
-      writeEmailLog([entry, ...readEmailLog()]);
+      await persistEmailEntry(entry);
       logSender('email_test_failed', { to: entry.to, error: entry.error });
       return res.status(502).json({
         error: entry.error,
@@ -507,7 +530,7 @@ app.post('/api/emails', async (req, res) => {
 
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
-    writeEmailLog([entry, ...readEmailLog()]);
+    await persistEmailEntry(entry);
     logSender('email_sent', { agent: entry.sentBy, lead: entry.leadName || entry.company || '' });
 
     // Lets the reply tracker attribute an answer to the agent who wrote it
@@ -524,16 +547,20 @@ app.post('/api/emails', async (req, res) => {
   } catch (err) {
     entry.status = 'failed';
     entry.error = err.message || 'Sending failed.';
-    writeEmailLog([entry, ...readEmailLog()]);
+    await persistEmailEntry(entry);
     logSender('email_failed', { agent: entry.sentBy, error: entry.error });
     res.status(502).json({ error: entry.error, email: entry });
   }
 });
 
 // API: Delivery log (most recent first)
-app.get('/api/emails', (req, res) => {
+app.get('/api/emails', async (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
+
+  // The shared store is the history every device reads; the local file fills in a send made
+  // while the store was unreachable
+  const stored = await emailLogStore.list(100);
   res.json({
     configured: Boolean(transporter),
     from: SENDER.from,
@@ -541,7 +568,7 @@ app.get('/api/emails', (req, res) => {
     fromOverridden: SENDER.overridden,
     signature: deliverability.signatureFooter(),
     sender: smtpUser,
-    emails: readEmailLog()
+    emails: mergeEmailLogs(stored, readEmailLog()).slice(0, 100)
   });
 });
 
