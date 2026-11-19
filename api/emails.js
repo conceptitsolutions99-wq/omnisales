@@ -6,6 +6,9 @@ const deliverability = require('../lib/mail-deliverability');
 const sentStore = require('../lib/replies-store');
 const requirementsStore = require('../lib/requirements-store');
 const testMail = require('../lib/deliverability-test');
+const suppression = require('../lib/suppression-store');
+const unsubscribe = require('../lib/unsubscribe-page');
+const { createUnsubscribeToken } = require('../lib/unsubscribe-token');
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const configuredPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
@@ -58,8 +61,25 @@ const deliveries = [];
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
+  // The unsubscribe route lives in this function because a deployment on this plan has a fixed
+  // number of functions. It answers without a session: the signed token in the link is proof.
+  const queryToken = (req.query && req.query.unsubscribe) || '';
+  const urlToken =
+    queryToken || (req.url ? new URL(req.url, 'http://localhost').searchParams.get('unsubscribe') : '') || '';
+  const unsubscribeToken = String(urlToken);
+  if (unsubscribeToken) {
+    await unsubscribe.handleUnsubscribe(req, res, unsubscribeToken);
+    return;
+  }
+
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
+
+  // Every outgoing message carries a link that names its own recipient, so a click opts out only
+  // that address and the send path can refuse it afterwards
+  const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
+  const unsubscribeUrlFor = (address) =>
+    origin ? `${origin}/api/emails?unsubscribe=${encodeURIComponent(createUnsubscribeToken(address))}` : '';
 
   if (req.method === 'GET') {
     return res.status(200).json({
@@ -110,7 +130,12 @@ module.exports = async (req, res) => {
     };
 
     try {
-      const result = await testMail.sendTestEmail({ transporter, session, sender: SENDER });
+      const result = await testMail.sendTestEmail({
+        transporter,
+        session,
+        sender: SENDER,
+        unsubscribeUrl: unsubscribeUrlFor(session.email)
+      });
       entry.subject = result.subject;
       entry.sentAt = result.sentAt;
       entry.status = 'sent';
@@ -147,6 +172,18 @@ module.exports = async (req, res) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to).trim())) {
     return res.status(400).json({ error: 'That recipient address does not look valid.' });
   }
+  // A suppression is a promise kept: an opt-out or a hard bounce is never written to again,
+  // whichever agent is at the keyboard
+  const blocked = await suppression.findSuppressed(to);
+  if (blocked) {
+    return res.status(409).json({
+      error: `${blocked.email} is on the do-not-contact list (${String(blocked.reason || '').replace(/_/g, ' ')}), so this message was not sent.`,
+      suppressed: true,
+      email: blocked.email,
+      reason: blocked.reason || ''
+    });
+  }
+
   if (!transporter) {
     return res.status(503).json({
       error: 'Email sending is not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD to the environment variables, then redeploy.'
@@ -174,7 +211,6 @@ module.exports = async (req, res) => {
   // Email clients strip real form controls, so the requirements form travels as a link that
   // carries its own token; the customer's answers come back into the app.
   const formType = String(requirements || '').trim();
-  const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
   let requirementsUrl = null;
   let messageBody = body;
 
@@ -196,7 +232,8 @@ module.exports = async (req, res) => {
     }
   }
 
-  messageBody = deliverability.withFooter(messageBody);
+  const unsubscribeUrl = unsubscribeUrlFor(entry.to);
+  messageBody = deliverability.withFooter(messageBody, { unsubscribeUrl });
   const replyTo = deliverability.replyTo(session.email, SENDER.address);
 
   try {
@@ -210,7 +247,7 @@ module.exports = async (req, res) => {
       headers: {
         'X-Concept-Agent': entry.sentBy,
         'X-Concept-Lead': entry.leadName || entry.company || '',
-        ...deliverability.unsubscribeHeaders(SENDER.address)
+        ...deliverability.unsubscribeHeaders(SENDER.address, unsubscribeUrl)
       }
     });
 

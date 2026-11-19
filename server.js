@@ -10,6 +10,9 @@ const sentStore = require('./lib/replies-store');
 const requirementsStore = require('./lib/requirements-store');
 const { findEmails } = require('./lib/find-email');
 const testMail = require('./lib/deliverability-test');
+const suppression = require('./lib/suppression-store');
+const unsubscribe = require('./lib/unsubscribe-page');
+const { createUnsubscribeToken } = require('./lib/unsubscribe-token');
 const leadsStore = require('./lib/leads-store');
 
 const app = express();
@@ -315,11 +318,24 @@ app.post('/api/find-email', async (req, res) => {
   }
 });
 
+// The unsubscribe route answers without a session: the signed token in the link is the proof.
+// It is registered before the send routes so an opt-out click never needs an account.
+app.all('/api/emails', async (req, res, next) => {
+  const token = String((req.query && req.query.unsubscribe) || '');
+  if (!token) return next();
+  await unsubscribe.handleUnsubscribe(req, res, token);
+});
+
 app.post('/api/emails', async (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
 
   const { to, subject, body, leadId, leadName, company, sentBy, requirements, test } = req.body || {};
+
+  // Every message carries a link naming its own recipient, so a click opts out only that address
+  const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
+  const unsubscribeUrlFor = (address) =>
+    `${origin}/api/emails?unsubscribe=${encodeURIComponent(createUnsubscribeToken(address))}`;
 
   // A test goes only to the admin who asked for it, through the same transport and From as a real
   // outreach email, so a delivered test proves the path that outreach actually uses
@@ -351,7 +367,12 @@ app.post('/api/emails', async (req, res) => {
     };
 
     try {
-      const result = await testMail.sendTestEmail({ transporter, session, sender: SENDER });
+      const result = await testMail.sendTestEmail({
+        transporter,
+        session,
+        sender: SENDER,
+        unsubscribeUrl: unsubscribeUrlFor(session.email)
+      });
       entry.subject = result.subject;
       entry.sentAt = result.sentAt;
       entry.status = 'sent';
@@ -388,6 +409,18 @@ app.post('/api/emails', async (req, res) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to).trim())) {
     return res.status(400).json({ error: 'That recipient address does not look valid.' });
   }
+
+  // A suppression is a promise kept: an opt-out or a hard bounce is never written to again
+  const blocked = await suppression.findSuppressed(to);
+  if (blocked) {
+    return res.status(409).json({
+      error: `${blocked.email} is on the do-not-contact list (${String(blocked.reason || '').replace(/_/g, ' ')}), so this message was not sent.`,
+      suppressed: true,
+      email: blocked.email,
+      reason: blocked.reason || ''
+    });
+  }
+
   if (!transporter) {
     return res.status(503).json({
       error: `Email sending is not configured. Add GMAIL_APP_PASSWORD for ${smtpUser} to .env and restart the server.`
@@ -413,7 +446,6 @@ app.post('/api/emails', async (req, res) => {
 
   // Email clients strip form controls, so the requirements form travels as a tokenised link
   const formType = String(requirements || '').trim();
-  const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
   let requirementsUrl = null;
   let messageBody = body;
 
@@ -437,7 +469,8 @@ app.post('/api/emails', async (req, res) => {
 
   entry.requirementsUrl = requirementsUrl;
 
-  messageBody = deliverability.withFooter(messageBody);
+  const unsubscribeUrl = unsubscribeUrlFor(entry.to);
+  messageBody = deliverability.withFooter(messageBody, { unsubscribeUrl });
   const replyTo = deliverability.replyTo(session.email, SENDER.address);
 
   try {
@@ -451,7 +484,7 @@ app.post('/api/emails', async (req, res) => {
       headers: {
         'X-Concept-Agent': entry.sentBy,
         'X-Concept-Lead': entry.leadName || entry.company || '',
-        ...deliverability.unsubscribeHeaders(SENDER.address)
+        ...deliverability.unsubscribeHeaders(SENDER.address, unsubscribeUrl)
       }
     });
 
