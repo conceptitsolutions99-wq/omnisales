@@ -181,8 +181,9 @@ const mapOverpassLead = (element, fallbackCity, country) => {
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const configuredSmtpPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
 const SMTP_PORT = Number.isInteger(configuredSmtpPort) && configuredSmtpPort > 0 ? configuredSmtpPort : 465;
-const smtpUser = process.env.GMAIL_USER || '';
-const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
+// A relay behind SMTP_HOST authenticates with its own user and key, so those names win when set
+const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || '';
+const smtpPass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 const mailFrom = process.env.MAIL_FROM || (smtpUser ? `Concept IT Solutions <${smtpUser}>` : '');
 
 // Gmail rewrites a From that is not the authenticated account, so the effective sender is

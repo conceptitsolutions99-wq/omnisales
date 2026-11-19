@@ -9,8 +9,9 @@ const requirementsStore = require('../lib/requirements-store');
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const configuredPort = Number.parseInt(process.env.SMTP_PORT || '', 10);
 const SMTP_PORT = Number.isInteger(configuredPort) && configuredPort > 0 ? configuredPort : 465;
-const smtpUser = process.env.GMAIL_USER || '';
-const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
+// A relay behind SMTP_HOST authenticates with its own user and key, so those names win when set
+const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER || '';
+const smtpPass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 const mailFrom = process.env.MAIL_FROM || (smtpUser ? `Concept IT Solutions <${smtpUser}>` : '');
 
 // The From address has to belong to the mailbox that authenticated, or SPF/DKIM stop aligning
