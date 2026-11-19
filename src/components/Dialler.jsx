@@ -205,6 +205,8 @@ export default function Dialler({
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
   const [emailLog, setEmailLog] = useState([]);
+  // Sender audit: which From path each send took, and how many took each
+  const [senderFilter, setSenderFilter] = useState('All');
   // The last message written to each lead, so an earlier one can be sent again unchanged
   const [lastDrafts, setLastDrafts] = useState(readLastDrafts);
   const [resendingEmail, setResendingEmail] = useState(false);
@@ -761,6 +763,23 @@ export default function Dialler({
   // What the lead was last written, when this browser wrote it; that is what Resend sends
   const activeLastDraft = activeLead ? lastDrafts[String(activeLead.id)] || null : null;
 
+  // Older entries predate the Sender column, so they are counted as unknown rather than
+  // disappearing from the audit
+  const senderModeOf = (entry) => {
+    const mode = String(entry?.fromMode || '');
+    return Object.prototype.hasOwnProperty.call(SENDER_MODES, mode) ? mode : 'unknown';
+  };
+  const senderCounts = emailLog.reduce(
+    (counts, entry) => {
+      const mode = senderModeOf(entry);
+      counts[mode] = (counts[mode] || 0) + 1;
+      return counts;
+    },
+    { unknown: 0 }
+  );
+  const visibleEmailLog =
+    senderFilter === 'All' ? emailLog : emailLog.filter((entry) => senderModeOf(entry) === senderFilter);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1242,6 +1261,49 @@ export default function Dialler({
           </div>
         )}
 
+        {/* Which From each send used, with the count, so a month of sends can be audited here */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[{ key: 'All', label: 'All sends' }, ...Object.entries(SENDER_MODES).map(([key, mode]) => ({ key, label: mode.label }))]
+            .concat(senderCounts.unknown > 0 ? [{ key: 'unknown', label: 'Sender not recorded' }] : [])
+            .map((chip) => {
+              const count = chip.key === 'All' ? emailLog.length : senderCounts[chip.key] || 0;
+              const isActive = senderFilter === chip.key;
+              return (
+                <button
+                  key={chip.key}
+                  onClick={() => setSenderFilter(chip.key)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all inline-flex items-center gap-1.5 ${
+                    isActive
+                      ? 'accent-pill text-[var(--accent)]'
+                      : 'glass-soft text-muted hover:text-[var(--text-primary)]'
+                  }`}
+                  title={
+                    chip.key === 'All'
+                      ? 'Every delivery in the log'
+                      : SENDER_MODES[chip.key]?.hint || 'Sends made before the Sender column existed'
+                  }
+                >
+                  <span>{chip.label}</span>
+                  <span
+                    className={`px-1.5 rounded-full text-[10px] font-bold ${
+                      isActive ? 'bg-[var(--accent)]/20' : 'bg-white/10'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          {senderFilter !== 'All' && (
+            <button
+              onClick={() => setSenderFilter('All')}
+              className="px-2.5 py-1.5 rounded-lg glass-soft text-[11px] font-semibold text-muted hover:text-[var(--text-primary)]"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -1255,14 +1317,16 @@ export default function Dialler({
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.07] text-sm">
-              {emailLog.length === 0 ? (
+              {visibleEmailLog.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="text-center py-8 text-muted">
-                    No emails sent yet. Compose one from the Email Prospect channel above.
+                    {emailLog.length === 0
+                      ? 'No emails sent yet. Compose one from the Email Prospect channel above.'
+                      : 'No sends used that sender. Choose another filter or clear it.'}
                   </td>
                 </tr>
               ) : (
-                emailLog.map((entry) => (
+                visibleEmailLog.map((entry) => (
                   <tr key={entry.id} className="row-hover">
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-[var(--text-primary)]">{entry.leadName || entry.to}</div>
