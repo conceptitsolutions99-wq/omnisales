@@ -404,6 +404,7 @@ app.get('/api/emails', (req, res) => {
     from: SENDER.from,
     fromMode: SENDER.mode,
     fromOverridden: SENDER.overridden,
+    signature: deliverability.signatureFooter(),
     sender: smtpUser,
     emails: readEmailLog()
   });

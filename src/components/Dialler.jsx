@@ -35,16 +35,23 @@ const marketLine = (lead) =>
   /egypt/i.test(String(lead?.country || '')) ? 'Egypt' : 'Canada and the USA';
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
-// One signature block, applied to every template
-const buildSignature = (agent = {}) =>
-  [
+// One signature block, applied to every template. The postal identity and the opt-out are the
+// last lines of this block, so the email ends with a single sign-off rather than a second one.
+const buildSignature = (agent = {}, company = {}) => {
+  const lines = [
     'Best regards,',
     agent.name || 'Concept IT Solutions Team',
     agent.title || agent.role || 'Sales Agent',
     `Concept IT Solutions — ${SIGNATURE_SERVICE_LINE}`,
-    ``,
-    `Our own site: ${COMPANY_SITE}`,
-  ].join('\n');
+    `Our own site: ${COMPANY_SITE}`
+  ];
+
+  if (company.address) lines.push(company.address);
+  if (company.disclosure && company.optOut) lines.push(`${company.disclosure} ${company.optOut}`);
+  else if (company.optOut) lines.push(company.optOut);
+
+  return lines.join('\n');
+};
 
 // Selectable outreach templates for the email compose window
 const EMAIL_TEMPLATES = [
@@ -168,6 +175,8 @@ export default function Dialler({
   // The From the server actually used, and whether MAIL_FROM was ignored in favour of the account
   const [emailFrom, setEmailFrom] = useState('');
   const [emailFromOverridden, setEmailFromOverridden] = useState(false);
+  // The postal identity and opt-out the server would add, so the signature can carry them once
+  const [companySignature, setCompanySignature] = useState({ address: '', disclosure: '', optOut: '' });
   const [emailTemplate, setEmailTemplate] = useState('intro');
   // Optional requirements form the customer fills in from the email
   const [emailRequirements, setEmailRequirements] = useState('');
@@ -321,7 +330,7 @@ export default function Dialler({
   const buildEmailDraft = (lead, templateId = 'intro') => {
     const template = EMAIL_TEMPLATES.find(item => item.id === templateId) || EMAIL_TEMPLATES[0];
     const draft = template.build(lead, currentUser);
-    return { subject: draft.subject, body: `${draft.body}\n\n${buildSignature(currentUser)}` };
+    return { subject: draft.subject, body: `${draft.body}\n\n${buildSignature(currentUser, companySignature)}` };
   };
 
   const applyEmailTemplate = (templateId) => {
@@ -374,6 +383,11 @@ export default function Dialler({
       setEmailSender(data.sender || '');
       setEmailFrom(data.from || '');
       setEmailFromOverridden(Boolean(data.fromOverridden));
+      setCompanySignature(
+        data.signature && typeof data.signature === 'object'
+          ? { address: data.signature.address || '', disclosure: data.signature.disclosure || '', optOut: data.signature.optOut || '' }
+          : { address: '', disclosure: '', optOut: '' }
+      );
     } catch (err) {
       setEmailLog(local);
     }
@@ -1234,7 +1248,20 @@ export default function Dialler({
                 </span>
                 Best regards,<br />
                 <strong>{currentUser.name}</strong> · {currentUser.role}<br />
-                Concept IT Solutions — {SIGNATURE_SERVICE_LINE}
+                Concept IT Solutions — {SIGNATURE_SERVICE_LINE}<br />
+                Our own site: {COMPANY_SITE}
+                {companySignature.address && (
+                  <>
+                    <br />
+                    {companySignature.address}
+                  </>
+                )}
+                {companySignature.optOut && (
+                  <>
+                    <br />
+                    {companySignature.disclosure} {companySignature.optOut}
+                  </>
+                )}
               </div>
 
               {emailStatus && (

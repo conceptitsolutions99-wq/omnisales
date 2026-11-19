@@ -66,6 +66,7 @@ module.exports = async (req, res) => {
       from: SENDER.from,
       fromMode: SENDER.mode,
       fromOverridden: SENDER.overridden,
+      signature: deliverability.signatureFooter(),
       sender: smtpUser,
       emails: deliveries.slice(0, 50)
     });
