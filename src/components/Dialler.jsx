@@ -176,6 +176,10 @@ export default function Dialler({
   const [callOutcome, setCallOutcome] = useState('Considering');
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   const [callHistorySearch, setCallHistorySearch] = useState('');
+  // History can be narrowed by the contact's name and by the day it happened, so a follow-up
+  // question ("what did we send Ahmed last Tuesday?") does not need scrolling or the free search
+  const [historyName, setHistoryName] = useState('');
+  const [historyDate, setHistoryDate] = useState('');
   const [channelFilter, setChannelFilter] = useState('All');
 
   // Email channel
@@ -639,12 +643,20 @@ export default function Dialler({
     const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
     const isUserCaller = log.caller === currentUser.name;
     const matchesPermission = isAdmin || isUserCaller;
-    const matchesSearch = log.leadName.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
-                          log.company.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
-                          log.caller.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
-                          log.outcome.toLowerCase().includes(callHistorySearch.toLowerCase()) ||
-                          (log.channel || 'Call').toLowerCase().includes(callHistorySearch.toLowerCase()) ||
-                          (log.notes || '').toLowerCase().includes(callHistorySearch.toLowerCase());
+    const query = callHistorySearch.toLowerCase();
+    const matchesSearch = (log.leadName || '').toLowerCase().includes(query) ||
+                          (log.company || '').toLowerCase().includes(query) ||
+                          (log.caller || '').toLowerCase().includes(query) ||
+                          (log.outcome || '').toLowerCase().includes(query) ||
+                          (log.channel || 'Call').toLowerCase().includes(query) ||
+                          (log.notes || '').toLowerCase().includes(query);
+    const nameQuery = historyName.trim().toLowerCase();
+    const matchesName =
+      !nameQuery || `${log.leadName || ''} ${log.company || ''}`.toLowerCase().includes(nameQuery);
+    // Outreach entries carry a readable "YYYY-MM-DD HH:mm" timestamp and emails an ISO sentAt,
+    // so the first ten characters are the day either way
+    const logDay = String(log.timestamp || log.sentAt || '').slice(0, 10);
+    const matchesDate = !historyDate || logDay === historyDate;
     const channel = log.channel || 'Call';
     const matchesChannel =
       channelFilter === 'All' ||
@@ -653,7 +665,7 @@ export default function Dialler({
         : channelFilter === 'WhatsApp'
           ? channel === 'WhatsApp'
           : channel !== 'Email' && channel !== 'WhatsApp');
-    return matchesPermission && matchesSearch && matchesChannel;
+    return matchesPermission && matchesSearch && matchesChannel && matchesName && matchesDate;
   });
 
   // A lead found by its email alone has no number, so calling has to be offered only when there is one
@@ -939,6 +951,27 @@ export default function Dialler({
             <div className="relative">
               <input
                 type="text"
+                placeholder="Filter by name..."
+                value={historyName}
+                onChange={(e) => setHistoryName(e.target.value)}
+                aria-label="Filter history by contact or company name"
+                className="py-2 px-3 pl-8 glass-input rounded-xl text-xs dark:text-white w-full sm:w-44"
+              />
+              <UserCheck className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted" />
+            </div>
+            <div className="relative">
+              <input
+                type="date"
+                value={historyDate}
+                onChange={(e) => setHistoryDate(e.target.value)}
+                aria-label="Filter history by date"
+                title="Show only the entries recorded on this day"
+                className="py-2 px-3 glass-input rounded-xl text-xs dark:text-white"
+              />
+            </div>
+            <div className="relative">
+              <input
+                type="text"
                 placeholder="Search calls, emails, outcomes..."
                 value={callHistorySearch}
                 onChange={(e) => setCallHistorySearch(e.target.value)}
@@ -946,6 +979,18 @@ export default function Dialler({
               />
               <History className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted" />
             </div>
+            {(historyName || historyDate) && (
+              <button
+                onClick={() => {
+                  setHistoryName('');
+                  setHistoryDate('');
+                }}
+                title="Clear the name and date filters"
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-muted hover:text-[var(--text-primary)] hover:bg-white/[0.06]"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 
