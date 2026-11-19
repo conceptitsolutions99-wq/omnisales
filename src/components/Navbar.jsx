@@ -13,6 +13,7 @@ import {
   Sparkles,
   Search,
   MailOpen,
+  MessageSquareText,
   ClipboardList,
   Settings,
   UserRound
@@ -28,7 +29,7 @@ const initialsOf = (name = '') =>
     .join('')
     .toUpperCase();
 
-export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, onOpenProfile, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenRequirements, requirementsPending = 0, onOpenSetup }) {
+export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, onOpenProfile, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenRequirements, requirementsPending = 0, onOpenWhatsAppProofs, onOpenSetup }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: true },
     { id: 'leads', label: 'Leads', icon: Users, permission: currentUser.permissions.leads },
@@ -37,6 +38,12 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
     { id: 'followups', label: 'Follow-ups', icon: Clock, permission: currentUser.permissions.followups },
     { id: 'admin', label: 'Admin', icon: ShieldAlert, permission: currentUser.permissions.admin },
   ].filter(item => item.permission);
+
+  // The admin and the analyst review the WhatsApp proof trail; agents only file their own
+  const canReviewWhatsApp =
+    Boolean(currentUser.permissions?.admin) ||
+    currentUser.role === 'Analyst' ||
+    Boolean(currentUser.permissions?.analytics);
 
   return (
     <>
@@ -120,6 +127,16 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
                     </span>
                   )}
                 </button>
+
+                {canReviewWhatsApp && (
+                  <button
+                    onClick={onOpenWhatsAppProofs}
+                    className="w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                    title="WhatsApp proof review"
+                  >
+                    <MessageSquareText className="w-4 h-4" />
+                  </button>
+                )}
 
                 <button
                   onClick={onOpenPalette}

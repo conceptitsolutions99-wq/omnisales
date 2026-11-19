@@ -15,12 +15,14 @@ import {
   History,
   PhoneForwarded,
   MessageSquare,
+  ImagePlus,
   Mail,
   Copy,
   Check,
   AtSign
 } from 'lucide-react';
 import { markLeadContacted } from '../lib/lead-status';
+import WhatsAppProofModal from './WhatsAppProofModal';
 
 const SIGNATURE_SERVICE_LINE = 'Websites · Web Portals · Mobile Apps';
 
@@ -159,6 +161,8 @@ export default function Dialler({
   const [emailStatus, setEmailStatus] = useState(null);
   const [emailLog, setEmailLog] = useState([]);
   const [whatsAppIssue, setWhatsAppIssue] = useState('');
+  // Opening a WhatsApp chat also opens the proof step: no screenshots, no logged contact
+  const [proofLead, setProofLead] = useState(null);
   const [emailConfigured, setEmailConfigured] = useState(true);
   const [emailSender, setEmailSender] = useState('');
   const [emailTemplate, setEmailTemplate] = useState('intro');
@@ -266,7 +270,41 @@ export default function Dialler({
 
     setWhatsAppIssue('');
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(buildWhatsAppMessage(activeLead))}`, '_blank');
-    markContacted(activeLead);
+
+    // The chat opens first, then the screenshot step: the contact is only recorded once the
+    // conversation it produced is on file for the admin and analyst to review.
+    setProofLead(activeLead);
+  };
+
+  const handleWhatsAppProofSaved = (proof) => {
+    const lead = proofLead || activeLead;
+    if (!lead) return;
+
+    const now = new Date();
+    const timestampStr = `${now.toISOString().split('T')[0]} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const shots = Number(proof?.imageCount) || 0;
+
+    setCallLogs([
+      {
+        id: Date.now(),
+        channel: 'WhatsApp',
+        leadId: lead.id ?? null,
+        leadName: lead.name || lead.company || '—',
+        company: lead.company || '—',
+        phone: lead.displayPhone || lead.phone || '—',
+        email: lead.email || '—',
+        caller: currentUser.name,
+        outcome: 'WhatsApped',
+        duration: '—',
+        timestamp: timestampStr,
+        notes: `${shots} WhatsApp screenshot${shots === 1 ? '' : 's'} attached${proof?.note ? ` · ${proof.note}` : ''}`,
+        proofId: proof?.id || null
+      },
+      ...callLogs
+    ]);
+
+    markContacted(lead);
+    setProofLead(null);
   };
 
   // Reaching a lead by email or WhatsApp moves it off "New"; the rule lives in one place so
@@ -554,7 +592,11 @@ export default function Dialler({
     const channel = log.channel || 'Call';
     const matchesChannel =
       channelFilter === 'All' ||
-      (channelFilter === 'Emails' ? channel === 'Email' : channel !== 'Email');
+      (channelFilter === 'Emails'
+        ? channel === 'Email'
+        : channelFilter === 'WhatsApp'
+          ? channel === 'WhatsApp'
+          : channel !== 'Email' && channel !== 'WhatsApp');
     return matchesPermission && matchesSearch && matchesChannel;
   });
 
@@ -749,6 +791,25 @@ export default function Dialler({
                     </p>
                   )}
 
+                  {activeLead && (
+                    <div className="w-full max-w-md mx-auto rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-left">
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-300 font-medium flex items-start gap-1.5">
+                        <ImagePlus className="w-3.5 h-3.5 mt-px shrink-0" />
+                        <span>
+                          Screenshots of the WhatsApp conversation are required for every contact. Nothing is
+                          logged until at least one is attached, and the admin and analyst review them.
+                        </span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setProofLead(activeLead)}
+                        className="mt-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:underline"
+                      >
+                        Already messaged this lead? Attach the screenshots
+                      </button>
+                    </div>
+                  )}
+
                   <p className="text-[11px] text-muted max-w-md mx-auto">
                     WhatsApp opens the chat with a message already written for this lead. WhatsApp does not
                     let a website see whether a number is registered on it, so if the chat does not open, use
@@ -801,7 +862,7 @@ export default function Dialler({
           </h3>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 p-1 rounded-xl glass-soft" role="group" aria-label="Filter history by channel">
-              {['All', 'Calls', 'Emails'].map((option) => {
+              {['All', 'Calls', 'Emails', 'WhatsApp'].map((option) => {
                 const isActive = channelFilter === option;
                 return (
                   <button
@@ -862,15 +923,19 @@ export default function Dialler({
                         className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide ${
                           log.channel === 'Email'
                             ? 'bg-indigo-400/15 text-indigo-300'
-                            : 'bg-emerald-400/15 text-emerald-300'
+                            : log.channel === 'WhatsApp'
+                              ? 'bg-teal-400/15 text-teal-300'
+                              : 'bg-emerald-400/15 text-emerald-300'
                         }`}
                       >
                         {log.channel === 'Email' ? (
                           <Mail className="w-3 h-3 mr-1" />
+                        ) : log.channel === 'WhatsApp' ? (
+                          <MessageSquare className="w-3 h-3 mr-1" />
                         ) : (
                           <PhoneCall className="w-3 h-3 mr-1" />
                         )}
-                        {log.channel === 'Email' ? 'Email' : 'Call'}
+                        {log.channel === 'Email' ? 'Email' : log.channel === 'WhatsApp' ? 'WhatsApp' : 'Call'}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-xs font-medium text-[var(--text-primary)]/80">
@@ -879,6 +944,7 @@ export default function Dialler({
                     <td className="py-3.5 px-4">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                         log.outcome === 'Emailed' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' :
+                        log.outcome === 'WhatsApped' ? 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300' :
                         log.outcome === 'Deal Completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
                         log.outcome === 'Considering' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' :
                         log.outcome === 'Call Back Later' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' :
@@ -1209,6 +1275,17 @@ export default function Dialler({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Every WhatsApp contact is stored with its conversation screenshots */}
+      {proofLead && (
+        <WhatsAppProofModal
+          open={Boolean(proofLead)}
+          lead={proofLead}
+          currentUser={currentUser}
+          onClose={() => setProofLead(null)}
+          onSaved={handleWhatsAppProofSaved}
+        />
       )}
     </div>
   );

@@ -12,7 +12,8 @@ const { findEmails } = require('./lib/find-email');
 const leadsStore = require('./lib/leads-store');
 
 const app = express();
-app.use(express.json());
+// WhatsApp proofs travel as base64 screenshots, so the default 100 kB body cap is too small
+app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static frontend build
@@ -380,6 +381,7 @@ app.get('/api/emails', (req, res) => {
 });
 
 // API: customer replies, attribution and admin reassignment (shared with the deployment)
+app.all('/api/whatsapp-proofs', require('./api/whatsapp-proofs'));
 app.all('/api/replies', require('./api/replies'));
 app.all('/api/requirements', require('./api/requirements'));
 app.all('/api/activity', require('./api/activity'));

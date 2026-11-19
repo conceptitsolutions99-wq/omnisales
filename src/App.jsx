@@ -15,6 +15,7 @@ import RequirementsPanel from './components/RequirementsPanel';
 import PublicRequirementPage from './components/PublicRequirementPage';
 import SetupChecklist from './components/SetupChecklist';
 import ProfileModal from './components/ProfileModal';
+import WhatsAppReview from './components/WhatsAppReview';
 import { fetchReplies, markRepliesSeen, isAdminUser, assignReply } from './lib/replies';
 import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
@@ -55,6 +56,8 @@ function Workspace() {
   }, []);
 
   const [activeTab, setActiveTab] = useState('dashboard');
+  // Admin and analyst review of every WhatsApp contact's conversation screenshots
+  const [whatsAppReviewOpen, setWhatsAppReviewOpen] = useState(false);
 
   // Dark glass is the default experience; light mode is an explicit opt-in
   const [darkMode, setDarkMode] = useState(() => {
@@ -480,6 +483,7 @@ function Workspace() {
         onOpenRequirements={openRequirements}
         requirementsPending={requirements.filter((request) => !request.submittedAt).length}
         onOpenReplies={openReplies}
+        onOpenWhatsAppProofs={() => setWhatsAppReviewOpen(true)}
         onOpenSetup={() => setSetupOpen(true)}
       />
 
@@ -596,6 +600,12 @@ function Workspace() {
         storage={repliesStorage}
         onRefresh={() => loadReplies(currentUser)}
         onAssign={assignReplyTo}
+      />
+
+      <WhatsAppReview
+        open={whatsAppReviewOpen}
+        onClose={() => setWhatsAppReviewOpen(false)}
+        currentUser={currentUser}
       />
 
       <CommandPalette
