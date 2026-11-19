@@ -85,11 +85,16 @@ const OVERPASS_TIMEOUT_MS = GEOAPIFY_KEY ? 6000 : 14000;
 // for the outreach copy, so the geocoded place name and Geoapify's country code fill it in.
 const COUNTRY_NAMES = { eg: 'Egypt', ca: 'Canada', us: 'USA' };
 
+// The chosen market is handed to both geocoders, so a repeated city name resolves in the
+// country the agent picked ("Alexandria" is Egypt, not Virginia; "London" is not Ontario).
+const COUNTRY_CODES = { Canada: 'ca', USA: 'us', Egypt: 'eg' };
+
 const countryFromCode = (code) => COUNTRY_NAMES[String(code || '').toLowerCase()] || String(code || '').toUpperCase();
 
 const countryFromLabel = (label) => {
   const text = String(label || '');
-  if (/egypt/i.test(text)) return 'Egypt';
+  // Nominatim answers Cairo in Arabic, so the local spelling has to count as Egypt too
+  if (/egypt|مصر/i.test(text)) return 'Egypt';
   if (/united states|\busa\b/i.test(text)) return 'USA';
   if (/canada/i.test(text)) return 'Canada';
   return '';
@@ -152,12 +157,15 @@ const limitBox = (bbox) => {
 // Resolve the city to a bounding box so matching does not depend on exact OSM names
 const geocodeCache = new Map();
 
-const geocodeCity = async (city) => {
-  const key = city.toLowerCase();
+const geocodeCity = async (city, country = '') => {
+  const code = COUNTRY_CODES[country] || '';
+  const key = `${city.toLowerCase()}|${code}`;
   const cached = geocodeCache.get(key);
   if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.bbox;
 
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`;
+  const url =
+    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1` +
+    (code ? `&countrycodes=${code}` : '');
   // A slow geocoder must not fail the whole search: both providers can resolve a city name
   let response;
   try {
@@ -289,18 +297,24 @@ const searchWithOverpass = async ({ city, category, limit, country, bbox }) => {
 // Geoapify Places returns the listings; phone/email/website live in Place Details,
 // so the best few results are expanded (1 credit per place on the free plan).
 // Geoapify can resolve the city itself, so the fallback still works when Nominatim fails
-const geocodeWithGeoapify = async (city) => {
+const geocodeWithGeoapify = async (city, country = '') => {
+  const code = COUNTRY_CODES[country] || '';
   const url =
     `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(city)}` +
-    `&limit=1&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
+    `&limit=1&format=json${code ? `&filter=countrycode:${code}` : ''}` +
+    `&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
   const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 8000);
   if (!response.ok) return null;
 
   const data = readJson(response.body);
-  const box = data?.results?.[0]?.bbox;
+  // Without format=json Geoapify answers a GeoJSON FeatureCollection, which has no `results`:
+  // reading only that shape silently returned nothing and left every US search empty. Both
+  // shapes are accepted now, so a change on their side cannot break the fallback again.
+  const first = data?.results?.[0] || data?.features?.[0]?.properties;
+  const box = first?.bbox;
   if (!box) return null;
 
-  return limitBox({ west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: data.results[0].formatted });
+  return limitBox({ west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: first.formatted });
 };
 
 // The same business has a different id on each provider, so a listing saved from OpenStreetMap
@@ -363,7 +377,7 @@ const isAlreadySaved = (place, knownIds, knownPlaces, knownPhones) => {
 const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset = 0, knownIds, knownPlaces, knownPhones }) => {
   if (!GEOAPIFY_KEY) return [];
 
-  const area = bbox || (await geocodeWithGeoapify(city));
+  const area = bbox || (await geocodeWithGeoapify(city, country));
   if (!area) return [];
 
   const categories = GEOAPIFY_CATEGORIES[category] || 'office';
@@ -440,7 +454,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
 };
 
 export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds, knownPlaces, knownPhones }) {
-  const bbox = await geocodeCity(city);
+  const bbox = await geocodeCity(city, country);
   const resolvedCountry = country || countryFromLabel(bbox?.label);
   const areaLimited = Boolean(bbox?.limited);
   const options = { city, category, limit, country: resolvedCountry, bbox, offset, knownIds, knownPlaces, knownPhones };
