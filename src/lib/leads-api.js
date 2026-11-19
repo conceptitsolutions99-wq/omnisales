@@ -43,6 +43,17 @@ export const pushSharedLeads = async (leads) =>
     })
   );
 
+// Admin only on the server: undo of a delete, so the leads come back for the whole team
+export const restoreSharedLeads = async (leads) =>
+  parse(
+    fetch('/api/leads', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leads })
+    })
+  );
+
 // Admin only on the server: the leads are removed for the whole team
 export const deleteSharedLeads = async (leads) =>
   parse(

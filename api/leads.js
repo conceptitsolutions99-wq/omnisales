@@ -36,9 +36,25 @@ module.exports = async (req, res) => {
     return res.status(200).json(await payload(remaining));
   }
 
+  // Undo: the admin puts the leads they just deleted back for the whole team
+  if (req.method === 'PATCH') {
+    if (!auth.isAdmin(session)) {
+      return res.status(403).json({ error: 'Only an admin can restore leads.' });
+    }
+
+    const { leads } = req.body || {};
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ error: 'Send the leads to restore as an array.' });
+    }
+
+    const actor = { name: session.name || session.email || '', email: session.email || '' };
+    const restored = await store.restoreLeads(leads, actor);
+    return res.status(200).json(await payload(restored));
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'GET, POST, DELETE');
-    return res.status(405).json({ error: 'Use GET, POST or DELETE.' });
+    res.setHeader('Allow', 'GET, POST, PATCH, DELETE');
+    return res.status(405).json({ error: 'Use GET, POST, PATCH or DELETE.' });
   }
 
   const { leads } = req.body || {};

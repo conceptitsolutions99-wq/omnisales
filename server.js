@@ -287,6 +287,23 @@ app.delete('/api/leads', async (req, res) => {
   res.json({ ok: true, count: remaining.length, leads: remaining, deleted: await leadsStore.listDeleted() });
 });
 
+// Undo of a delete: the admin puts the batch back for the whole team
+app.patch('/api/leads', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const session = auth.requireActiveSession(req, res);
+  if (!session) return;
+
+  if (!auth.isAdmin(session)) return res.status(403).json({ error: 'Only an admin can restore leads.' });
+
+  const { leads } = req.body || {};
+  if (!Array.isArray(leads) || leads.length === 0) {
+    return res.status(400).json({ error: 'Send the leads to restore as an array.' });
+  }
+
+  const restored = await leadsStore.restoreLeads(leads, { name: session.name, email: session.email });
+  res.json({ ok: true, count: restored.length, leads: restored, deleted: await leadsStore.listDeleted() });
+});
+
 app.post('/api/leads', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const session = auth.requireActiveSession(req, res);

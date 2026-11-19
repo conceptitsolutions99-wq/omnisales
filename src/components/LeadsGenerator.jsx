@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { searchLeads } from '../lib/leads';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
-import { deleteSharedLeads } from '../lib/leads-api';
+import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import {
   Users,
   MapPin,
@@ -23,8 +23,12 @@ import {
   AtSign,
   ExternalLink,
   MessageCircle,
-  Trash2
+  Trash2,
+  Undo2
 } from 'lucide-react';
+
+// A bulk delete is easy to trigger by accident, so a deleted batch stays in hand briefly
+const UNDO_WINDOW_MS = 30000;
 
 const CATEGORY_OPTIONS = [
   { value: 'offices', label: 'Offices' },
@@ -69,6 +73,11 @@ export default function LeadsGenerator({
   // Deleting is an admin action, and it applies to the whole team's list
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  // The batch just deleted, and the moment its undo stops being offered
+  const [deletedBatch, setDeletedBatch] = useState(null);
+  const [undoSeconds, setUndoSeconds] = useState(0);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const undoDeadline = useRef(0);
 
   // Egyptian OpenStreetMap coverage is thin for offices and dense for shops and restaurants, so
   // choosing Egypt moves the search there; leaving it restores offices unless the agent picked
@@ -397,6 +406,8 @@ export default function LeadsGenerator({
     setIsDeleting(true);
     try {
       await deleteSharedLeads(selectedLeads);
+      undoDeadline.current = Date.now() + UNDO_WINDOW_MS;
+      setDeletedBatch(selectedLeads);
       const gone = new Set(selectedLeads.map(lead => String(lead.id)));
       setLeads(prev => prev.filter(lead => !gone.has(String(lead.id))));
       setSelectedLeadIds([]);
@@ -406,6 +417,42 @@ export default function LeadsGenerator({
       setFetchMessage(err.message);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // The window closes on its own; the strip disappears instead of lingering as a stale offer
+  useEffect(() => {
+    if (!deletedBatch) return undefined;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((undoDeadline.current - Date.now()) / 1000));
+      setUndoSeconds(left);
+      if (left === 0) setDeletedBatch(null);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [deletedBatch]);
+
+  const handleUndoDelete = async () => {
+    if (!deletedBatch || isRestoring) return;
+
+    const batch = deletedBatch;
+    setIsRestoring(true);
+    try {
+      await restoreSharedLeads(batch);
+      setLeads(prev => {
+        const known = new Set(prev.map(lead => String(lead.id)));
+        const add = batch.filter(lead => !known.has(String(lead.id)));
+        return add.length ? [...add, ...prev] : prev;
+      });
+      setDeletedBatch(null);
+      setUndoSeconds(0);
+      setFetchMessage(`Restored ${batch.length} lead${batch.length === 1 ? '' : 's'} for the team.`);
+      setTimeout(() => setFetchMessage(''), 8000);
+    } catch (err) {
+      setFetchMessage(err.message);
+    } finally {
+      setIsRestoring(false);
     }
   };
   const visibleLeads = leads;
@@ -582,6 +629,23 @@ export default function LeadsGenerator({
         <div className="p-4 accent-pill border border-blue-200 dark:border-blue-900 rounded-2xl text-xs text-blue-800 dark:text-blue-300 font-medium flex items-center space-x-2">
           <Database className="w-4 h-4 text-blue-600 animate-pulse" />
           <span>{fetchMessage}</span>
+        </div>
+      )}
+
+      {deletedBatch && (
+        <div className="p-4 rounded-2xl border border-amber-300/60 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20 text-xs flex flex-wrap items-center justify-between gap-3">
+          <span className="flex items-center gap-2 font-medium text-amber-800 dark:text-amber-300">
+            <Undo2 className="w-4 h-4" />
+            Deleted {deletedBatch.length} lead{deletedBatch.length === 1 ? '' : 's'} for the whole team.
+            Undo available for {undoSeconds}s.
+          </span>
+          <button
+            onClick={handleUndoDelete}
+            disabled={isRestoring}
+            className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold"
+          >
+            {isRestoring ? 'Restoring…' : 'Undo delete'}
+          </button>
         </div>
       )}
 
