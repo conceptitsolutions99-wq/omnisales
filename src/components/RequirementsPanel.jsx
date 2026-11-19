@@ -170,7 +170,7 @@ function QuoteBuilder({ request, currentUser, setLeads }) {
   );
 }
 
-export default function RequirementsPanel({ open, onClose, requests, loading, error, isAdmin, currentUser, onRefresh, setLeads }) {
+export default function RequirementsPanel({ open, onClose, requests, loading, error, isAdmin, canReview = false, currentUser, onRefresh, setLeads }) {
   const [expanded, setExpanded] = useState('');
   const [copied, setCopied] = useState('');
 
@@ -206,7 +206,7 @@ export default function RequirementsPanel({ open, onClose, requests, loading, er
                 )}
               </h2>
               <p className="text-[11px] text-muted">
-                {isAdmin ? 'Every form the team sent and what came back' : 'Forms you sent and what came back'}
+                {canReview ? 'Every form the team sent and what came back' : 'Forms you sent and what came back'}
               </p>
             </div>
           </div>

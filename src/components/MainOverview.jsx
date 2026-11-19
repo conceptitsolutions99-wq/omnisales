@@ -14,7 +14,9 @@ import {
   Activity,
   Zap,
   PhoneOutgoing,
-  Radar
+  Radar,
+  MailOpen,
+  ClipboardList
 } from 'lucide-react';
 
 /* ───────────────────────────  Dynamic primitives  ─────────────────────────── */
@@ -158,7 +160,17 @@ const outcomeTone = (outcome) => {
 
 /* ───────────────────────────  Dashboard  ─────────────────────────── */
 
-export default function MainOverview({ leads, callLogs, followups, setActiveTab, currentUser }) {
+export default function MainOverview({
+  leads,
+  callLogs,
+  followups,
+  setActiveTab,
+  currentUser,
+  replies = [],
+  requirements = [],
+  onOpenReplies,
+  onOpenRequirements
+}) {
   const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
 
   const userCallLogs = isAdmin ? callLogs : callLogs.filter(log => log.caller === currentUser.name);
@@ -337,6 +349,79 @@ export default function MainOverview({ leads, callLogs, followups, setActiveTab,
           );
         })}
       </section>
+
+      {/* ── Customer responses: the replies and filled forms that came back to this viewer ── */}
+      {(replies.length > 0 || requirements.length > 0) && (
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          <div className="glass p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <MailOpen className="w-4 h-4 text-cyan-400" />
+                Customer replies
+              </h3>
+              <span className="text-[11px] font-semibold text-muted">
+                {replies.filter((reply) => reply.unread).length} unread · {replies.length} total
+              </span>
+            </div>
+            {replies.length === 0 ? (
+              <p className="text-xs text-muted">No customer replies yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {replies.slice(0, 3).map((reply) => (
+                  <li key={reply.id} className="rounded-xl glass-soft px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12px] font-semibold truncate">{reply.fromName || reply.from}</span>
+                      <span className="text-[10px] text-muted shrink-0">{reply.agent || 'Unassigned'}</span>
+                    </div>
+                    <p className="text-[11px] text-muted truncate">{reply.subject || '(no subject)'}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button onClick={onOpenReplies} className="mt-3 text-[11px] font-semibold text-cyan-400 hover:underline">
+              Open all replies
+            </button>
+          </div>
+
+          <div className="glass p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-indigo-400" />
+                Requirements forms
+              </h3>
+              <span className="text-[11px] font-semibold text-muted">
+                {requirements.filter((request) => request.submittedAt).length} filled ·{' '}
+                {requirements.filter((request) => !request.submittedAt).length} awaiting
+              </span>
+            </div>
+            {requirements.filter((request) => request.submittedAt).length === 0 ? (
+              <p className="text-xs text-muted">No forms filled in yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {requirements
+                  .filter((request) => request.submittedAt)
+                  .slice(0, 3)
+                  .map((request) => (
+                    <li key={request.token} className="rounded-xl glass-soft px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[12px] font-semibold truncate">
+                          {request.company || request.leadName || request.leadEmail}
+                        </span>
+                        <span className="text-[10px] text-muted shrink-0">{request.agent || 'Unassigned'}</span>
+                      </div>
+                      <p className="text-[11px] text-muted truncate">
+                        {request.type} form · {new Date(request.submittedAt).toLocaleDateString()}
+                      </p>
+                    </li>
+                  ))}
+              </ul>
+            )}
+            <button onClick={onOpenRequirements} className="mt-3 text-[11px] font-semibold text-indigo-400 hover:underline">
+              Open all forms
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ── Pipeline + activity ── */}
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-5">

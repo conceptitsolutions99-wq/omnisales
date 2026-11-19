@@ -21,6 +21,7 @@ export default function RepliesPanel({
   loading,
   error,
   isAdmin,
+  canReview = false,
   currentUser,
   staff = [],
   storage = 'persistent',
@@ -61,8 +62,8 @@ export default function RepliesPanel({
                 )}
               </h2>
               <p className="text-[11px] text-muted">
-                {isAdmin
-                  ? 'Every reply across the team · assign any reply to an employee'
+                {canReview
+                  ? 'Every reply across the team, attributed to the employee who sent the email'
                   : `Replies to email you sent, ${currentUser?.name || ''}`}
               </p>
             </div>
@@ -166,7 +167,7 @@ export default function RepliesPanel({
         </div>
 
         <div className="px-5 py-3 border-t border-white/10 text-[11px] text-muted">
-          Replies are read from {isAdmin ? 'the shared inbox' : 'your sent threads'} · attributed to whoever sent the
+          Replies are read from {canReview ? 'the shared inbox' : 'your sent threads'} · attributed to whoever sent the
           original email · refreshed every two minutes
           {isAdmin && storage === 'memory' && (
             <span className="mt-1 flex items-center gap-1.5 text-amber-300">

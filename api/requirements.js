@@ -38,7 +38,7 @@ module.exports = async (req, res) => {
 
   // ── staff: list the forms that were sent and the answers that came back ──
   if (req.method === 'GET') {
-    const requests = await store.listVisible(session, auth.isAdmin(session));
+    const requests = await store.listVisible(session, auth.isReviewer(session));
     const submitted = requests.filter((request) => request.submittedAt);
     return res.status(200).json({
       ok: true,

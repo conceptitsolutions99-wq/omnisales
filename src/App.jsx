@@ -16,7 +16,7 @@ import PublicRequirementPage from './components/PublicRequirementPage';
 import SetupChecklist from './components/SetupChecklist';
 import ProfileModal from './components/ProfileModal';
 import WhatsAppReview from './components/WhatsAppReview';
-import { fetchReplies, markRepliesSeen, isAdminUser, assignReply } from './lib/replies';
+import { fetchReplies, markRepliesSeen, isAdminUser, isReviewerUser, assignReply } from './lib/replies';
 import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
 import { listRequirements } from './lib/requirements';
@@ -327,6 +327,8 @@ function Workspace() {
   // Admins need the roster to hand a reply to a specific employee
   const [staff, setStaff] = useState([]);
   const viewerIsAdmin = isAdminUser(currentUser);
+  // The analyst reviews the whole team's replies and forms, like the admin
+  const viewerCanReview = isReviewerUser(currentUser);
 
   useEffect(() => {
     if (!viewerIsAdmin) {
@@ -496,6 +498,10 @@ function Workspace() {
               followups={followups}
               setActiveTab={setActiveTab}
               currentUser={currentUser}
+              replies={replies}
+              requirements={requirements}
+              onOpenReplies={openReplies}
+              onOpenRequirements={openRequirements}
             />
           )}
 
@@ -574,6 +580,7 @@ function Workspace() {
         loading={requirementsLoading}
         error={requirementsError}
         isAdmin={viewerIsAdmin}
+        canReview={viewerCanReview}
         currentUser={currentUser}
         onRefresh={loadRequirements}
         setLeads={setLeads}
@@ -586,6 +593,7 @@ function Workspace() {
         loading={repliesLoading}
         error={repliesError}
         isAdmin={viewerIsAdmin}
+        canReview={viewerCanReview}
         currentUser={currentUser}
         staff={
           currentUser

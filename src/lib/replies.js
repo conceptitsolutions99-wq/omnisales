@@ -23,10 +23,14 @@ export const markRepliesSeen = (ids) => {
 export const isAdminUser = (user) =>
   Boolean(user) && (user.role === 'Admin' || Boolean(user.permissions?.admin));
 
+// Admin and analyst read every employee's replies and forms; an agent reads only their own
+export const isReviewerUser = (user) =>
+  isAdminUser(user) || user?.role === 'Analyst' || Boolean(user?.permissions?.analytics);
+
 export async function fetchReplies(currentUser) {
   const params = new URLSearchParams();
   if (currentUser?.name) params.set('agent', currentUser.name);
-  if (isAdminUser(currentUser)) params.set('all', '1');
+  if (isReviewerUser(currentUser)) params.set('all', '1');
 
   const response = await fetch(`/api/replies?${params.toString()}`);
   const data = await response.json().catch(() => ({}));

@@ -170,7 +170,7 @@ const handler = async (req, res) => {
     });
 
     // The session decides what is visible - never the query string
-    const visible = auth.isAdmin(session)
+    const visible = auth.isReviewer(session)
       ? resolved
       : resolved.filter((reply) => {
           if (!reply.agent) return false;
