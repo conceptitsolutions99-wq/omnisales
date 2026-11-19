@@ -237,7 +237,10 @@ export default function Dialler({
   // History can be narrowed by the contact's name and by the day it happened, so a follow-up
   // question ("what did we send Ahmed last Tuesday?") does not need scrolling or the free search
   const [historyName, setHistoryName] = useState('');
-  const [historyDate, setHistoryDate] = useState('');
+  // A whole week is the usual question, so the date filter is a range rather than one day
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
+  const [historyCaller, setHistoryCaller] = useState('All');
   const [channelFilter, setChannelFilter] = useState('All');
 
   // Email channel
@@ -759,10 +762,10 @@ export default function Dialler({
   };
 
   // Role-based filtering for call logs: Admin sees all, employees see only their own calls
+  const isAdminView = currentUser.role === 'Admin' || Boolean(currentUser.permissions?.admin);
   const filteredLogs = callLogs.filter(log => {
-    const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
     const isUserCaller = log.caller === currentUser.name;
-    const matchesPermission = isAdmin || isUserCaller;
+    const matchesPermission = isAdminView || isUserCaller;
     const query = callHistorySearch.toLowerCase();
     const matchesSearch = (log.leadName || '').toLowerCase().includes(query) ||
                           (log.company || '').toLowerCase().includes(query) ||
@@ -776,7 +779,10 @@ export default function Dialler({
     // Outreach entries carry a readable "YYYY-MM-DD HH:mm" timestamp and emails an ISO sentAt,
     // so the first ten characters are the day either way
     const logDay = String(log.timestamp || log.sentAt || '').slice(0, 10);
-    const matchesDate = !historyDate || logDay === historyDate;
+    // ISO days compare as text, so an open end simply means "from here" or "up to here"
+    const matchesDate =
+      (!historyFrom || logDay >= historyFrom) && (!historyTo || logDay <= historyTo);
+    const matchesCaller = historyCaller === 'All' || (log.caller || '') === historyCaller;
     const channel = log.channel || 'Call';
     const matchesChannel =
       channelFilter === 'All' ||
@@ -785,8 +791,17 @@ export default function Dialler({
         : channelFilter === 'WhatsApp'
           ? channel === 'WhatsApp'
           : channel !== 'Email' && channel !== 'WhatsApp');
-    return matchesPermission && matchesSearch && matchesChannel && matchesName && matchesDate;
+    return matchesPermission && matchesSearch && matchesChannel && matchesName && matchesDate && matchesCaller;
   });
+
+  // Only the employees this viewer can already see, so the list never offers a name that would
+  // then return nothing
+  const historyCallers = [...new Set(
+    callLogs
+      .filter((log) => isAdminView || log.caller === currentUser.name)
+      .map((log) => String(log.caller || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
 
   // A lead found by its email alone has no number, so calling has to be offered only when there is one
   const activePhoneDigits = String(activeLead?.phone || '').replace(/\D/g, '');
@@ -1130,16 +1145,39 @@ export default function Dialler({
               />
               <UserCheck className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted" />
             </div>
-            <div className="relative">
+            <div className="flex items-center gap-1" role="group" aria-label="Filter history by date range">
               <input
                 type="date"
-                value={historyDate}
-                onChange={(e) => setHistoryDate(e.target.value)}
-                aria-label="Filter history by date"
-                title="Show only the entries recorded on this day"
-                className="py-2 px-3 glass-input rounded-xl text-xs dark:text-white"
+                value={historyFrom}
+                onChange={(e) => setHistoryFrom(e.target.value)}
+                aria-label="History from this date"
+                title="Show entries recorded on or after this day"
+                className="py-2 px-2 glass-input rounded-xl text-xs dark:text-white"
+              />
+              <span className="text-[11px] text-muted">to</span>
+              <input
+                type="date"
+                value={historyTo}
+                onChange={(e) => setHistoryTo(e.target.value)}
+                aria-label="History up to this date"
+                title="Show entries recorded on or before this day"
+                className="py-2 px-2 glass-input rounded-xl text-xs dark:text-white"
               />
             </div>
+            <select
+              value={historyCaller}
+              onChange={(e) => setHistoryCaller(e.target.value)}
+              aria-label="Filter history by the employee who made the entry"
+              title="Show only the entries one employee recorded"
+              className="py-2 px-3 glass-input rounded-xl text-xs dark:text-white"
+            >
+              <option value="All">Everyone</option>
+              {historyCallers.map((caller) => (
+                <option key={caller} value={caller}>
+                  {caller}
+                </option>
+              ))}
+            </select>
             <div className="relative">
               <input
                 type="text"
@@ -1150,13 +1188,15 @@ export default function Dialler({
               />
               <History className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted" />
             </div>
-            {(historyName || historyDate) && (
+            {(historyName || historyFrom || historyTo || historyCaller !== 'All') && (
               <button
                 onClick={() => {
                   setHistoryName('');
-                  setHistoryDate('');
+                  setHistoryFrom('');
+                  setHistoryTo('');
+                  setHistoryCaller('All');
                 }}
-                title="Clear the name and date filters"
+                title="Clear the name, date range and employee filters"
                 className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-muted hover:text-[var(--text-primary)] hover:bg-white/[0.06]"
               >
                 Clear
