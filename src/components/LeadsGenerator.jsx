@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { searchLeads } from '../lib/leads';
+import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
 import {
   Users,
   MapPin,
@@ -19,7 +20,8 @@ import {
   Database,
   ClipboardList,
   AtSign,
-  ExternalLink
+  ExternalLink,
+  MessageCircle
 } from 'lucide-react';
 
 const CATEGORY_OPTIONS = [
@@ -49,6 +51,9 @@ export default function LeadsGenerator({
   const [websiteFilter, setWebsiteFilter] = useState('All');
   const [emailFilter, setEmailFilter] = useState('All');
   const [contactFilter, setContactFilter] = useState('All');
+  // Most generated listings publish only a switchboard landline, so the list can be narrowed to
+  // the channels outreach can actually use
+  const [channelFilter, setChannelFilter] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
@@ -191,7 +196,19 @@ export default function LeadsGenerator({
       const fresh = fetched.filter(lead => !existingKeys.has(leadKey(lead)));
       const skipped = fetched.length - fresh.length + (data.skippedKnown || 0);
 
-      if (fresh.length > 0) setLeads(prev => [...fresh, ...prev]);
+      if (fresh.length > 0) {
+        setLeads(prev => [...fresh, ...prev]);
+        // A fresh list is mostly phone-only until each business's own site is read, so it is read
+        // straight away instead of waiting for the agent to press the button afterwards
+        enrichMany(fresh).then(result => {
+          if (result.checked === 0) return;
+          setEmailLookupMessage(
+            `Read ${result.checked} website${result.checked === 1 ? '' : 's'}: added ${result.emails} email${result.emails === 1 ? '' : 's'}, ` +
+              `${result.socials} social page${result.socials === 1 ? '' : 's'} and ${result.whatsapp} WhatsApp number${result.whatsapp === 1 ? '' : 's'}.`
+          );
+          setTimeout(() => setEmailLookupMessage(''), 12000);
+        });
+      }
 
       const areaNote = data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name for another part of the city.' : '';
 
@@ -214,9 +231,10 @@ export default function LeadsGenerator({
     }
   };
 
-  // Reads the contact address off the lead's own website. The fetch runs on the server because
-  // a page on another domain cannot be read from the browser.
-  const lookupEmail = async (website) => {
+  // Reads the contact details published on the lead's own website: an address, the social pages
+  // and a WhatsApp link. The fetch runs on the server because a page on another domain cannot be
+  // read from the browser.
+  const lookupContacts = async (website) => {
     const response = await fetch('/api/find-email', {
       method: 'POST',
       credentials: 'same-origin',
@@ -225,21 +243,47 @@ export default function LeadsGenerator({
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'That website could not be read.');
-    return Array.isArray(data.emails) ? data.emails : [];
+    return {
+      emails: Array.isArray(data.emails) ? data.emails : [],
+      socials: data.socials && typeof data.socials === 'object' ? data.socials : {},
+      whatsapp: typeof data.whatsapp === 'string' ? data.whatsapp : ''
+    };
+  };
+
+  // One website read can add three channels at once, and nothing already on file is replaced
+  const applyLookup = (lead, result) => {
+    const socials = result?.socials || {};
+    const emails = result?.emails || [];
+    return {
+      ...lead,
+      email: lead.email || emails[0] || '',
+      altEmails: lead.altEmails?.length ? lead.altEmails : emails.slice(1),
+      facebook: lead.facebook || socials.facebook || '',
+      instagram: lead.instagram || socials.instagram || '',
+      linkedin: lead.linkedin || socials.linkedin || '',
+      whatsapp: lead.whatsapp || result?.whatsapp || ''
+    };
   };
 
   const handleFindEmail = async (lead) => {
     if (!lead.website || emailBusy[lead.id]) return;
     setEmailBusy(prev => ({ ...prev, [lead.id]: true }));
     try {
-      const emails = await lookupEmail(lead.website);
-      if (emails.length === 0) {
-        setEmailLookupMessage(`${lead.company} does not publish an email address on ${lead.website}.`);
+      const result = await lookupContacts(lead.website);
+      const next = applyLookup(lead, result);
+      const gained = [
+        next.email && !lead.email ? next.email : '',
+        next.whatsapp && !lead.whatsapp ? 'a WhatsApp number' : '',
+        next.facebook && !lead.facebook ? 'a Facebook page' : '',
+        next.instagram && !lead.instagram ? 'an Instagram page' : '',
+        next.linkedin && !lead.linkedin ? 'a LinkedIn page' : ''
+      ].filter(Boolean);
+
+      if (gained.length === 0) {
+        setEmailLookupMessage(`${lead.company} publishes no email, social page or WhatsApp link on ${lead.website}.`);
       } else {
-        setLeads(prev =>
-          prev.map(item => (item.id === lead.id ? { ...item, email: emails[0], altEmails: emails.slice(1) } : item))
-        );
-        setEmailLookupMessage(`Added ${emails[0]} for ${lead.company}.`);
+        setLeads(prev => prev.map(item => (item.id === lead.id ? applyLookup(item, result) : item)));
+        setEmailLookupMessage(`Added ${gained.join(', ')} for ${lead.company}.`);
       }
     } catch (err) {
       setEmailLookupMessage(err.message);
@@ -253,46 +297,78 @@ export default function LeadsGenerator({
     }
   };
 
-  // Every visible lead that has a website but no address yet, four sites at a time
-  const handleFindMissingEmails = async () => {
-    const targets = visibleLeads.filter(lead => !lead.email && lead.website);
-    if (targets.length === 0) {
-      setEmailLookupMessage('Every lead with a website already has an email address.');
-      return;
+  // Reads each lead's website once and merges whatever it publishes: an address, social pages
+  // and a WhatsApp link. Three at a time, because every read is a real page fetch.
+  const enrichMany = async (targets, { announce = true } = {}) => {
+    const queue = targets.filter(lead => lead.website).slice(0, 12);
+    if (queue.length === 0) return { emails: 0, socials: 0, whatsapp: 0, checked: 0 };
+
+    if (announce) {
+      setEmailLookupMessage(`Reading ${queue.length} website${queue.length === 1 ? '' : 's'} for emails, social pages and WhatsApp numbers…`);
     }
 
-    setEmailLookupMessage(`Checking ${targets.length} website${targets.length === 1 ? '' : 's'} for contact addresses…`);
-    let found = 0;
+    let emails = 0;
+    let socials = 0;
+    let whatsapp = 0;
     let checked = 0;
 
-    for (let i = 0; i < targets.length; i += 4) {
-      const chunk = targets.slice(i, i + 4);
+    for (let i = 0; i < queue.length; i += 3) {
+      const chunk = queue.slice(i, i + 3);
       const results = await Promise.all(
         chunk.map(async (lead) => {
           try {
-            return { lead, emails: await lookupEmail(lead.website) };
+            return { lead, result: await lookupContacts(lead.website) };
           } catch (err) {
-            return { lead, emails: [] };
+            return { lead, result: null };
           }
         })
       );
 
-      const withEmail = results.filter(result => result.emails.length > 0);
-      if (withEmail.length > 0) {
-        const byId = new Map(withEmail.map(result => [result.lead.id, result.emails]));
-        setLeads(prev =>
-          prev.map(item => {
-            const emails = byId.get(item.id);
-            return emails ? { ...item, email: emails[0], altEmails: emails.slice(1) } : item;
-          })
-        );
-        found += withEmail.length;
+      const merged = new Map();
+      for (const { lead, result } of results) {
+        if (!result) continue;
+        const next = applyLookup(lead, result);
+        if (next.email && !lead.email) emails += 1;
+        if (
+          (next.facebook && !lead.facebook) ||
+          (next.instagram && !lead.instagram) ||
+          (next.linkedin && !lead.linkedin)
+        ) {
+          socials += 1;
+        }
+        if (next.whatsapp && !lead.whatsapp) whatsapp += 1;
+        merged.set(lead.id, next);
       }
+
+      if (merged.size > 0) setLeads(prev => prev.map(item => merged.get(item.id) || item));
       checked += chunk.length;
-      setEmailLookupMessage(`Checked ${checked} of ${targets.length} websites — ${found} email${found === 1 ? '' : 's'} found.`);
+      if (announce) {
+        setEmailLookupMessage(
+          `Checked ${checked} of ${queue.length} websites — ${emails} email${emails === 1 ? '' : 's'}, ` +
+            `${socials} social page${socials === 1 ? '' : 's'} and ${whatsapp} WhatsApp number${whatsapp === 1 ? '' : 's'} found.`
+        );
+      }
     }
 
-    setEmailLookupMessage(`Finished: ${found} email${found === 1 ? '' : 's'} found on ${checked} website${checked === 1 ? '' : 's'}.`);
+    return { emails, socials, whatsapp, checked };
+  };
+
+  // The bulk button covers the whole visible list, not only the leads a search just added
+  const handleFindMissingEmails = async () => {
+    const targets = visibleLeads.filter(
+      lead => lead.website && (!lead.email || !(lead.facebook || lead.instagram || lead.linkedin))
+    );
+    if (targets.length === 0) {
+      setEmailLookupMessage('Every lead with a website already has an email or a social page.');
+      return;
+    }
+
+    const result = await enrichMany(targets);
+    setEmailLookupMessage(
+      `Finished: added ${result.emails} email${result.emails === 1 ? '' : 's'}, ${result.socials} social ` +
+        `page${result.socials === 1 ? '' : 's'} and ${result.whatsapp} WhatsApp number${result.whatsapp === 1 ? '' : 's'} ` +
+        `from ${result.checked} website${result.checked === 1 ? '' : 's'}.`
+    );
     setTimeout(() => setEmailLookupMessage(''), 12000);
   };
 
@@ -322,8 +398,21 @@ export default function LeadsGenerator({
     const matchesContact =
       contactFilter === 'All' ||
       (contactFilter === 'None' ? !lead.contactedBy : lead.contactedBy === contactFilter);
+    // The channel filter is the answer to "show me only leads I can actually message"
+    const matchesChannel =
+      channelFilter === 'All' || Boolean(leadChannels(lead)[channelFilter.toLowerCase()]);
 
-    return matchesSearch && matchesCountry && matchesSize && matchesSolution && matchesStatus && matchesWebsite && matchesEmail && matchesContact;
+    return (
+      matchesSearch &&
+      matchesCountry &&
+      matchesSize &&
+      matchesSolution &&
+      matchesStatus &&
+      matchesWebsite &&
+      matchesEmail &&
+      matchesContact &&
+      matchesChannel
+    );
   });
 
   // The employees who have contacted someone in this list, so the filter only offers real names
@@ -331,7 +420,11 @@ export default function LeadsGenerator({
 
   const noWebsiteCount = visibleLeads.filter(lead => !lead.website).length;
   const emailCount = visibleLeads.filter(lead => lead.email).length;
-  const missingEmailCount = visibleLeads.filter(lead => !lead.email && lead.website).length;
+  const whatsappCount = visibleLeads.filter(isWhatsAppLead).length;
+  const socialCount = visibleLeads.filter(lead => lead.facebook || lead.instagram || lead.linkedin).length;
+  const missingContactCount = visibleLeads.filter(
+    lead => lead.website && (!lead.email || !(lead.facebook || lead.instagram || lead.linkedin))
+  ).length;
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -403,12 +496,12 @@ export default function LeadsGenerator({
           </button>
           <button
             onClick={handleFindMissingEmails}
-            disabled={missingEmailCount === 0}
-            title="Read the contact address published on each lead's own website"
+            disabled={missingContactCount === 0}
+            title="Read each lead's own website for an email address, social pages and a WhatsApp link"
             className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium rounded-xl shadow-md transition-all flex items-center space-x-2 text-sm"
           >
             <AtSign className="w-4 h-4" />
-            <span>Find Missing Emails ({missingEmailCount})</span>
+            <span>Find Emails &amp; Socials ({missingContactCount})</span>
           </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
@@ -524,6 +617,21 @@ export default function LeadsGenerator({
             </select>
           </div>
 
+          {/* Channel filter: hides the switchboard-only listings outreach cannot use */}
+          <div>
+            <select
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value)}
+              className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
+            >
+              <option value="All">Any Contact Channel</option>
+              <option value="Whatsapp">WhatsApp number on file</option>
+              <option value="Email">Has an email</option>
+              <option value="Social">Has a social page</option>
+              <option value="Website">Has a website</option>
+            </select>
+          </div>
+
           {/* Contact Filter: whose last contact this was, so a manager can review one person */}
           <div>
             <select
@@ -544,6 +652,8 @@ export default function LeadsGenerator({
           <span>
             Showing <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads
             <span className="text-emerald-500/90"> · <strong>{emailCount}</strong> with an email</span>
+            <span className="text-emerald-500/90"> · <strong>{whatsappCount}</strong> on WhatsApp</span>
+            <span className="text-blue-500/90"> · <strong>{socialCount}</strong> with a social page</span>
             {noWebsiteCount > 0 && (
               <span className="text-amber-400/90"> · <strong>{noWebsiteCount}</strong> have no website</span>
             )}
@@ -619,7 +729,7 @@ export default function LeadsGenerator({
                             : 'no email · no website to check'}
                         </div>
                       )}
-                      {(lead.facebook || lead.instagram) && (
+                      {(lead.facebook || lead.instagram || lead.linkedin) && (
                         <div className="flex items-center gap-2 mt-1 text-[10px] font-semibold">
                           {lead.facebook && (
                             <a
@@ -643,11 +753,30 @@ export default function LeadsGenerator({
                               <ExternalLink className="w-3 h-3 mr-0.5" /> Instagram
                             </a>
                           )}
+                          {lead.linkedin && (
+                            <a
+                              href={lead.linkedin.startsWith('http') ? lead.linkedin : `https://${lead.linkedin}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Open the LinkedIn page — decision makers can be reached there"
+                              className="text-sky-500 hover:underline inline-flex items-center"
+                            >
+                              <ExternalLink className="w-3 h-3 mr-0.5" /> LinkedIn
+                            </a>
+                          )}
                         </div>
                       )}
                     </td>
                     <td className="py-4 px-4">
                       <div className="font-mono text-xs font-medium text-[var(--text-primary)]">{lead.displayPhone || lead.phone}</div>
+                      {isWhatsAppLead(lead) && (
+                        <span
+                          title={`This number was published as a mobile or WhatsApp line — message it on WhatsApp${lead.whatsapp ? ` (${lead.whatsapp})` : ''}`}
+                          className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-400/15 text-emerald-300 border border-emerald-400/30"
+                        >
+                          <MessageCircle className="w-3 h-3" /> WhatsApp
+                        </span>
+                      )}
                       <div className="text-xs text-muted flex items-center mt-0.5">
                         <Globe className="w-3 h-3 mr-1 text-blue-500" /> {lead.country} • {lead.region}
                       </div>

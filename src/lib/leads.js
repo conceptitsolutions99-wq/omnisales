@@ -21,46 +21,34 @@ const OVERPASS_ENDPOINTS = [
 // Each category asks for a published phone or a published email. Most listings carry a phone,
 // but an email is what outreach actually needs, so the email tag is searched in its own right
 // instead of only being read off places that happened to have a number.
+// A business that publishes only a mobile or WhatsApp number is the most valuable kind of lead
+// for this team: those are the numbers WhatsApp can actually reach. Mobile and WhatsApp tags
+// were not searched for at all, so every search returned landlines and switchboards.
+const withContactTags = (base) => [
+  `${base}["phone"]`,
+  `${base}["contact:phone"]`,
+  `${base}["mobile"]`,
+  `${base}["contact:mobile"]`,
+  `${base}["contact:whatsapp"]`,
+  `${base}["email"]`,
+  `${base}["contact:email"]`
+];
+
+const OFFICE = 'nwr["office"]';
+const PROFESSIONAL = 'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]';
+const SHOP = 'nwr["shop"]';
+const FOOD = 'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]';
+const HEALTH = 'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]';
+const CRAFT = 'nwr["craft"]';
+const REPAIR = 'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]';
+
 const LEAD_CATEGORIES = {
-  offices: [
-    'nwr["office"]["phone"]',
-    'nwr["office"]["contact:phone"]',
-    'nwr["office"]["email"]',
-    'nwr["office"]["contact:email"]'
-  ],
-  professional: [
-    'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["phone"]',
-    'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["contact:phone"]',
-    'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["email"]',
-    'nwr["office"~"^(lawyer|accountant|insurance|estate_agent|financial|it|company|consulting)$"]["contact:email"]'
-  ],
-  retail: [
-    'nwr["shop"]["phone"]',
-    'nwr["shop"]["contact:phone"]',
-    'nwr["shop"]["email"]',
-    'nwr["shop"]["contact:email"]'
-  ],
-  food: [
-    'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["phone"]',
-    'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["contact:phone"]',
-    'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["email"]',
-    'nwr["amenity"~"^(restaurant|cafe|bar|fast_food|bakery|pub)$"]["contact:email"]'
-  ],
-  health: [
-    'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["phone"]',
-    'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["contact:phone"]',
-    'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["email"]',
-    'nwr["amenity"~"^(dentist|clinic|doctors|pharmacy|veterinary)$"]["contact:email"]'
-  ],
-  trades: [
-    'nwr["craft"]["phone"]',
-    'nwr["craft"]["email"]',
-    'nwr["craft"]["contact:email"]',
-    'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["phone"]',
-    'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["contact:phone"]',
-    'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["email"]',
-    'nwr["shop"~"^(car_repair|doityourself|hardware|electrical)$"]["contact:email"]'
-  ]
+  offices: withContactTags(OFFICE),
+  professional: withContactTags(PROFESSIONAL),
+  retail: withContactTags(SHOP),
+  food: withContactTags(FOOD),
+  health: withContactTags(HEALTH),
+  trades: [...withContactTags(CRAFT), ...withContactTags(REPAIR)]
 };
 
 // Geoapify taxonomy equivalents of the same six categories
@@ -207,13 +195,21 @@ area["name"="${safeCity}"]["boundary"="administrative"]->.a;
 out tags center ${limit};`;
 };
 
+// A five-digit shortcode (a delivery hotline, not a line a person answers) is not a lead
+const hasReachableNumber = (value) => String(value || '').replace(/\D/g, '').length >= 7;
+
 const mapOverpassLead = (element, fallbackCity, country) => {
   const tags = element.tags || {};
-  const rawPhone = tags.phone || tags['contact:phone'] || '';
+  // Mobile and WhatsApp numbers are kept apart from the landline: they are what WhatsApp can
+  // reach, and the agent has to be able to see which one they are about to message
+  const mobile = tags.mobile || tags['contact:mobile'] || '';
+  const whatsapp = tags['contact:whatsapp'] || tags.whatsapp || '';
+  const landline = tags.phone || tags['contact:phone'] || '';
+  const rawPhone = landline || mobile || whatsapp;
   const email = tags.email || tags['contact:email'] || '';
   const name = tags.name || tags['operator'];
-  // A business that publishes only an email is still worth outreach
-  if (!name || (!rawPhone && !email)) return null;
+  // A business that publishes only an email is still worth outreach, but a shortcode is not
+  if (!name || (!email && !hasReachableNumber(rawPhone))) return null;
 
   const website = tags.website || tags['contact:website'] || '';
   // Facebook and Instagram cannot be read by a server (they answer with a login wall or a 400),
@@ -229,6 +225,8 @@ const mapOverpassLead = (element, fallbackCity, country) => {
     company: name,
     phone: rawPhone.replace(/[^+\d]/g, ''),
     displayPhone: rawPhone || 'No phone on file',
+    mobile: mobile.replace(/[^+\d]/g, ''),
+    whatsapp: whatsapp.replace(/[^+\d]/g, ''),
     email,
     website,
     facebook,
@@ -425,18 +423,42 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     })
   );
 
+  const rawTags = (place) => place?.datasource?.raw || {};
+  // Geoapify spends a detail credit per listing, so only a listing with a way to reach it is
+  // kept — and a mobile or WhatsApp number counts, because that is what the team messages.
+  const reachable = (place) => {
+    const raw = rawTags(place);
+    const phone =
+      place?.contact?.phone ||
+      raw.phone ||
+      raw['contact:phone'] ||
+      raw.mobile ||
+      raw['contact:mobile'] ||
+      raw['contact:whatsapp'] ||
+      raw.whatsapp;
+    const email = place?.contact?.email || raw.email || raw['contact:email'];
+    return Boolean(email) || hasReachableNumber(phone);
+  };
+
   const leads = expanded
-    .filter((place) => place?.contact?.phone || place?.contact?.email)
-    .map((place) => ({
+    .filter(reachable)
+    .map((place) => {
+    const raw = rawTags(place);
+    const mobile = String(raw.mobile || raw['contact:mobile'] || '');
+    const whatsapp = String(raw['contact:whatsapp'] || raw.whatsapp || '');
+    const phone = place.contact?.phone || raw.phone || raw['contact:phone'] || mobile || whatsapp || '';
+    return {
     id: `geoapify-${place.place_id || place.formatted}`,
     name: place.name || place.address_line1 || 'Unnamed business',
     company: place.name || place.address_line1 || 'Unnamed business',
-    phone: String(place.contact?.phone || '').replace(/[^+\d]/g, ''),
-    displayPhone: place.contact?.phone || 'No phone on file',
-    email: place.contact?.email || '',
+    phone: String(phone).replace(/[^+\d]/g, ''),
+    displayPhone: phone || 'No phone on file',
+    mobile: mobile.replace(/[^+\d]/g, ''),
+    whatsapp: whatsapp.replace(/[^+\d]/g, ''),
+    email: place.contact?.email || raw.email || raw['contact:email'] || '',
     website: place.website || '',
-    facebook: place.contact?.facebook || place.datasource?.raw?.['contact:facebook'] || '',
-    instagram: place.contact?.instagram || place.datasource?.raw?.['contact:instagram'] || '',
+    facebook: place.contact?.facebook || raw['contact:facebook'] || '',
+    instagram: place.contact?.instagram || raw['contact:instagram'] || '',
     address: [place.address_line1, place.address_line2].filter(Boolean).join(', '),
     country: country || countryFromCode(place.country_code),
     region: place.city || place.state || city,
@@ -444,11 +466,12 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     solution: '',
     status: 'New',
     value: 0,
-    notes: `Verified listing via Geoapify${place.website ? ' · website on file' : ' · no website listed'}`,
+    notes: `Verified listing via Geoapify${place.website ? ' · website on file' : ' · no website listed'}${whatsapp || mobile ? ' · mobile/WhatsApp number on file' : ''}`,
     createdAt: new Date().toISOString().split('T')[0],
     lat: place.lat ?? null,
     lon: place.lon ?? null
-    }));
+    };
+    });
 
   return { leads, skippedKnown, hadResults: places.length > 0 };
 };

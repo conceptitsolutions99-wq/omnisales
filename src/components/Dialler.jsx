@@ -22,6 +22,7 @@ import {
   AtSign
 } from 'lucide-react';
 import { markLeadContacted } from '../lib/lead-status';
+import { whatsappNumberFor } from '../lib/contact-channels';
 import WhatsAppProofModal from './WhatsAppProofModal';
 
 const SIGNATURE_SERVICE_LINE = 'Websites · Web Portals · Mobile Apps';
@@ -215,41 +216,6 @@ export default function Dialler({
     }
   };
 
-  // WhatsApp needs the number in international form. Leads carry the number as it was typed,
-  // sometimes with a leading 0 and sometimes with the wrong country, so the trunk prefix is
-  // removed and a dialling code is only added when the pattern is recognisable — a guess here
-  // opens WhatsApp on a blank page with an invalid number, which is worse than saying so.
-  const COUNTRY_DIAL_CODES = {
-    canada: '1',
-    usa: '1',
-    'united states': '1',
-    egypt: '20',
-    'saudi arabia': '966',
-    'united arab emirates': '971',
-    uae: '971',
-    qatar: '974',
-    kuwait: '965',
-    'united kingdom': '44',
-    uk: '44'
-  };
-
-  // Egyptian mobiles: 010/011/012/015 followed by eight digits
-  const EGYPT_MOBILE = /^01[0125]\d{8}$/;
-
-  const whatsappNumber = (lead) => {
-    const raw = String(lead?.phone || '').trim();
-    const typedInternational = raw.startsWith('+');
-    let digits = raw.replace(/\D/g, '');
-    if (!digits) return '';
-    if (digits.startsWith('00')) digits = digits.slice(2);
-    if (typedInternational) return digits;
-    if (EGYPT_MOBILE.test(digits)) return `20${digits.slice(1)}`;
-
-    const code = COUNTRY_DIAL_CODES[String(lead?.country || '').toLowerCase().trim()];
-    if (code === '1' && digits.length === 10) return `1${digits}`;
-    if (code && code !== '1' && digits.startsWith('0')) return `${code}${digits.slice(1)}`;
-    return digits;
-  };
 
   // A usable WhatsApp number is 8–15 digits and never starts with the 0 trunk prefix
   const usableWhatsAppNumber = (number) => /^[1-9]\d{7,14}$/.test(number);
@@ -269,7 +235,9 @@ export default function Dialler({
 
   const handleWhatsAppCall = () => {
     if (!activeLead) return;
-    const number = whatsappNumber(activeLead);
+    // A WhatsApp or mobile number on file wins over the switchboard, because that is the
+    // number the chat actually exists on
+    const number = whatsappNumberFor(activeLead);
 
     if (!usableWhatsAppNumber(number)) {
       setWhatsAppIssue(
