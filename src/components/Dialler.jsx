@@ -36,6 +36,25 @@ const marketLine = (lead) =>
   /egypt/i.test(String(lead?.country || '')) ? 'Egypt' : 'Canada and the USA';
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
+// How the From of a recorded send was decided, so the log explains itself without the server logs
+const SENDER_MODES = {
+  account: {
+    label: 'Gmail account',
+    className: 'bg-slate-400/15 text-slate-300',
+    hint: 'Sent as the signed-in Gmail account, so SPF and DKIM stay aligned'
+  },
+  alias: {
+    label: 'Verified alias',
+    className: 'bg-emerald-400/15 text-emerald-300',
+    hint: 'Sent as a Gmail “send mail as” address that the account has verified'
+  },
+  relay: {
+    label: 'Relay sender',
+    className: 'bg-sky-400/15 text-sky-300',
+    hint: 'MAIL_FROM sent through the configured relay host'
+  }
+};
+
 // One signature block, applied to every template. The postal identity and the opt-out are the
 // last lines of this block, so the email ends with a single sign-off rather than a second one.
 const buildSignature = (agent = {}, company = {}) => {
@@ -343,9 +362,18 @@ export default function Dialler({
       if (!response.ok) throw new Error(`Log unavailable (${response.status})`);
       const data = await response.json();
       const serverEmails = Array.isArray(data.emails) ? data.emails : [];
-      const merged = [...local, ...serverEmails]
-        .filter((entry, index, all) => all.findIndex((other) => other.id === entry.id) === index)
-        .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
+      // The server's copy of a send records the From it left with; the browser copy keeps what
+      // the warm serverless instance may have forgotten, so a duplicate keeps both sets of facts
+      const byId = new Map();
+      for (const entry of local) byId.set(entry.id, entry);
+      for (const entry of serverEmails) {
+        const existing = byId.get(entry.id);
+        const filled = Object.fromEntries(
+          Object.entries(entry).filter(([, value]) => value !== null && value !== undefined && value !== '')
+        );
+        byId.set(entry.id, existing ? { ...existing, ...filled } : entry);
+      }
+      const merged = [...byId.values()].sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
       setEmailLog(merged);
       setEmailConfigured(data.configured !== false);
       setEmailSender(data.sender || '');
@@ -456,6 +484,10 @@ export default function Dialler({
           leadName: activeLead?.name || '',
           sentBy: currentUser.name,
           sentAt: new Date().toISOString(),
+          // The From the server says it used, so this browser's copy stays auditable even after
+          // the warm serverless instance that held the delivery is gone
+          from: data.email?.from || emailFrom || '',
+          fromMode: data.email?.fromMode || '',
           status: 'sent',
           providerId: data.email?.providerId || null,
           error: null
@@ -983,6 +1015,7 @@ export default function Dialler({
               <tr className="glass-head text-xs font-semibold uppercase tracking-wider text-muted">
                 <th className="py-3 px-4">Recipient</th>
                 <th className="py-3 px-4">Subject</th>
+                <th className="py-3 px-4">Sender</th>
                 <th className="py-3 px-4">Sent By</th>
                 <th className="py-3 px-4">Sent At</th>
                 <th className="py-3 px-4">Status</th>
@@ -991,7 +1024,7 @@ export default function Dialler({
             <tbody className="divide-y divide-white/[0.07] text-sm">
               {emailLog.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="text-center py-8 text-muted">
+                  <td colSpan="6" className="text-center py-8 text-muted">
                     No emails sent yet. Compose one from the Email Prospect channel above.
                   </td>
                 </tr>
@@ -1004,6 +1037,32 @@ export default function Dialler({
                     </td>
                     <td className="py-3.5 px-4 text-xs text-[var(--text-secondary)] max-w-xs truncate" title={entry.subject}>
                       {entry.subject}
+                    </td>
+                    <td className="py-3.5 px-4 text-xs">
+                      {entry.from ? (
+                        <>
+                          <div
+                            className="font-mono text-[var(--text-primary)]/80 truncate max-w-[200px]"
+                            title={`${entry.from}${entry.fromMode ? ` — ${SENDER_MODES[entry.fromMode]?.hint || entry.fromMode}` : ''}`}
+                          >
+                            {entry.from}
+                          </div>
+                          {entry.fromMode && (
+                            <span
+                              className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                SENDER_MODES[entry.fromMode]?.className || 'bg-slate-400/15 text-slate-300'
+                              }`}
+                              title={SENDER_MODES[entry.fromMode]?.hint || entry.fromMode}
+                            >
+                              {SENDER_MODES[entry.fromMode]?.label || entry.fromMode}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted" title="This send was recorded before the From address was logged">
+                          —
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-xs text-[var(--text-primary)]/80">{entry.sentBy}</td>
                     <td className="py-3.5 px-4 text-xs text-muted font-mono">
