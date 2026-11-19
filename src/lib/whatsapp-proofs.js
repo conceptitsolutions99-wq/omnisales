@@ -54,21 +54,23 @@ const parse = async (pending) => {
   return data;
 };
 
+// The proofs share the activity endpoint (?whatsapp=1): the deployment may only hold twelve
+// serverless functions, and both resources are the same outreach record.
 export const listWhatsAppProofs = async () => {
-  const data = await parse(fetch('/api/whatsapp-proofs', { credentials: 'same-origin' }));
+  const data = await parse(fetch('/api/activity?whatsapp=1', { credentials: 'same-origin' }));
   return Array.isArray(data.proofs) ? data.proofs : [];
 };
 
 export const getWhatsAppProof = async (id) => {
   const data = await parse(
-    fetch(`/api/whatsapp-proofs?id=${encodeURIComponent(id)}`, { credentials: 'same-origin' })
+    fetch(`/api/activity?whatsapp=1&id=${encodeURIComponent(id)}`, { credentials: 'same-origin' })
   );
   return data.proof || null;
 };
 
 export const saveWhatsAppProof = async (payload) => {
   const data = await parse(
-    fetch('/api/whatsapp-proofs', {
+    fetch('/api/activity?whatsapp=1', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },

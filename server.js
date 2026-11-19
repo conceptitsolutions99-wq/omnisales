@@ -381,7 +381,6 @@ app.get('/api/emails', (req, res) => {
 });
 
 // API: customer replies, attribution and admin reassignment (shared with the deployment)
-app.all('/api/whatsapp-proofs', require('./api/whatsapp-proofs'));
 app.all('/api/replies', require('./api/replies'));
 app.all('/api/requirements', require('./api/requirements'));
 app.all('/api/activity', require('./api/activity'));
