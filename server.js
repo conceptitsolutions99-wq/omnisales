@@ -185,6 +185,11 @@ const smtpUser = process.env.GMAIL_USER || '';
 const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 const mailFrom = process.env.MAIL_FROM || (smtpUser ? `Concept IT Solutions <${smtpUser}>` : '');
 
+// Gmail rewrites a From that is not the authenticated account, so the effective sender is
+// resolved once and used by both the send and the delivery-log view.
+const deliverability = require('./lib/mail-deliverability');
+const SENDER = deliverability.resolveSender({ smtpHost: SMTP_HOST, smtpUser, mailFrom });
+
 const transporter = smtpPass && smtpUser
   ? nodemailer.createTransport({
       host: SMTP_HOST,
@@ -287,7 +292,7 @@ app.post('/api/emails', async (req, res) => {
   const entry = {
     id: `em_${Date.now()}`,
     to: String(to).trim(),
-    subject,
+    subject: deliverability.cleanSubject(subject),
     body,
     leadId: leadId ?? null,
     leadName: leadName || '',
@@ -325,16 +330,21 @@ app.post('/api/emails', async (req, res) => {
 
   entry.requirementsUrl = requirementsUrl;
 
+  messageBody = deliverability.withFooter(messageBody);
+  const replyTo = deliverability.replyTo(session.email, SENDER.address);
+
   try {
     const info = await transporter.sendMail({
-      from: mailFrom,
+      from: SENDER.from,
       to: entry.to,
-      subject,
+      ...(replyTo ? { replyTo } : {}),
+      subject: entry.subject,
       text: messageBody,
       // Lets the reply tracker attribute an answer to the agent who wrote it
       headers: {
         'X-Concept-Agent': entry.sentBy,
-        'X-Concept-Lead': entry.leadName || entry.company || ''
+        'X-Concept-Lead': entry.leadName || entry.company || '',
+        ...deliverability.unsubscribeHeaders(SENDER.address)
       }
     });
 
@@ -349,7 +359,7 @@ app.post('/api/emails', async (req, res) => {
       agentEmail: session.email,
       leadName: entry.leadName || entry.company,
       to: entry.to,
-      subject,
+      subject: entry.subject,
       sentAt: entry.sentAt
     });
     res.json({ ok: true, email: entry });
@@ -365,7 +375,7 @@ app.post('/api/emails', async (req, res) => {
 app.get('/api/emails', (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
-  res.json({ configured: Boolean(transporter), from: mailFrom, sender: smtpUser, emails: readEmailLog() });
+  res.json({ configured: Boolean(transporter), from: SENDER.from, sender: smtpUser, emails: readEmailLog() });
 });
 
 // API: customer replies, attribution and admin reassignment (shared with the deployment)

@@ -2,6 +2,7 @@
 // The app password only ever lives in environment variables, never in the browser bundle.
 const nodemailer = require('nodemailer');
 const auth = require('../lib/auth-core');
+const deliverability = require('../lib/mail-deliverability');
 const sentStore = require('../lib/replies-store');
 const requirementsStore = require('../lib/requirements-store');
 
@@ -11,6 +12,10 @@ const SMTP_PORT = Number.isInteger(configuredPort) && configuredPort > 0 ? confi
 const smtpUser = process.env.GMAIL_USER || '';
 const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 const mailFrom = process.env.MAIL_FROM || (smtpUser ? `Concept IT Solutions <${smtpUser}>` : '');
+
+// The From address has to belong to the mailbox that authenticated, or SPF/DKIM stop aligning
+// and the message is filtered as forged. The effective sender is resolved once here.
+const SENDER = deliverability.resolveSender({ smtpHost: SMTP_HOST, smtpUser, mailFrom });
 
 const transporter = smtpPass && smtpUser
   ? nodemailer.createTransport({
@@ -37,7 +42,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     return res.status(200).json({
       configured: Boolean(transporter),
-      from: mailFrom,
+      from: SENDER.from,
       sender: smtpUser,
       emails: deliveries.slice(0, 50)
     });
@@ -62,10 +67,13 @@ module.exports = async (req, res) => {
     });
   }
 
+  const subjectLine = deliverability.cleanSubject(subject);
+
   const entry = {
     id: `em_${Date.now()}`,
     to: String(to).trim(),
-    subject,
+    subject: subjectLine,
+    from: SENDER.from,
     leadId: leadId ?? null,
     leadName: leadName || '',
     company: company || '',
@@ -101,16 +109,21 @@ module.exports = async (req, res) => {
     }
   }
 
+  messageBody = deliverability.withFooter(messageBody);
+  const replyTo = deliverability.replyTo(session.email, SENDER.address);
+
   try {
     const info = await transporter.sendMail({
-      from: mailFrom,
+      from: SENDER.from,
       to: entry.to,
-      subject,
+      ...(replyTo ? { replyTo } : {}),
+      subject: subjectLine,
       text: messageBody,
       // Lets the reply tracker attribute an answer to the agent who wrote it
       headers: {
         'X-Concept-Agent': entry.sentBy,
-        'X-Concept-Lead': entry.leadName || entry.company || ''
+        'X-Concept-Lead': entry.leadName || entry.company || '',
+        ...deliverability.unsubscribeHeaders(SENDER.address)
       }
     });
 
@@ -126,7 +139,7 @@ module.exports = async (req, res) => {
       agentEmail: session.email,
       leadName: entry.leadName || entry.company,
       to: entry.to,
-      subject,
+      subject: subjectLine,
       sentAt: entry.sentAt
     });
 
