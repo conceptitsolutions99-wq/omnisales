@@ -12,6 +12,7 @@ const { findEmails } = require('./lib/find-email');
 const testMail = require('./lib/deliverability-test');
 const suppression = require('./lib/suppression-store');
 const emailLogStore = require('./lib/email-log-store');
+const authResults = require('./lib/auth-results');
 const unsubscribe = require('./lib/unsubscribe-page');
 const { createUnsubscribeToken } = require('./lib/unsubscribe-token');
 const leadsStore = require('./lib/leads-store');
@@ -419,6 +420,12 @@ app.post('/api/emails', async (req, res) => {
       entry.providerId = result.messageId;
       await persistEmailEntry(entry);
       logSender('email_test_sent', { to: entry.to, messageId: entry.providerId });
+
+      // The verdicts the receiver recorded for the delivered copy, read back over IMAP
+      const authentication = await authResults
+        .findDeliveredTest({ user: smtpUser, pass: smtpPass, messageId: entry.providerId })
+        .catch((err) => ({ found: false, reason: err.message }));
+
       return res.json({
         ok: true,
         test: true,
@@ -427,7 +434,8 @@ app.post('/api/emails', async (req, res) => {
         fromMode: SENDER.mode,
         messageId: entry.providerId,
         accepted: result.accepted,
-        rejected: result.rejected
+        rejected: result.rejected,
+        authentication
       });
     } catch (err) {
       entry.status = 'failed';

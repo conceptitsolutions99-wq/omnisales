@@ -87,6 +87,50 @@ const SENDER_MODES = {
   }
 };
 
+// A test proves the path only if the receiver agrees: these are Gmail's own SPF, DKIM and DMARC
+// verdicts for the delivered copy, read back over IMAP, shown next to the From that was used
+const AUTH_MECHANISMS = ['spf', 'dkim', 'dmarc'];
+
+const AuthenticationVerdicts = ({ result }) => {
+  if (!result) return null;
+
+  if (!result.found) {
+    const message =
+      result.reason === 'imap_not_configured'
+        ? 'Add GMAIL_USER and GMAIL_APP_PASSWORD to read the verdicts back.'
+        : result.reason === 'not_delivered_yet'
+          ? 'Gmail had not delivered the copy into the inbox yet, so no verdicts were read. Send the test again in a moment.'
+          : `Verdicts unavailable: ${result.reason || 'unknown reason'}`;
+    return <div className="mt-2 text-[11px] text-amber-300/90">{message}</div>;
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+      {AUTH_MECHANISMS.map((mechanism) => {
+        const verdict = String(result[mechanism] || '').toLowerCase();
+        return (
+          <span
+            key={mechanism}
+            className={`px-2 py-0.5 rounded-full uppercase tracking-wider ${
+              !verdict
+                ? 'bg-slate-400/15 text-slate-300'
+                : verdict === 'pass'
+                  ? 'bg-emerald-400/15 text-emerald-300'
+                  : 'bg-rose-400/15 text-rose-300'
+            }`}
+          >
+            {mechanism} {verdict || '—'}
+          </span>
+        );
+      })}
+      <span className="ml-1 font-medium text-muted">
+        {result.aligned ? 'aligned with the From' : 'not aligned with the From'}
+        {result.fromDomain ? ` · ${result.fromDomain}` : ''}
+      </span>
+    </div>
+  );
+};
+
 // Selectable outreach templates for the email compose window
 const EMAIL_TEMPLATES = [
   {
@@ -613,7 +657,8 @@ export default function Dialler({
         to: data.email?.to || '',
         from: data.from || data.email?.from || '',
         mode: data.fromMode || data.email?.fromMode || '',
-        messageId: data.messageId || data.email?.providerId || ''
+        messageId: data.messageId || data.email?.providerId || '',
+        authentication: data.authentication || null
       });
       fetchEmailLog();
     } catch (err) {
@@ -1239,6 +1284,7 @@ export default function Dialler({
             }`}
           >
             {testEmailResult.ok ? (
+              <>
               <span>
                 Test email sent to <strong>{testEmailResult.to}</strong>
                 {testEmailResult.from && (
@@ -1255,6 +1301,8 @@ export default function Dialler({
                   </>
                 )}
               </span>
+              <AuthenticationVerdicts result={testEmailResult.authentication} />
+              </>
             ) : (
               <span>{testEmailResult.error}</span>
             )}

@@ -8,6 +8,7 @@ const requirementsStore = require('../lib/requirements-store');
 const testMail = require('../lib/deliverability-test');
 const suppression = require('../lib/suppression-store');
 const emailLogStore = require('../lib/email-log-store');
+const authResults = require('../lib/auth-results');
 const unsubscribe = require('../lib/unsubscribe-page');
 const { createUnsubscribeToken } = require('../lib/unsubscribe-token');
 
@@ -165,6 +166,13 @@ module.exports = async (req, res) => {
       entry.providerId = result.messageId;
       await recordDelivery(entry);
       logSender('email_test_sent', { to: entry.to, messageId: entry.providerId });
+
+      // Read the delivered copy back over IMAP, so the report shows the receiver's own SPF, DKIM
+      // and DMARC verdicts rather than the fact that SMTP accepted the message
+      const authentication = await authResults
+        .findDeliveredTest({ user: smtpUser, pass: smtpPass, messageId: entry.providerId })
+        .catch((err) => ({ found: false, reason: err.message }));
+
       return res.status(200).json({
         ok: true,
         test: true,
@@ -173,7 +181,8 @@ module.exports = async (req, res) => {
         fromMode: SENDER.mode,
         messageId: entry.providerId,
         accepted: result.accepted,
-        rejected: result.rejected
+        rejected: result.rejected,
+        authentication
       });
     } catch (err) {
       entry.status = 'failed';
