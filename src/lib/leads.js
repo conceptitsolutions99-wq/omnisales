@@ -15,7 +15,7 @@ const OVERPASS_ENDPOINTS = [
 // The public Overpass instances regularly take 15–25s for a city-sized query, so a short ceiling
 // abandoned searches that would have succeeded and pushed every request onto the paid provider.
 // Both endpoints serve the same database, so they are asked at once and the first answer wins.
-const OVERPASS_TIMEOUT_MS = 14000;
+// The ceiling therefore depends on whether there is anywhere to fall back to (see below).
 
 // Each category maps to OSM selectors that require a published phone number
 // Each category asks for a published phone or a published email. Most listings carry a phone,
@@ -74,6 +74,12 @@ const GEOAPIFY_CATEGORIES = {
 };
 
 const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || '';
+
+// A bounded Cairo query can still sit on the free map server for ~38s. When the keyed provider
+// is configured, waiting the full ceiling only delays the answer, so the free attempt is cut
+// short and the search falls back quickly. Without a fallback the long ceiling stays, because
+// abandoning the only source would return nothing at all.
+const OVERPASS_TIMEOUT_MS = GEOAPIFY_KEY ? 6000 : 14000;
 
 // A search can run without a country chosen, and the listings still need one for filtering and
 // for the outreach copy, so the geocoded place name and Geoapify's country code fill it in.
