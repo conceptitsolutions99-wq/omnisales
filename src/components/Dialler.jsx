@@ -32,6 +32,42 @@ const marketLine = (lead) =>
   /egypt/i.test(String(lead?.country || '')) ? 'Egypt' : 'Canada and the USA';
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
+// What was actually written to each lead last. A resend must be the same message, not a fresh
+// draft the agent has to rebuild, and the server keeps no copy of a body after it sends it.
+const LAST_DRAFT_KEY = 'cit_last_email_drafts';
+
+const readLastDrafts = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LAST_DRAFT_KEY) || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const rememberLastDraft = (lead, draft) => {
+  const all = readLastDrafts();
+  if (!lead || !draft?.to) return all;
+
+  all[String(lead.id)] = { ...draft, sentAt: new Date().toISOString() };
+
+  // Keep the map bounded: old leads drop out rather than filling the browser's storage
+  const keys = Object.keys(all);
+  if (keys.length > 200) {
+    keys
+      .sort((a, b) => String(all[a].sentAt || '').localeCompare(String(all[b].sentAt || '')))
+      .slice(0, keys.length - 200)
+      .forEach((key) => delete all[key]);
+  }
+
+  try {
+    localStorage.setItem(LAST_DRAFT_KEY, JSON.stringify(all));
+  } catch {
+    /* storage unavailable: resend is simply not offered */
+  }
+  return all;
+};
+
 // How the From of a recorded send was decided, so the log explains itself without the server logs
 const SENDER_MODES = {
   account: {
@@ -169,6 +205,10 @@ export default function Dialler({
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
   const [emailLog, setEmailLog] = useState([]);
+  // The last message written to each lead, so an earlier one can be sent again unchanged
+  const [lastDrafts, setLastDrafts] = useState(readLastDrafts);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendStatus, setResendStatus] = useState(null);
   const [whatsAppIssue, setWhatsAppIssue] = useState('');
   // Opening a WhatsApp chat also opens the proof step: no screenshots, no logged contact
   const [proofLead, setProofLead] = useState(null);
@@ -407,6 +447,52 @@ export default function Dialler({
   // A second click can arrive before the state has re-rendered, so the guard is a ref: one
   // click must mean one email and one history entry
   const sendingRef = useRef(false);
+  const resendRef = useRef(false);
+
+  // The history entry, the contact mark and this browser's copy of the delivery all follow from
+  // one send; a resend records itself the same way, so the log shows both messages
+  const recordEmailSend = (data, { to, subject, lead }) => {
+    const now = new Date();
+    const timestampStr = `${now.toISOString().split('T')[0]} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const emailLogEntry = {
+      id: Date.now(),
+      channel: 'Email',
+      leadId: lead?.id ?? null,
+      leadName: lead?.name || to,
+      company: lead?.company || '—',
+      phone: lead?.displayPhone || lead?.phone || to,
+      email: to,
+      caller: currentUser.name,
+      outcome: 'Emailed',
+      duration: '—',
+      timestamp: timestampStr,
+      notes: `Subject: ${subject}`,
+      providerId: data.email?.providerId || null
+    };
+    setCallLogs(prev => [emailLogEntry, ...prev]);
+    markContacted(lead);
+
+    writeLocalEmailLog([
+      {
+        id: data.email?.id || `local_${Date.now()}`,
+        to,
+        subject,
+        leadName: lead?.name || '',
+        sentBy: currentUser.name,
+        sentAt: new Date().toISOString(),
+        // The From the server says it used, so this browser's copy stays auditable even after
+        // the warm serverless instance that held the delivery is gone
+        from: data.email?.from || emailFrom || '',
+        fromMode: data.email?.fromMode || '',
+        status: 'sent',
+        providerId: data.email?.providerId || null,
+        error: null
+      },
+      ...readLocalEmailLog()
+    ]);
+
+    fetchEmailLog();
+  };
 
   const handleSendEmail = async (e) => {
     e.preventDefault();
@@ -442,47 +528,11 @@ export default function Dialler({
         }`
       });
 
-      // Record the send in the shared outreach history
-      const now = new Date();
-      const timestampStr = `${now.toISOString().split('T')[0]} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      const emailLogEntry = {
-        id: Date.now(),
-        channel: 'Email',
-        leadId: activeLead?.id ?? null,
-        leadName: activeLead?.name || emailTo.trim(),
-        company: activeLead?.company || '—',
-        phone: activeLead?.displayPhone || activeLead?.phone || emailTo.trim(),
-        email: emailTo.trim(),
-        caller: currentUser.name,
-        outcome: 'Emailed',
-        duration: '—',
-        timestamp: timestampStr,
-        notes: `Subject: ${emailSubject}`,
-        providerId: data.email?.providerId || null
-      };
-      setCallLogs([emailLogEntry, ...callLogs]);
-      markContacted(activeLead);
-
-      writeLocalEmailLog([
-        {
-          id: data.email?.id || `local_${Date.now()}`,
-          to: emailTo.trim(),
-          subject: emailSubject,
-          leadName: activeLead?.name || '',
-          sentBy: currentUser.name,
-          sentAt: new Date().toISOString(),
-          // The From the server says it used, so this browser's copy stays auditable even after
-          // the warm serverless instance that held the delivery is gone
-          from: data.email?.from || emailFrom || '',
-          fromMode: data.email?.fromMode || '',
-          status: 'sent',
-          providerId: data.email?.providerId || null,
-          error: null
-        },
-        ...readLocalEmailLog()
-      ]);
-
-      fetchEmailLog();
+      recordEmailSend(data, { to: emailTo.trim(), subject: emailSubject, lead: activeLead });
+      // Remembered so this lead can be written to again later without rebuilding the message
+      setLastDrafts(
+        rememberLastDraft(activeLead, { to: emailTo.trim(), subject: emailSubject, body: emailBody })
+      );
     } catch (err) {
       setEmailStatus({
         type: 'error',
@@ -494,6 +544,51 @@ export default function Dialler({
     } finally {
       sendingRef.current = false;
       setEmailSending(false);
+    }
+  };
+
+  // Sending the same message again because the customer lost it or did not reply. The subject,
+  // wording and recipient come from what was sent last time, not from a new draft.
+  const handleResendEmail = async () => {
+    if (!activeLead || !activeLastDraft?.to || resendingEmail || resendRef.current) return;
+
+    resendRef.current = true;
+    setResendingEmail(true);
+    setResendStatus(null);
+
+    try {
+      const response = await fetch('/api/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: activeLastDraft.to,
+          subject: activeLastDraft.subject,
+          body: activeLastDraft.body,
+          leadId: activeLead.id ?? null,
+          leadName: activeLead.name || '',
+          company: activeLead.company || '',
+          sentBy: currentUser.name
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Sending failed (${response.status}).`);
+
+      recordEmailSend(data, {
+        to: activeLastDraft.to,
+        subject: activeLastDraft.subject,
+        lead: activeLead
+      });
+      setLastDrafts(rememberLastDraft(activeLead, activeLastDraft));
+      setResendStatus({ type: 'success', message: `Sent again to ${activeLastDraft.to}.` });
+    } catch (err) {
+      setResendStatus({
+        type: 'error',
+        message: err.message === 'Failed to fetch' ? 'Cannot reach the mail service.' : err.message
+      });
+    } finally {
+      resendRef.current = false;
+      setResendingEmail(false);
     }
   };
 
@@ -663,6 +758,9 @@ export default function Dialler({
     ? Math.max(0, Math.round((Date.now() - new Date(String(lastEmailToLead.timestamp).replace(' ', 'T')).getTime()) / 60000))
     : null;
 
+  // What the lead was last written, when this browser wrote it; that is what Resend sends
+  const activeLastDraft = activeLead ? lastDrafts[String(activeLead.id)] || null : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -820,7 +918,38 @@ export default function Dialler({
                       <Mail className="w-5 h-5" />
                       <span>Email Prospect</span>
                     </button>
+
+                    {/* Offered once this lead has actually been written to: it sends that same
+                        message again, which is the common "they never got it" case */}
+                    {activeLastDraft && (
+                      <button
+                        onClick={handleResendEmail}
+                        disabled={resendingEmail}
+                        title={`Last sent ${new Date(activeLastDraft.sentAt).toLocaleString()} — “${activeLastDraft.subject}”`}
+                        className="px-6 py-3.5 rounded-xl border border-amber-400/40 bg-amber-400/10 hover:bg-amber-400/20 disabled:opacity-50 text-amber-600 dark:text-amber-300 font-bold transition-all flex items-center space-x-2 text-sm"
+                      >
+                        <History className="w-5 h-5" />
+                        <span>{resendingEmail ? 'Resending…' : 'Resend Last Email'}</span>
+                      </button>
+                    )}
                   </div>
+
+                  {activeLastDraft && !resendStatus && (
+                    <p className="text-[11px] text-muted">
+                      Resend sends “{activeLastDraft.subject}” to {activeLastDraft.to} again, exactly as it was
+                      written.
+                    </p>
+                  )}
+
+                  {resendStatus && (
+                    <p
+                      className={`text-[11px] font-medium ${
+                        resendStatus.type === 'error' ? 'text-rose-400' : 'text-emerald-400'
+                      }`}
+                    >
+                      {resendStatus.message}
+                    </p>
+                  )}
 
                   {whatsAppIssue && (
                     <p className="text-[11px] text-amber-500 max-w-md mx-auto">{whatsAppIssue}</p>
