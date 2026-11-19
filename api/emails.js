@@ -15,8 +15,28 @@ const smtpPass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '')
 const mailFrom = process.env.MAIL_FROM || (smtpUser ? `Concept IT Solutions <${smtpUser}>` : '');
 
 // The From address has to belong to the mailbox that authenticated, or SPF/DKIM stop aligning
-// and the message is filtered as forged. The effective sender is resolved once here.
-const SENDER = deliverability.resolveSender({ smtpHost: SMTP_HOST, smtpUser, mailFrom });
+// and the message is filtered as forged. A verified Gmail alias is the one exception, and it is
+// opt-in through GMAIL_FROM_ALIAS_VERIFIED so MAIL_FROM is never overridden without a word.
+const SENDER = deliverability.resolveSender({
+  smtpHost: SMTP_HOST,
+  smtpUser,
+  mailFrom,
+  aliasVerified: process.env.GMAIL_FROM_ALIAS_VERIFIED
+});
+
+// Which From a message actually left with is part of the delivery record, not an assumption
+const logSender = (event, fields = {}) => {
+  console.log(
+    JSON.stringify({
+      at: new Date().toISOString(),
+      event,
+      from: SENDER.from,
+      fromMode: SENDER.mode,
+      fromOverridden: SENDER.overridden,
+      ...fields
+    })
+  );
+};
 
 const transporter = smtpPass && smtpUser
   ? nodemailer.createTransport({
@@ -44,6 +64,8 @@ module.exports = async (req, res) => {
     return res.status(200).json({
       configured: Boolean(transporter),
       from: SENDER.from,
+      fromMode: SENDER.mode,
+      fromOverridden: SENDER.overridden,
       sender: smtpUser,
       emails: deliveries.slice(0, 50)
     });
@@ -75,6 +97,7 @@ module.exports = async (req, res) => {
     to: String(to).trim(),
     subject: subjectLine,
     from: SENDER.from,
+    fromMode: SENDER.mode,
     leadId: leadId ?? null,
     leadName: leadName || '',
     company: company || '',
@@ -132,6 +155,7 @@ module.exports = async (req, res) => {
     entry.providerId = info.messageId || null;
     entry.requirementsUrl = requirementsUrl;
     deliveries.unshift(entry);
+    logSender('email_sent', { agent: entry.sentBy, lead: entry.leadName || entry.company || '' });
 
     // Record who sent what, so the reply can be attributed even if the IMAP scan misses it
     await sentStore.rememberSent({
@@ -149,6 +173,7 @@ module.exports = async (req, res) => {
     entry.status = 'failed';
     entry.error = err.message || 'Sending failed.';
     deliveries.unshift(entry);
+    logSender('email_failed', { agent: entry.sentBy, error: entry.error });
     return res.status(502).json({ error: entry.error, email: entry });
   }
 };

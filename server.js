@@ -190,7 +190,25 @@ const mailFrom = process.env.MAIL_FROM || (smtpUser ? `Concept IT Solutions <${s
 // Gmail rewrites a From that is not the authenticated account, so the effective sender is
 // resolved once and used by both the send and the delivery-log view.
 const deliverability = require('./lib/mail-deliverability');
-const SENDER = deliverability.resolveSender({ smtpHost: SMTP_HOST, smtpUser, mailFrom });
+const SENDER = deliverability.resolveSender({
+  smtpHost: SMTP_HOST,
+  smtpUser,
+  mailFrom,
+  aliasVerified: process.env.GMAIL_FROM_ALIAS_VERIFIED
+});
+
+const logSender = (event, fields = {}) => {
+  console.log(
+    JSON.stringify({
+      at: new Date().toISOString(),
+      event,
+      from: SENDER.from,
+      fromMode: SENDER.mode,
+      fromOverridden: SENDER.overridden,
+      ...fields
+    })
+  );
+};
 
 const transporter = smtpPass && smtpUser
   ? nodemailer.createTransport({
@@ -295,6 +313,8 @@ app.post('/api/emails', async (req, res) => {
     id: `em_${Date.now()}`,
     to: String(to).trim(),
     subject: deliverability.cleanSubject(subject),
+    from: SENDER.from,
+    fromMode: SENDER.mode,
     body,
     leadId: leadId ?? null,
     leadName: leadName || '',
@@ -353,6 +373,7 @@ app.post('/api/emails', async (req, res) => {
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
     writeEmailLog([entry, ...readEmailLog()]);
+    logSender('email_sent', { agent: entry.sentBy, lead: entry.leadName || entry.company || '' });
 
     // Lets the reply tracker attribute an answer to the agent who wrote it
     await sentStore.rememberSent({
@@ -369,6 +390,7 @@ app.post('/api/emails', async (req, res) => {
     entry.status = 'failed';
     entry.error = err.message || 'Sending failed.';
     writeEmailLog([entry, ...readEmailLog()]);
+    logSender('email_failed', { agent: entry.sentBy, error: entry.error });
     res.status(502).json({ error: entry.error, email: entry });
   }
 });
@@ -377,7 +399,14 @@ app.post('/api/emails', async (req, res) => {
 app.get('/api/emails', (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
-  res.json({ configured: Boolean(transporter), from: SENDER.from, sender: smtpUser, emails: readEmailLog() });
+  res.json({
+    configured: Boolean(transporter),
+    from: SENDER.from,
+    fromMode: SENDER.mode,
+    fromOverridden: SENDER.overridden,
+    sender: smtpUser,
+    emails: readEmailLog()
+  });
 });
 
 // API: customer replies, attribution and admin reassignment (shared with the deployment)

@@ -165,6 +165,9 @@ export default function Dialler({
   const [proofLead, setProofLead] = useState(null);
   const [emailConfigured, setEmailConfigured] = useState(true);
   const [emailSender, setEmailSender] = useState('');
+  // The From the server actually used, and whether MAIL_FROM was ignored in favour of the account
+  const [emailFrom, setEmailFrom] = useState('');
+  const [emailFromOverridden, setEmailFromOverridden] = useState(false);
   const [emailTemplate, setEmailTemplate] = useState('intro');
   // Optional requirements form the customer fills in from the email
   const [emailRequirements, setEmailRequirements] = useState('');
@@ -369,6 +372,8 @@ export default function Dialler({
       setEmailLog(merged);
       setEmailConfigured(data.configured !== false);
       setEmailSender(data.sender || '');
+      setEmailFrom(data.from || '');
+      setEmailFromOverridden(Boolean(data.fromOverridden));
     } catch (err) {
       setEmailLog(local);
     }
@@ -977,11 +982,17 @@ export default function Dialler({
             <Mail className="w-5 h-5 mr-2 text-indigo-400" />
             Email Delivery Log ({emailLog.length})
           </h3>
-          <span className="text-[11px] text-muted">
+          <div className="text-[11px] text-muted sm:text-right">
             {emailConfigured
-              ? `Sending as ${emailSender || 'your Gmail account'} · newest first`
+              ? `Sending as ${emailFrom || emailSender || 'your Gmail account'} · newest first`
               : 'Sending not configured — add GMAIL_USER and GMAIL_APP_PASSWORD to the environment variables'}
-          </span>
+            {emailConfigured && emailFromOverridden && (
+              <p className="text-amber-500 mt-0.5 max-w-xs">
+                MAIL_FROM was ignored: Gmail only sends as the signed-in account. Set
+                GMAIL_FROM_ALIAS_VERIFIED=true once that address is a verified “send mail as” alias.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
