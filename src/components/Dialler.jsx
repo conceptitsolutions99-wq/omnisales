@@ -55,8 +55,9 @@ const SENDER_MODES = {
   }
 };
 
-// One signature block, applied to every template. The postal identity and the opt-out are the
-// last lines of this block, so the email ends with a single sign-off rather than a second one.
+// One signature block, applied to every template. The disclosure and the opt-out are the last
+// lines of this block, so the email ends with a single sign-off rather than a second one. The
+// company's postal address is deliberately not part of it.
 const buildSignature = (agent = {}, company = {}) => {
   const lines = [
     'Best regards,',
@@ -66,7 +67,6 @@ const buildSignature = (agent = {}, company = {}) => {
     `Our own site: ${COMPANY_SITE}`
   ];
 
-  if (company.address) lines.push(company.address);
   if (company.disclosure && company.optOut) lines.push(`${company.disclosure} ${company.optOut}`);
   else if (company.optOut) lines.push(company.optOut);
 
@@ -205,7 +205,7 @@ export default function Dialler({
   const [testEmailResult, setTestEmailResult] = useState(null);
   const canSendTest = currentUser.role === 'Admin' || Boolean(currentUser.permissions?.admin);
   // The postal identity and opt-out the server would add, so the signature can carry them once
-  const [companySignature, setCompanySignature] = useState({ address: '', disclosure: '', optOut: '' });
+  const [companySignature, setCompanySignature] = useState({ disclosure: '', optOut: '' });
   const [emailTemplate, setEmailTemplate] = useState('intro');
   // Optional requirements form the customer fills in from the email
   const [emailRequirements, setEmailRequirements] = useState('');
@@ -390,8 +390,8 @@ export default function Dialler({
       setEmailFromOverridden(Boolean(data.fromOverridden));
       setCompanySignature(
         data.signature && typeof data.signature === 'object'
-          ? { address: data.signature.address || '', disclosure: data.signature.disclosure || '', optOut: data.signature.optOut || '' }
-          : { address: '', disclosure: '', optOut: '' }
+          ? { disclosure: data.signature.disclosure || '', optOut: data.signature.optOut || '' }
+          : { disclosure: '', optOut: '' }
       );
     } catch (err) {
       setEmailLog(local);
@@ -1403,12 +1403,6 @@ export default function Dialler({
                 <strong>{currentUser.name}</strong> · {currentUser.role}<br />
                 Concept IT Solutions — {SIGNATURE_SERVICE_LINE}<br />
                 Our own site: {COMPANY_SITE}
-                {companySignature.address && (
-                  <>
-                    <br />
-                    {companySignature.address}
-                  </>
-                )}
                 {companySignature.optOut && (
                   <>
                     <br />
