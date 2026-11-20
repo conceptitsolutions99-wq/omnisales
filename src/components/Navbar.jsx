@@ -47,39 +47,39 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
 
   return (
     <>
-      {/* Floating glass top bar */}
+      {/* Floating top bar: obsidian, white type and gold accents in either theme */}
       <div className="sticky top-0 z-40 pt-3 sm:pt-4 px-3 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-[1400px]">
-          <header className="glass glass-strong !rounded-2xl px-3 sm:px-4">
+          <header className="goldbar px-3 sm:px-4">
             <div className="flex items-center justify-between gap-3 h-16">
 
               {/* Identity */}
               <div className="flex items-center gap-3 min-w-0">
-                <div className="relative w-10 h-10 rounded-xl overflow-hidden ring-1 ring-white/15 shadow-lg shadow-blue-950/50 shrink-0">
+                <div className="goldbar-logo relative w-10 h-10 rounded-xl overflow-hidden shrink-0">
                   <img
                     src="/logo-mark.png"
                     alt="Concept IT Solutions logo"
                     className="w-full h-full object-cover"
                     onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = '/logo-mark.svg'; }}
                   />
-                  <span className="absolute right-0.5 bottom-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[var(--page-bg)] live-dot" />
+                  <span className="goldbar-live absolute right-0.5 bottom-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0a0a0b]" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-[15px] tracking-tight whitespace-nowrap">Concept IT Solutions</span>
-                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full accent-pill">
+                    <span className="goldbar-pill hidden sm:inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full">
                       <Sparkles className="w-2.5 h-2.5" /> IT Pro
                     </span>
                   </div>
-                  <div className="hidden md:flex items-center gap-1.5 text-[11px] text-muted whitespace-nowrap">
-                    <Globe className="w-3 h-3 text-cyan-400" />
+                  <div className="goldbar-sub hidden md:flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+                    <Globe className="goldbar-gold w-3 h-3" />
                     Canada &amp; USA · Web · Portals · Apps
                   </div>
                 </div>
               </div>
 
               {/* Desktop segmented navigation */}
-              <nav className="hidden lg:flex items-center gap-1 p-1 rounded-xl glass-soft">
+              <nav className="goldbar-nav hidden lg:flex items-center gap-1 p-1">
                 {navItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
@@ -88,9 +88,7 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
                       key={item.id}
                       onClick={() => setActiveTab(item.id)}
                       className={`relative flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-semibold transition-all duration-300 ${
-                        isActive
-                          ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-600/35'
-                          : 'text-muted hover:text-[var(--text-primary)] hover:bg-white/[0.06]'
+                        isActive ? 'goldbar-link-active' : 'goldbar-link'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -104,12 +102,12 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
               <div className="flex items-center gap-2">
                 <button
                   onClick={onOpenReplies}
-                  className="relative w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  className="goldbar-action relative w-9 h-9 flex items-center justify-center"
                   title={repliesUnread > 0 ? `${repliesUnread} new customer ${repliesUnread === 1 ? 'reply' : 'replies'}` : 'Customer replies'}
                 >
                   <MailOpen className="w-4 h-4" />
                   {repliesUnread > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg shadow-rose-500/40">
+                    <span className="goldbar-badge absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center">
                       {repliesUnread > 9 ? '9+' : repliesUnread}
                     </span>
                   )}
@@ -117,12 +115,12 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
 
                 <button
                   onClick={onOpenRequirements}
-                  className="relative w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  className="goldbar-action relative w-9 h-9 flex items-center justify-center"
                   title={requirementsPending > 0 ? `${requirementsPending} requirements form${requirementsPending === 1 ? '' : 's'} awaiting answers` : 'Requirements forms'}
                 >
                   <ClipboardList className="w-4 h-4" />
                   {requirementsPending > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center shadow-lg shadow-amber-500/40">
+                    <span className="goldbar-badge absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center">
                       {requirementsPending > 9 ? '9+' : requirementsPending}
                     </span>
                   )}
@@ -131,7 +129,7 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
                 {canReviewWhatsApp && (
                   <button
                     onClick={onOpenWhatsAppProofs}
-                    className="w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                    className="goldbar-action w-9 h-9 flex items-center justify-center"
                     title="WhatsApp proof review"
                   >
                     <MessageSquareText className="w-4 h-4" />
@@ -140,19 +138,19 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
 
                 <button
                   onClick={onOpenPalette}
-                  className="flex items-center gap-2 h-9 px-2.5 xl:px-3 rounded-xl glass-soft text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  className="goldbar-action flex items-center gap-2 h-9 px-2.5 xl:px-3"
                   title="Search (Ctrl/Cmd + K)"
                 >
                   <Search className="w-4 h-4 shrink-0" />
                   <span className="hidden xl:inline text-[12px] font-medium">Search…</span>
-                  <kbd className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold border border-[var(--glass-border)]">
+                  <kbd className="goldbar-kbd hidden xl:inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold border">
                     ⌘K
                   </kbd>
                 </button>
 
                 <button
                   onClick={onOpenSetup}
-                  className="w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors shrink-0"
+                  className="goldbar-action w-9 h-9 flex items-center justify-center shrink-0"
                   title="Setup status"
                 >
                   <Settings className="w-4 h-4" />
@@ -160,31 +158,31 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
 
                 <button
                   onClick={() => setDarkMode(!darkMode)}
-                  className="w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  className="goldbar-action w-9 h-9 flex items-center justify-center"
                   title="Toggle theme"
                 >
-                  {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+                  {darkMode ? <Sun className="goldbar-gold w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
 
                 <button
                   onClick={onOpenProfile}
-                  className="hidden sm:flex items-center gap-2.5 pl-2.5 border-l border-white/10 text-left rounded-xl hover:opacity-90 transition-opacity"
+                  className="goldbar-divider hidden sm:flex items-center gap-2.5 pl-2.5 border-l text-left rounded-xl hover:opacity-90 transition-opacity"
                   title="Edit my name and outreach title"
                 >
                   <div className="text-right leading-tight">
-                    <div className="text-[13px] font-semibold whitespace-nowrap">{currentUser.name}</div>
-                    <div className="text-[11px] font-medium accent-text whitespace-nowrap">
+                    <div className="text-[13px] font-semibold whitespace-nowrap text-white">{currentUser.name}</div>
+                    <div className="goldbar-gold text-[11px] font-medium whitespace-nowrap">
                       {currentUser.title || currentUser.role}
                     </div>
                   </div>
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-400 to-indigo-500 text-[11px] font-bold text-white flex items-center justify-center shadow-md shadow-cyan-500/25">
+                  <div className="goldbar-avatar w-9 h-9 rounded-full text-[11px] font-bold flex items-center justify-center">
                     {initialsOf(currentUser.name)}
                   </div>
                 </button>
 
                 <button
                   onClick={onOpenProfile}
-                  className="sm:hidden w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40 transition-colors"
+                  className="goldbar-action sm:hidden w-9 h-9 flex items-center justify-center"
                   title="Edit my name and outreach title"
                 >
                   <UserRound className="w-4 h-4" />
@@ -192,7 +190,7 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
 
                 <button
                   onClick={onLogout}
-                  className="w-9 h-9 rounded-xl glass-soft flex items-center justify-center text-muted hover:text-rose-400 hover:border-rose-400/40 transition-colors"
+                  className="goldbar-action w-9 h-9 flex items-center justify-center"
                   title="Sign out"
                 >
                   <LogOut className="w-4 h-4" />
@@ -204,9 +202,9 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
         </div>
       </div>
 
-      {/* Mobile floating dock */}
+      {/* Mobile floating dock, styled as the same black/white/gold chrome */}
       <div className="lg:hidden fixed bottom-3 inset-x-3 z-40">
-        <div className="glass glass-strong !rounded-2xl px-1.5 py-1.5 flex items-center justify-around">
+        <div className="goldbar px-1.5 py-1.5 flex items-center justify-around">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -215,9 +213,7 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-semibold transition-all ${
-                  isActive
-                    ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-600/30'
-                    : 'text-muted'
+                  isActive ? 'goldbar-link-active' : 'goldbar-link'
                 }`}
               >
                 <Icon className="w-[18px] h-[18px]" />
