@@ -47,7 +47,9 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
       phone: selectedLead.displayPhone || selectedLead.phone,
       value: selectedLead.value,
       ...newFollowup,
-      assignedTo: currentUser.name
+      assignedTo: currentUser.name,
+      // The stable identity behind the name, so visibility survives a rename
+      assignedToEmail: currentUser.email || ''
     };
 
     setFollowups([followupToAdd, ...followups]);
@@ -57,7 +59,10 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
   // Role-based filtering: Admin sees all, employees see only their own assigned follow-ups
   const filteredFollowups = followups.filter(f => {
     const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
-    const isAssignedToUser = f.assignedTo === currentUser.name;
+    const assignedEmail = String(f.assignedToEmail || '').toLowerCase();
+    const isAssignedToUser = assignedEmail
+      ? assignedEmail === String(currentUser.email || '').toLowerCase()
+      : f.assignedTo === currentUser.name;
     const matchesPermission = isAdmin || isAssignedToUser;
     const matchesStatus = filterStatus === 'All' || f.status === filterStatus;
 

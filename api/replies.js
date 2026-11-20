@@ -14,6 +14,7 @@ const { resolveReply } = require('../lib/reply-attribution');
 const auth = require('../lib/auth-core');
 const sentStore = require('../lib/replies-store');
 const leadsStore = require('../lib/leads-store');
+const followupsStore = require('../lib/followups-store');
 
 const smtpUser = process.env.GMAIL_USER || '';
 const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
@@ -149,6 +150,14 @@ const handler = async (req, res) => {
         return [];
       });
 
+    // The queue is shared, so the cancellation is written once here and every device sees it
+    const cancelled = repliedLeads.length
+      ? await followupsStore.cancelForRepliedLeads(repliedLeads).catch((err) => {
+          log('error', requestId, 'reply_followups_failed', { message: err.message });
+          return { changed: 0 };
+        })
+      : { changed: 0 };
+
     // The session decides what is visible - never the query string
     const visible = auth.isReviewer(session)
       ? resolved
@@ -163,6 +172,7 @@ const handler = async (req, res) => {
       replies: resolved.length,
       visible: visible.length,
       unassigned: visible.filter((reply) => !reply.agent).length,
+      followupsCancelled: cancelled.changed,
       mailMs,
       storeMs,
       storage: sentStore.configured() ? 'persistent' : 'memory'

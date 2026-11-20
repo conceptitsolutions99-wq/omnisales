@@ -859,6 +859,7 @@ export default function Dialler({
         status: callOutcome === 'Deal Completed' ? 'Pending Transfer' : 'Scheduled',
         scheduledDate: new Date(Date.now() + 86400000 * 2).toISOString().replace('T', ' ').substring(0, 16),
         assignedTo: currentUser.name,
+        assignedToEmail: currentUser.email || '',
         notes: callNotes || (callOutcome === 'Deal Completed' ? 'Awaiting initial funds transfer.' : 'Requested call back.'),
         value: activeLead.value
       };

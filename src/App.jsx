@@ -21,6 +21,7 @@ import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
 import { listRequirements } from './lib/requirements';
 import { listSharedLeads, pushSharedLeads, listActivity, pushActivity } from './lib/leads-api';
+import { listFollowups, pushFollowups } from './lib/followups';
 import { leadKey, mergeLeadLists } from './lib/lead-key';
 import { mergeActivity } from './lib/activity-merge';
 
@@ -115,22 +116,7 @@ function Workspace() {
     return [];
   });
 
-  const [followups, setFollowups] = useState(() => {
-    const saved = localStorage.getItem('omnisales_followups');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.length > 0 && parsed.some(l => l.company === 'Vancouver Harbor Exports')) {
-          localStorage.removeItem('omnisales_followups');
-          return [];
-        }
-        return parsed;
-      } catch (e) {
-        return [];
-      }
-    }
-    return [];
-  });
+  const [followups, setFollowups] = useState([]);
 
   // The lead list is the team's, kept on the server; the browser copy is a cache so the page
   // still works offline. Each change is pushed, and the list is refreshed so an employee's
@@ -192,6 +178,84 @@ function Workspace() {
 
     return () => clearTimeout(leadsPushTimer.current);
   }, [leads, currentUser, applySharedLeads]);
+
+  // Follow-ups live in the shared store, so a reply cancels the task on every device and any
+  // device can complete or reschedule it. The fingerprints remember what the server already
+  // has, so loading or polling the queue never pushes every task back as if it had changed.
+  const followupsFingerprints = useRef(new Map());
+  const followupsPending = useRef(false);
+
+  const seedFollowups = useCallback((shared) => {
+    const list = Array.isArray(shared) ? shared : [];
+    followupsFingerprints.current = new Map(list.map(task => [String(task.id), JSON.stringify(task)]));
+    setFollowups(prev => (JSON.stringify(list) === JSON.stringify(prev) ? prev : list));
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      followupsFingerprints.current = new Map();
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        let shared = await listFollowups();
+        // The queue used to live in this browser only: upload that copy once, when the shared
+        // queue is still empty, so nobody loses tasks they already scheduled.
+        if (shared.length === 0) {
+          let cached = [];
+          try {
+            const parsed = JSON.parse(localStorage.getItem('omnisales_followups') || '[]');
+            cached = Array.isArray(parsed) ? parsed : [];
+          } catch (err) {
+            cached = [];
+          }
+          if (cached.length > 0) {
+            shared = await pushFollowups(cached);
+            localStorage.removeItem('omnisales_followups');
+          }
+        }
+        if (!cancelled) seedFollowups(shared);
+      } catch (err) {
+        // Offline: the last copy this browser held is still better than an empty queue
+        try {
+          const parsed = JSON.parse(localStorage.getItem('omnisales_followups') || '[]');
+          if (Array.isArray(parsed) && parsed.length > 0) setFollowups(parsed);
+        } catch (ignored) {
+          /* no cache */
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, seedFollowups]);
+
+  // Only the tasks that actually changed are sent; a load or a poll is not a change
+  useEffect(() => {
+    if (!currentUser) return undefined;
+
+    const changed = followups.filter(
+      task => followupsFingerprints.current.get(String(task.id)) !== JSON.stringify(task)
+    );
+    if (changed.length === 0) return undefined;
+
+    followupsPending.current = true;
+    const timer = setTimeout(() => {
+      pushFollowups(changed)
+        .then(() => {
+          changed.forEach(task => followupsFingerprints.current.set(String(task.id), JSON.stringify(task)));
+        })
+        .catch(() => {})
+        .finally(() => {
+          followupsPending.current = false;
+        });
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [followups, currentUser]);
 
   // Outreach history follows the same rule as the leads: shared for the admin, own for an
   // employee, with this browser's copy kept as a cache
@@ -268,9 +332,14 @@ function Workspace() {
       listActivity()
         .then(shared => applySharedActivity(shared))
         .catch(() => {});
+      if (!followupsPending.current) {
+        listFollowups()
+          .then(shared => seedFollowups(shared))
+          .catch(() => {});
+      }
     }, 20000);
     return () => clearInterval(timer);
-  }, [currentUser, applySharedLeads, applySharedActivity]);
+  }, [currentUser, applySharedLeads, applySharedActivity, seedFollowups]);
 
   const [selectedLeadForCall, setSelectedLeadForCall] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -404,12 +473,8 @@ function Workspace() {
     localStorage.setItem('omnisales_call_logs', JSON.stringify(callLogs));
   }, [callLogs]);
 
-  useEffect(() => {
-    localStorage.setItem('omnisales_followups', JSON.stringify(followups));
-  }, [followups]);
-
-  // A prospect who answered is no longer a follow-up target. The task queue lives in this
-  // browser, so it is cancelled here as soon as the shared lead says it has a reply.
+  // A prospect who answered is no longer a follow-up target. The server also closes these tasks
+  // when a reply is matched; this catches tasks scheduled before the lead carried repliedAt.
   useEffect(() => {
     const replied = leads.filter(lead => lead.repliedAt);
     if (replied.length === 0) return;
@@ -429,7 +494,8 @@ function Workspace() {
       });
       return changed ? next : prev;
     });
-  }, [leads]);
+    // Re-run when the shared queue arrives too, so a task scheduled before the reply is caught
+  }, [leads, followups]);
 
   // Dark mode class toggle & persistence
   useEffect(() => {

@@ -7,12 +7,60 @@
 const auth = require('../lib/auth-core');
 const store = require('../lib/activity-store');
 const proofs = require('../lib/whatsapp-proof-store');
+const followupsStore = require('../lib/followups-store');
 
 const isReviewer = (session) =>
   auth.isAdmin(session) || session.role === 'Analyst' || Boolean(session.permissions?.analytics);
 
 const ownedBy = (proof, session) =>
   String(proof?.agentEmail || '').toLowerCase() === String(session?.email || '').toLowerCase();
+
+const ownsFollowup = (task, session) => {
+  const ownerEmail = String(task?.assignedToEmail || '').toLowerCase();
+  if (ownerEmail) return ownerEmail === String(session?.email || '').toLowerCase();
+  return String(task?.assignedTo || '') === String(session?.name || '');
+};
+
+// Follow-ups ride on this function for the same reason the proof trail does: the plan allows
+// twelve serverless functions. An admin sees every task; an agent sees the ones assigned to them.
+const handleFollowups = async (req, res, session) => {
+  const visible = (tasks) => (auth.isAdmin(session) ? tasks : tasks.filter((task) => ownsFollowup(task, session)));
+
+  if (req.method === 'GET') {
+    const tasks = visible(await followupsStore.listFollowups());
+    return res.status(200).json({
+      ok: true,
+      count: tasks.length,
+      followups: tasks,
+      scope: auth.isAdmin(session) ? 'team' : 'own'
+    });
+  }
+
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST');
+    return res.status(405).json({ error: 'Use GET or POST.' });
+  }
+
+  const { followups } = req.body || {};
+  if (!Array.isArray(followups)) {
+    return res.status(400).json({ error: 'Send the follow-ups as an array.' });
+  }
+
+  try {
+    await followupsStore.upsertFollowups(followups, { name: session.name, email: session.email });
+  } catch (err) {
+    console.error('Could not save follow-ups:', err.message);
+    return res.status(502).json({ error: 'The follow-up queue could not be saved.' });
+  }
+
+  const tasks = visible(await followupsStore.listFollowups());
+  return res.status(200).json({
+    ok: true,
+    count: tasks.length,
+    followups: tasks,
+    scope: auth.isAdmin(session) ? 'team' : 'own'
+  });
+};
 
 const handleWhatsApp = async (req, res, session) => {
   const reviewer = isReviewer(session);
@@ -69,6 +117,10 @@ module.exports = async (req, res) => {
 
   if (String(req.query?.whatsapp || '') === '1') {
     return handleWhatsApp(req, res, session);
+  }
+
+  if (String(req.query?.followups || '') === '1') {
+    return handleFollowups(req, res, session);
   }
 
   if (req.method === 'GET') {
