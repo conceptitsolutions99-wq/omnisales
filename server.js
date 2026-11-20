@@ -618,8 +618,13 @@ app.get('/api/emails', async (req, res) => {
   }
 
   // The shared store is the history every device reads; the local file fills in a send made
-  // while the store was unreachable
-  const stored = await emailLogStore.list(100);
+  // while the store was unreachable. The response is scoped here as well as in the deployment:
+  // an agent reads their own sends, an admin reads the team's.
+  const viewerIsAdmin = auth.isAdmin(session);
+  const viewer = String(session.name || '').trim();
+  const canSee = (entry) =>
+    viewerIsAdmin || (Boolean(viewer) && String(entry.sentBy || '').trim() === viewer);
+  const stored = await emailLogStore.list(300);
   res.json({
     configured: Boolean(transporter),
     from: SENDER.from,
@@ -628,7 +633,7 @@ app.get('/api/emails', async (req, res) => {
     signature: deliverability.signatureFooter(),
     sender: smtpUser,
     rateLimit: await sendPacing.status(),
-    emails: mergeEmailLogs(stored, readEmailLog()).slice(0, 100)
+    emails: mergeEmailLogs(stored, readEmailLog()).filter(canSee).slice(0, 100)
   });
 });
 

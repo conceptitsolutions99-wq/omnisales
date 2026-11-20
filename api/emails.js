@@ -119,7 +119,14 @@ module.exports = async (req, res) => {
       return res.status(200).json({ conflict, replied });
     }
 
-    const stored = await emailLogStore.list(100);
+    // The table filters by sender in the browser, but hiding rows is not access control: this
+    // response only carries an agent's own sends. Admins review the whole team's history.
+    const viewerIsAdmin = auth.isAdmin(session);
+    const viewer = String(session.name || '').trim();
+    const canSee = (entry) =>
+      viewerIsAdmin || (Boolean(viewer) && String(entry.sentBy || '').trim() === viewer);
+    const stored = await emailLogStore.list(300);
+    const emails = mergeDeliveryLog(stored, deliveries).filter(canSee).slice(0, 50);
     return res.status(200).json({
       configured: Boolean(transporter),
       from: SENDER.from,
@@ -129,7 +136,7 @@ module.exports = async (req, res) => {
       sender: smtpUser,
       // The remaining allowance travels with the log: the compose card reads it before sending
       rateLimit: await sendPacing.status(),
-      emails: mergeDeliveryLog(stored, deliveries).slice(0, 50)
+      emails
     });
   }
 
