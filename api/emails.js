@@ -8,6 +8,7 @@ const requirementsStore = require('../lib/requirements-store');
 const testMail = require('../lib/deliverability-test');
 const suppression = require('../lib/suppression-store');
 const emailLogStore = require('../lib/email-log-store');
+const sendPacing = require('../lib/send-pacing');
 const authResults = require('../lib/auth-results');
 const unsubscribe = require('../lib/unsubscribe-page');
 const { createUnsubscribeToken } = require('../lib/unsubscribe-token');
@@ -113,6 +114,8 @@ module.exports = async (req, res) => {
       fromOverridden: SENDER.overridden,
       signature: deliverability.signatureFooter(),
       sender: smtpUser,
+      // The remaining allowance travels with the log: the compose card reads it before sending
+      rateLimit: await sendPacing.status(),
       emails: mergeDeliveryLog(stored, deliveries).slice(0, 50)
     });
   }
@@ -222,6 +225,17 @@ module.exports = async (req, res) => {
     });
   }
 
+  // Reputation guard: the mailbox is shared, so its ceiling belongs to the team, not to whoever
+  // is at the keyboard. The slot is taken before any side effect and given back if SMTP fails.
+  const slot = await sendPacing.reserve();
+  if (!slot.ok) {
+    return res.status(429).json({
+      error: sendPacing.messageFor(slot),
+      reason: slot.reason,
+      rateLimit: slot
+    });
+  }
+
   const subjectLine = deliverability.cleanSubject(subject);
 
   const entry = {
@@ -300,8 +314,10 @@ module.exports = async (req, res) => {
       sentAt: entry.sentAt
     });
 
-    return res.status(200).json({ ok: true, email: entry });
+    return res.status(200).json({ ok: true, email: entry, rateLimit: await sendPacing.status() });
   } catch (err) {
+    // A message SMTP refused never reached the mailbox, so its slot goes back
+    if (entry.status !== 'sent') await sendPacing.release(slot.stamp);
     entry.status = 'failed';
     entry.error = err.message || 'Sending failed.';
     await recordDelivery(entry);

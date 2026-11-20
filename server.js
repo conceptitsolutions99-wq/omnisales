@@ -12,6 +12,7 @@ const { findEmails } = require('./lib/find-email');
 const testMail = require('./lib/deliverability-test');
 const suppression = require('./lib/suppression-store');
 const emailLogStore = require('./lib/email-log-store');
+const sendPacing = require('./lib/send-pacing');
 const authResults = require('./lib/auth-results');
 const unsubscribe = require('./lib/unsubscribe-page');
 const { createUnsubscribeToken } = require('./lib/unsubscribe-token');
@@ -475,6 +476,16 @@ app.post('/api/emails', async (req, res) => {
     });
   }
 
+  // Reputation guard: one shared mailbox, one allowance for the whole team
+  const slot = await sendPacing.reserve();
+  if (!slot.ok) {
+    return res.status(429).json({
+      error: sendPacing.messageFor(slot),
+      reason: slot.reason,
+      rateLimit: slot
+    });
+  }
+
   const entry = {
     id: `em_${Date.now()}`,
     to: String(to).trim(),
@@ -551,8 +562,10 @@ app.post('/api/emails', async (req, res) => {
       subject: entry.subject,
       sentAt: entry.sentAt
     });
-    res.json({ ok: true, email: entry });
+    res.json({ ok: true, email: entry, rateLimit: await sendPacing.status() });
   } catch (err) {
+    // A hand-off SMTP refused never reached the mailbox, so its slot goes back
+    if (entry.status !== 'sent') await sendPacing.release(slot.stamp);
     entry.status = 'failed';
     entry.error = err.message || 'Sending failed.';
     await persistEmailEntry(entry);
@@ -576,6 +589,7 @@ app.get('/api/emails', async (req, res) => {
     fromOverridden: SENDER.overridden,
     signature: deliverability.signatureFooter(),
     sender: smtpUser,
+    rateLimit: await sendPacing.status(),
     emails: mergeEmailLogs(stored, readEmailLog()).slice(0, 100)
   });
 });

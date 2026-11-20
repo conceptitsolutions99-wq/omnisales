@@ -256,6 +256,9 @@ export default function Dialler({
   const [senderFilter, setSenderFilter] = useState('All');
   // The same audit by person: one employee's sends can be isolated from the team's
   const [emailSenderFilter, setEmailSenderFilter] = useState('All');
+  // Reputation guard for the one shared mailbox: allowance left and the gap to the next send
+  const [sendPacing, setSendPacing] = useState(null);
+  const [pacingClock, setPacingClock] = useState(Date.now());
   // The last message written to each lead, so an earlier one can be sent again unchanged
   const [lastDrafts, setLastDrafts] = useState(readLastDrafts);
   const [resendingEmail, setResendingEmail] = useState(false);
@@ -457,6 +460,8 @@ export default function Dialler({
       setEmailSender(data.sender || '');
       setEmailFrom(data.from || '');
       setEmailFromOverridden(Boolean(data.fromOverridden));
+      setSendPacing(data.rateLimit && typeof data.rateLimit === 'object' ? data.rateLimit : null);
+      setPacingClock(Date.now());
       setCompanySignature(
         data.signature && typeof data.signature === 'object'
           ? { disclosure: data.signature.disclosure || '', optOut: data.signature.optOut || '' }
@@ -470,6 +475,20 @@ export default function Dialler({
   useEffect(() => {
     fetchEmailLog();
   }, []);
+
+  // The spacing window counts down in the compose card, so the button unlocks without a reload
+  useEffect(() => {
+    const until = sendPacing?.nextAllowedAt ? new Date(sendPacing.nextAllowedAt).getTime() : 0;
+    if (!until || until <= Date.now()) return undefined;
+    const timer = setInterval(() => setPacingClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [sendPacing]);
+
+  const pacingWaitSeconds = sendPacing?.nextAllowedAt
+    ? Math.max(0, Math.ceil((new Date(sendPacing.nextAllowedAt).getTime() - pacingClock) / 1000))
+    : 0;
+  const sendPacingBlocked = Boolean(sendPacing) &&
+    (sendPacing.unavailable || sendPacing.remaining <= 0 || pacingWaitSeconds > 0);
 
   // An email sent before this rule existed still leaves its lead on New, so the delivery log is
   // replayed once on mount and those leads catch up
@@ -570,6 +589,10 @@ export default function Dialler({
       });
 
       const data = await response.json().catch(() => ({}));
+      if (data.rateLimit && typeof data.rateLimit === 'object') {
+        setSendPacing(data.rateLimit);
+        setPacingClock(Date.now());
+      }
       if (!response.ok) throw new Error(data.error || `Sending failed (${response.status}).`);
 
       setEmailStatus({
@@ -623,6 +646,10 @@ export default function Dialler({
       });
 
       const data = await response.json().catch(() => ({}));
+      if (data.rateLimit && typeof data.rateLimit === 'object') {
+        setSendPacing(data.rateLimit);
+        setPacingClock(Date.now());
+      }
       if (!response.ok) throw new Error(data.error || `Sending failed (${response.status}).`);
 
       recordEmailSend(data, {
@@ -1729,6 +1756,37 @@ export default function Dialler({
                 </div>
               )}
 
+              {sendPacing && (
+                <div
+                  className={`p-3 rounded-xl border text-[11px] font-medium flex items-start gap-2 ${ 
+                    sendPacing.unavailable || sendPacingBlocked
+                      ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+                      : 'border-[var(--glass-border)] bg-white/[0.03] text-muted'
+                  }`}
+                >
+                  <Clock className="w-4 h-4 shrink-0 mt-px" />
+                  <span>
+                    {sendPacing.unavailable ? (
+                      'Send limiter unavailable — sending is paused to protect the shared mailbox.'
+                    ) : sendPacing.remaining <= 0 ? (
+                      <>
+                        Daily limit reached: <strong>{sendPacing.used}</strong> of {sendPacing.limit} messages in
+                        the last 24 hours. Next send after{' '}
+                        {sendPacing.nextAllowedAt
+                          ? new Date(sendPacing.nextAllowedAt).toLocaleString()
+                          : 'the window resets'}.
+                      </>
+                    ) : (
+                      <>
+                        <strong>{sendPacing.remaining}</strong> of {sendPacing.limit} sends left in the 24-hour
+                        window · one message every {sendPacing.minGapSeconds}s
+                        {pacingWaitSeconds > 0 ? ` · next in ${pacingWaitSeconds}s` : ''}
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
+
               <p className="text-[11px] text-muted">
                 Sent through your Gmail account from Concept IT Solutions, and recorded in the delivery log on this screen.
               </p>
@@ -1751,7 +1809,16 @@ export default function Dialler({
                 </button>
                 <button
                   type="submit"
-                  disabled={!emailTo.trim() || emailSending}
+                  disabled={!emailTo.trim() || emailSending || sendPacingBlocked}
+                  title={
+                    sendPacingBlocked
+                      ? sendPacing?.unavailable
+                        ? 'Sending is paused while the send limiter is unavailable'
+                        : sendPacing?.remaining <= 0
+                          ? 'The shared mailbox has used its daily allowance'
+                          : `The mailbox sends one message every ${sendPacing?.minGapSeconds || 30}s`
+                      : undefined
+                  }
                   className="px-5 py-2.5 bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 disabled:opacity-50 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center space-x-2 text-sm"
                 >
                   <Send className={`w-4 h-4 ${emailSending ? 'animate-pulse' : ''}`} />
