@@ -833,17 +833,19 @@ export default function Dialler({
   };
   // Only the employees this viewer can already see, so the picker never offers a name that
   // would then return nothing
+  // The log follows the same rule as the history table: an admin sees every send, an agent
+  // only the messages they sent themselves
+  const emailLogForViewer = emailLog.filter(
+    (entry) => isAdminView || String(entry.sentBy || '') === currentUser.name
+  );
   const emailLogSenders = [...new Set(
-    emailLog
-      .filter((entry) => isAdminView || String(entry.sentBy || '') === currentUser.name)
-      .map((entry) => String(entry.sentBy || '').trim())
-      .filter(Boolean)
+    emailLogForViewer.map((entry) => String(entry.sentBy || '').trim()).filter(Boolean)
   )].sort((a, b) => a.localeCompare(b));
   // The path counts follow the employee picked, so the chips describe that person's sends
   const emailLogForEmployee =
     emailSenderFilter === 'All'
-      ? emailLog
-      : emailLog.filter((entry) => String(entry.sentBy || '') === emailSenderFilter);
+      ? emailLogForViewer
+      : emailLogForViewer.filter((entry) => String(entry.sentBy || '') === emailSenderFilter);
   const senderCounts = emailLogForEmployee.reduce(
     (counts, entry) => {
       const mode = senderModeOf(entry);
@@ -1304,7 +1306,7 @@ export default function Dialler({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center">
             <Mail className="w-5 h-5 mr-2 text-indigo-400" />
-            Email Delivery Log ({emailLog.length})
+            Email Delivery Log ({emailLogForViewer.length})
           </h3>
           <div className="text-[11px] text-muted sm:text-right space-y-1">
             {canSendTest && (
@@ -1444,8 +1446,10 @@ export default function Dialler({
               {visibleEmailLog.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="text-center py-8 text-muted">
-                    {emailLog.length === 0
-                      ? 'No emails sent yet. Compose one from the Email Prospect channel above.'
+                    {emailLogForViewer.length === 0
+                      ? emailLog.length === 0
+                        ? 'No emails sent yet. Compose one from the Email Prospect channel above.'
+                        : 'You have not sent any emails yet. This log shows only your own sends.'
                       : emailSenderFilter !== 'All'
                         ? `No sends by ${emailSenderFilter} match these filters. Choose another employee or clear it.`
                         : 'No sends used that sender. Choose another filter or clear it.'}
