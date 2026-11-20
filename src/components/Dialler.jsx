@@ -496,11 +496,22 @@ export default function Dialler({
     fetchEmailLog();
   }, []);
 
-  // The spacing window counts down in the compose card, so the button unlocks without a reload
+  // The spacing window counts down in the compose card, so the button unlocks without a reload.
+  // The interval stops itself at zero: leaving it running would re-render the dialler every
+  // second for the rest of the session once the wait is over.
   useEffect(() => {
     const until = sendPacing?.nextAllowedAt ? new Date(sendPacing.nextAllowedAt).getTime() : 0;
     if (!until || until <= Date.now()) return undefined;
-    const timer = setInterval(() => setPacingClock(Date.now()), 1000);
+    let timer = null;
+    const tick = () => {
+      const now = Date.now();
+      setPacingClock(now);
+      if (now >= until) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [sendPacing]);
 
