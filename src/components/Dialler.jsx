@@ -181,16 +181,12 @@ export default function Dialler({
   // Optional requirements form the customer fills in from the email
   const [emailRequirements, setEmailRequirements] = useState('');
 
-  // Timer effect
+  // The call timer only exists while a call is running; ending the call removes it immediately
   useEffect(() => {
-    let interval = null;
-    if (isCalling) {
-      interval = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
+    if (!isCalling) return undefined;
+    const interval = setInterval(() => {
+      setCallDuration(prev => prev + 1);
+    }, 1000);
     return () => clearInterval(interval);
   }, [isCalling]);
 

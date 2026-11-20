@@ -420,17 +420,29 @@ export default function LeadsGenerator({
     }
   };
 
-  // The window closes on its own; the strip disappears instead of lingering as a stale offer
+  // The window closes on its own; the strip disappears instead of lingering as a stale offer.
+  // The interval clears itself at zero rather than re-rendering this screen every second while
+  // the undo strip is already gone.
   useEffect(() => {
     if (!deletedBatch) return undefined;
+    let timer = null;
+    let done = false;
     const tick = () => {
       const left = Math.max(0, Math.ceil((undoDeadline.current - Date.now()) / 1000));
       setUndoSeconds(left);
-      if (left === 0) setDeletedBatch(null);
+      if (left === 0) {
+        done = true;
+        if (timer) clearInterval(timer);
+        timer = null;
+        setDeletedBatch(null);
+      }
     };
     tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
+    if (!done) timer = setInterval(tick, 1000);
+    return () => {
+      done = true;
+      if (timer) clearInterval(timer);
+    };
   }, [deletedBatch]);
 
   const handleUndoDelete = async () => {
