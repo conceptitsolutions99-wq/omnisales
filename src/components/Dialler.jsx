@@ -1287,7 +1287,7 @@ export default function Dialler({
                 <div
                   title={
                     sendPacing.resetsAt
-                      ? `Daily allowance resets ${new Date(sendPacing.resetsAt).toLocaleString()} (UTC day)`
+                      ? `Today's allowance resets ${new Date(sendPacing.resetsAt).toLocaleString()} (UTC day). Sends stay capped at ${sendPacing.limit} in any rolling 24 hours; the next slot opens ${sendPacing.rollingResetsAt ? new Date(sendPacing.rollingResetsAt).toLocaleString() : 'when older sends leave the window'}.`
                       : undefined
                   }
                   className={`p-3 rounded-xl border text-[11px] font-medium flex items-start gap-2 ${ 
@@ -1301,19 +1301,31 @@ export default function Dialler({
                     {sendPacing.unavailable ? (
                       'Send limiter unavailable — sending is paused to protect the shared mailbox.'
                     ) : sendPacing.remaining <= 0 ? (
-                      <>
-                        Daily limit reached: <strong>{sendPacing.used}</strong> of {sendPacing.limit} sent today
-                        {sendPacing.warmup?.active ? ` (warm-up day ${sendPacing.warmup.day})` : ''}. Resets{' '}
-                        {sendPacing.resetsAt
-                          ? new Date(sendPacing.resetsAt).toLocaleString()
-                          : 'at midnight UTC'}{' '}
-                        (UTC day).
-                      </>
+                      sendPacing.rollingRemaining <= 0 && sendPacing.used < sendPacing.limit ? (
+                        <>
+                          Rolling 24-hour cap reached: <strong>{sendPacing.rollingUsed}</strong> of {sendPacing.limit}{' '}
+                          sends in the last 24 hours
+                          {sendPacing.warmup?.active ? ` (warm-up day ${sendPacing.warmup.day})` : ''}. Next slot{' '}
+                          {sendPacing.rollingResetsAt
+                            ? new Date(sendPacing.rollingResetsAt).toLocaleString()
+                            : 'when older sends leave the window'}
+                          {` · ${sendPacing.used} of ${sendPacing.limit} sent today`}.
+                        </>
+                      ) : (
+                        <>
+                          Daily limit reached: <strong>{sendPacing.used}</strong> of {sendPacing.limit} sent today
+                          {sendPacing.warmup?.active ? ` (warm-up day ${sendPacing.warmup.day})` : ''}. Sends also
+                          stay capped at {sendPacing.limit} in any rolling 24 hours; next slot{' '}
+                          {sendPacing.rollingResetsAt
+                            ? new Date(sendPacing.rollingResetsAt).toLocaleString()
+                            : 'when older sends leave the window'}.
+                        </>
+                      )
                     ) : (
                       <>
                         <strong>{sendPacing.used}</strong> of {sendPacing.limit} sent today
                         {sendPacing.warmup?.active ? ` · warm-up day ${sendPacing.warmup.day}` : ''}
-                        {` · ${sendPacing.remaining} left · one message every ${sendPacing.minGapSeconds}s`}
+                        {` · ${sendPacing.remaining} left · ${sendPacing.rollingUsed || 0} in the last 24h · one message every ${sendPacing.minGapSeconds}s`}
                         {pacingWaitSeconds > 0 ? ` · next in ${pacingWaitSeconds}s` : ''}
                       </>
                     )}
