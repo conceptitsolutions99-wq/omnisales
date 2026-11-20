@@ -402,6 +402,8 @@ app.post('/api/emails', async (req, res) => {
       leadName: 'Deliverability test',
       company: 'Concept IT Solutions',
       sentBy: session.name || 'Admin',
+      // The address is the stable identity; a display name can change in the profile
+      sentByEmail: String(session.email || '').toLowerCase(),
       sentAt: new Date().toISOString(),
       status: 'sending',
       providerId: null,
@@ -518,6 +520,7 @@ app.post('/api/emails', async (req, res) => {
     leadName: leadName || '',
     company: company || '',
     sentBy: session.name || sentBy || 'Unknown agent',
+    sentByEmail: String(session.email || '').toLowerCase(),
     sentAt: new Date().toISOString(),
     status: 'sending',
     providerId: null,
@@ -621,9 +624,14 @@ app.get('/api/emails', async (req, res) => {
   // while the store was unreachable. The response is scoped here as well as in the deployment:
   // an agent reads their own sends, an admin reads the team's.
   const viewerIsAdmin = auth.isAdmin(session);
-  const viewer = String(session.name || '').trim();
-  const canSee = (entry) =>
-    viewerIsAdmin || (Boolean(viewer) && String(entry.sentBy || '').trim() === viewer);
+  const viewerEmail = String(session.email || '').trim().toLowerCase();
+  const viewerName = String(session.name || '').trim();
+  const canSee = (entry) => {
+    if (viewerIsAdmin) return true;
+    const owner = String(entry.sentByEmail || '').trim().toLowerCase();
+    if (owner) return Boolean(viewerEmail) && owner === viewerEmail;
+    return Boolean(viewerName) && String(entry.sentBy || '').trim() === viewerName;
+  };
   const stored = await emailLogStore.list(300);
   res.json({
     configured: Boolean(transporter),

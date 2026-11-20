@@ -930,11 +930,16 @@ export default function Dialler({
   };
   // Only the employees this viewer can already see, so the picker never offers a name that
   // would then return nothing
-  // The log follows the same rule as the history table: an admin sees every send, an agent
-  // only the messages they sent themselves
-  const emailLogForViewer = emailLog.filter(
-    (entry) => isAdminView || String(entry.sentBy || '') === currentUser.name
-  );
+  // The log follows the same rule as the server: an admin sees every send, an agent only the
+  // messages they sent. Ownership follows the address stored with the send, so a renamed
+  // employee keeps their history; older rows without an address fall back to the display name.
+  const viewerEmail = String(currentUser.email || '').trim().toLowerCase();
+  const isOwnEmail = (entry) => {
+    const owner = String(entry.sentByEmail || '').trim().toLowerCase();
+    if (owner) return owner === viewerEmail;
+    return String(entry.sentBy || '') === currentUser.name;
+  };
+  const emailLogForViewer = emailLog.filter((entry) => isAdminView || isOwnEmail(entry));
   const emailLogSenders = [...new Set(
     emailLogForViewer.map((entry) => String(entry.sentBy || '').trim()).filter(Boolean)
   )].sort((a, b) => a.localeCompare(b));
