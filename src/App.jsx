@@ -192,6 +192,7 @@ function Workspace() {
   // has, so loading or polling the queue never pushes every task back as if it had changed.
   const followupsFingerprints = useRef(new Map());
   const followupsPending = useRef(false);
+  const followupsRetryTimer = useRef(null);
 
   const seedFollowups = useCallback((shared) => {
     const list = Array.isArray(shared) ? shared : [];
@@ -201,6 +202,9 @@ function Workspace() {
 
   useEffect(() => {
     if (!currentUser) {
+      clearTimeout(followupsRetryTimer.current);
+      followupsRetryTimer.current = null;
+      followupsPending.current = false;
       followupsFingerprints.current = new Map();
       return undefined;
     }
@@ -241,28 +245,53 @@ function Workspace() {
     };
   }, [currentUser, seedFollowups]);
 
-  // Only the tasks that actually changed are sent; a load or a poll is not a change
+  // Only the tasks that actually changed are sent; a load or a poll is not a change. A failed
+  // push keeps the local task and retries, because the server never received it.
   useEffect(() => {
-    if (!currentUser) return undefined;
+    if (!currentUser) {
+      followupsPending.current = false;
+      clearTimeout(followupsRetryTimer.current);
+      followupsRetryTimer.current = null;
+      return undefined;
+    }
 
     const changed = followups.filter(
       task => followupsFingerprints.current.get(String(task.id)) !== JSON.stringify(task)
     );
     if (changed.length === 0) return undefined;
 
+    let active = true;
+    let retryDelay = 5000;
     followupsPending.current = true;
-    const timer = setTimeout(() => {
+    clearTimeout(followupsRetryTimer.current);
+    followupsRetryTimer.current = null;
+
+    const send = () => {
+      followupsRetryTimer.current = null;
       pushFollowups(changed)
         .then(() => {
           changed.forEach(task => followupsFingerprints.current.set(String(task.id), JSON.stringify(task)));
+          if (active) followupsPending.current = false;
         })
-        .catch(() => {})
-        .finally(() => {
-          followupsPending.current = false;
+        .catch(() => {
+          if (!active) return;
+          // Back off, but never drop the change: the next attempt carries the same tasks
+          followupsRetryTimer.current = setTimeout(send, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 30000);
         });
-    }, 800);
+    };
 
-    return () => clearTimeout(timer);
+    const timer = setTimeout(send, 800);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      clearTimeout(followupsRetryTimer.current);
+      followupsRetryTimer.current = null;
+      // A cancelled timer never reaches its success handler, so leaving this set would stop the
+      // 20-second poll from refreshing follow-ups for the rest of the session.
+      followupsPending.current = false;
+    };
   }, [followups, currentUser]);
 
   // Outreach history follows the same rule as the leads: shared for the admin, own for an
