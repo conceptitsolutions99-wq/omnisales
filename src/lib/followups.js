@@ -19,3 +19,7 @@ export const pushFollowups = async (followups) =>
       body: JSON.stringify({ followups })
     })
   );
+
+// Admin only on the server: clears the shared queue for every device, not just this browser
+export const clearFollowups = async () =>
+  parse(fetch('/api/activity?followups=1', { method: 'DELETE', credentials: 'same-origin' }));

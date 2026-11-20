@@ -45,9 +45,17 @@ const handleFollowups = async (req, res, session) => {
     });
   }
 
+  if (req.method === 'DELETE') {
+    if (!auth.isAdmin(session)) {
+      return res.status(403).json({ error: 'Only an admin can clear the shared follow-up queue.' });
+    }
+    const tasks = await followupsStore.clearFollowups();
+    return res.status(200).json({ ok: true, count: tasks.length, followups: tasks, scope: 'team' });
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'GET, POST');
-    return res.status(405).json({ error: 'Use GET or POST.' });
+    res.setHeader('Allow', 'GET, POST, DELETE');
+    return res.status(405).json({ error: 'Use GET, POST or DELETE.' });
   }
 
   const { followups } = req.body || {};
@@ -139,9 +147,17 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true, count: visible.length, activity: visible, scope: admin ? 'team' : 'own' });
   }
 
+  if (req.method === 'DELETE') {
+    if (!auth.isAdmin(session)) {
+      return res.status(403).json({ error: 'Only an admin can clear the shared history.' });
+    }
+    const activity = await store.clearActivity();
+    return res.status(200).json({ ok: true, count: activity.length, activity, scope: 'team' });
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'GET, POST');
-    return res.status(405).json({ error: 'Use GET or POST.' });
+    res.setHeader('Allow', 'GET, POST, DELETE');
+    return res.status(405).json({ error: 'Use GET, POST or DELETE.' });
   }
 
   const { activity } = req.body || {};

@@ -206,7 +206,7 @@ export default function AdminDashboard({ currentUser, onClearDatabase }) {
       <div className="p-4 accent-pill rounded-2xl border border-blue-200 dark:border-blue-900 flex items-start space-x-3 text-xs text-blue-800 dark:text-blue-300">
         <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
         <div>
-          <strong>Admin Privilege Center:</strong> You can wipe all leads, call logs, and follow-up tasks via the <strong>Clear Database</strong> button to operate fresh on the system.
+          <strong>Admin Privilege Center:</strong> The <strong>Clear Database</strong> button removes every shared lead, call and email history entry, and follow-up task for the whole team, so every device starts fresh. This cannot be undone.
         </div>
       </div>
 

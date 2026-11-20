@@ -21,8 +21,15 @@ import { fetchReplies, markRepliesSeen, isAdminUser, isReviewerUser, assignReply
 import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
 import { listRequirements } from './lib/requirements';
-import { listSharedLeads, pushSharedLeads, listActivity, pushActivity } from './lib/leads-api';
-import { listFollowups, pushFollowups } from './lib/followups';
+import {
+  listSharedLeads,
+  pushSharedLeads,
+  listActivity,
+  pushActivity,
+  clearSharedActivity,
+  deleteSharedLeads
+} from './lib/leads-api';
+import { listFollowups, pushFollowups, clearFollowups } from './lib/followups';
 import { leadKey, mergeLeadLists } from './lib/lead-key';
 import { mergeActivity } from './lib/activity-merge';
 
@@ -520,15 +527,33 @@ function Workspace() {
     localStorage.removeItem('omnisales_user');
   };
 
-  const handleClearDatabase = () => {
-    if (window.confirm('Are you sure you want to clear all leads, call logs, and follow-up tasks? This will give you a completely fresh system.')) {
+  // Leads, history and follow-ups live on the server, so a local reset alone is undone by the
+  // next poll. This removes the shared copies first and only then clears this browser.
+  const handleClearDatabase = async () => {
+    if (
+      !window.confirm(
+        'Clear every shared lead, call and email history entry, and follow-up task for the whole team?\n\nThis cannot be undone.'
+      )
+    )
+      return;
+
+    try {
+      const { leads: sharedLeads } = await listSharedLeads();
+      await Promise.all([
+        sharedLeads.length > 0 ? deleteSharedLeads(sharedLeads) : null,
+        clearSharedActivity(),
+        clearFollowups()
+      ]);
+
       setLeads([]);
       setCallLogs([]);
       setFollowups([]);
       localStorage.removeItem('omnisales_leads');
       localStorage.removeItem('omnisales_call_logs');
       localStorage.removeItem('omnisales_followups');
-      alert('Database successfully cleared! You are operating fresh.');
+      alert('The shared lead list, call history and follow-up queue were cleared for the whole team.');
+    } catch (err) {
+      alert(`The database was not cleared: ${err.message}`);
     }
   };
 

@@ -23,6 +23,10 @@ const parseActivity = async (pending) => {
 // An admin receives the whole team's history; an employee receives only their own
 export const listActivity = async () => parseActivity(fetch('/api/activity', { credentials: 'same-origin' }));
 
+// Admin only on the server: clears the shared history for every device
+export const clearSharedActivity = async () =>
+  parseActivity(fetch('/api/activity', { method: 'DELETE', credentials: 'same-origin' }));
+
 export const pushActivity = async (activity) =>
   parseActivity(
     fetch('/api/activity', {
