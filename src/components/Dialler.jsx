@@ -1895,6 +1895,11 @@ export default function Dialler({
 
               {sendPacing && (
                 <div
+                  title={
+                    sendPacing.resetsAt
+                      ? `Daily allowance resets ${new Date(sendPacing.resetsAt).toLocaleString()} (UTC day)`
+                      : undefined
+                  }
                   className={`p-3 rounded-xl border text-[11px] font-medium flex items-start gap-2 ${ 
                     sendPacing.unavailable || sendPacingBlocked
                       ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
@@ -1907,16 +1912,18 @@ export default function Dialler({
                       'Send limiter unavailable — sending is paused to protect the shared mailbox.'
                     ) : sendPacing.remaining <= 0 ? (
                       <>
-                        Daily limit reached: <strong>{sendPacing.used}</strong> of {sendPacing.limit} messages in
-                        the last 24 hours. Next send after{' '}
-                        {sendPacing.nextAllowedAt
-                          ? new Date(sendPacing.nextAllowedAt).toLocaleString()
-                          : 'the window resets'}.
+                        Daily limit reached: <strong>{sendPacing.used}</strong> of {sendPacing.limit} sent today
+                        {sendPacing.warmup?.active ? ` (warm-up day ${sendPacing.warmup.day})` : ''}. Resets{' '}
+                        {sendPacing.resetsAt
+                          ? new Date(sendPacing.resetsAt).toLocaleString()
+                          : 'at midnight UTC'}{' '}
+                        (UTC day).
                       </>
                     ) : (
                       <>
-                        <strong>{sendPacing.remaining}</strong> of {sendPacing.limit} sends left in the 24-hour
-                        window · one message every {sendPacing.minGapSeconds}s
+                        <strong>{sendPacing.used}</strong> of {sendPacing.limit} sent today
+                        {sendPacing.warmup?.active ? ` · warm-up day ${sendPacing.warmup.day}` : ''}
+                        {` · ${sendPacing.remaining} left · one message every ${sendPacing.minGapSeconds}s`}
                         {pacingWaitSeconds > 0 ? ` · next in ${pacingWaitSeconds}s` : ''}
                       </>
                     )}
