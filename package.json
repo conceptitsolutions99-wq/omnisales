@@ -8,7 +8,7 @@
     "build": "vite build",
     "start": "node server.js",
     "lint": "oxlint",
-    "test": "node --test tests/send-pacing.test.js tests/reply-attribution.test.js tests/session-invalidation.test.js tests/signin-failures.test.js",
+    "test": "node --test tests/send-pacing.test.js tests/reply-attribution.test.js tests/session-invalidation.test.js tests/signin-failures.test.js tests/signin-timeout.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
