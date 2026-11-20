@@ -10,6 +10,7 @@
 // header, which is what a "Failed to fetch" from the browser has to be matched against.
 const crypto = require('crypto');
 const { fetchReplies } = require('../lib/replies-core');
+const { resolveReply } = require('../lib/reply-attribution');
 const auth = require('../lib/auth-core');
 const sentStore = require('../lib/replies-store');
 const leadsStore = require('../lib/leads-store');
@@ -17,7 +18,6 @@ const leadsStore = require('../lib/leads-store');
 const smtpUser = process.env.GMAIL_USER || '';
 const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
 
-const normaliseId = (value = '') => String(value).replace(/[<>]/g, '').trim().toLowerCase();
 const normaliseEmail = (value = '') => String(value).trim().toLowerCase();
 
 const newRequestId = () => crypto.randomUUID().slice(0, 8);
@@ -33,36 +33,6 @@ const log = (level, requestId, event, fields = {}) => {
   });
   if (level === 'error') console.error(line);
   else console.log(line);
-};
-
-const resolveReply = (reply, sentIndex, assignments) => {
-  const override = assignments[reply.id];
-  if (override) {
-    return {
-      agent: override.name || null,
-      agentEmail: normaliseEmail(override.email) || null,
-      leadName: override.leadName || reply.leadName || '',
-      manual: true,
-      assignedBy: override.by || null
-    };
-  }
-
-  if (reply.agent) {
-    return { agent: reply.agent, agentEmail: reply.agentEmail || null, leadName: reply.leadName || '', manual: false };
-  }
-
-  const ids = (reply.messageIds || []).map(normaliseId).filter(Boolean);
-  const byMessageId = ids.length
-    ? sentIndex.find((row) => row.messageId && ids.includes(normaliseId(row.messageId)))
-    : null;
-  const original = byMessageId || sentIndex.find((row) => row.to && normaliseEmail(row.to) === normaliseEmail(reply.from));
-
-  return {
-    agent: original?.agent || null,
-    agentEmail: normaliseEmail(original?.agentEmail) || null,
-    leadName: reply.leadName || original?.leadName || '',
-    manual: false
-  };
 };
 
 const handler = async (req, res) => {
@@ -167,7 +137,7 @@ const handler = async (req, res) => {
 
     const resolved = replies.map((reply) => {
       const attribution = resolveReply(reply, sentIndex, assignments);
-      return { ...reply, ...attribution, matched: Boolean(reply.matched || attribution.agent) };
+      return { ...reply, ...attribution, matched: attribution.matched === true };
     });
 
     // The reply closes the sequence for that prospect: mark the shared lead so every device
