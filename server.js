@@ -13,6 +13,7 @@ const testMail = require('./lib/deliverability-test');
 const suppression = require('./lib/suppression-store');
 const emailLogStore = require('./lib/email-log-store');
 const sendPacing = require('./lib/send-pacing');
+const contactGuard = require('./lib/contact-guard');
 const authResults = require('./lib/auth-results');
 const unsubscribe = require('./lib/unsubscribe-page');
 const { createUnsubscribeToken } = require('./lib/unsubscribe-token');
@@ -372,7 +373,7 @@ app.post('/api/emails', async (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
 
-  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test } = req.body || {};
+  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test, confirmSharedContact } = req.body || {};
 
   // Every message carries a link naming its own recipient, so a click opts out only that address
   const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
@@ -470,6 +471,16 @@ app.post('/api/emails', async (req, res) => {
     });
   }
 
+  // Two lists can hold the same business: block a second agent before the duplicate goes out
+  const conflict = await contactGuard.findConflict({ to: String(to).trim(), leadId, sentBy: session.name });
+  if (conflict && !confirmSharedContact) {
+    return res.status(409).json({
+      error: contactGuard.messageFor(conflict),
+      conflict,
+      requiresConfirmation: true
+    });
+  }
+
   if (!transporter) {
     return res.status(503).json({
       error: `Email sending is not configured. Add GMAIL_APP_PASSWORD for ${smtpUser} to .env and restart the server.`
@@ -562,6 +573,12 @@ app.post('/api/emails', async (req, res) => {
       subject: entry.subject,
       sentAt: entry.sentAt
     });
+
+    // Ownership is recorded server-side, so every device sees whose conversation this is
+    await leadsStore
+      .claimLead({ id: entry.leadId, email: entry.to }, session)
+      .catch((err) => console.error('Could not record the lead owner:', err.message));
+
     res.json({ ok: true, email: entry, rateLimit: await sendPacing.status() });
   } catch (err) {
     // A hand-off SMTP refused never reached the mailbox, so its slot goes back
@@ -578,6 +595,18 @@ app.post('/api/emails', async (req, res) => {
 app.get('/api/emails', async (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
+
+  // Asked before composing: has another agent already written to this prospect?
+  const checkTo = String((req.query && req.query.checkTo) || '').trim();
+  const checkLeadId = (req.query && req.query.checkLeadId) || null;
+  if (checkTo || checkLeadId) {
+    const conflict = await contactGuard.findConflict({
+      to: checkTo,
+      leadId: checkLeadId,
+      sentBy: session.name
+    });
+    return res.json({ conflict });
+  }
 
   // The shared store is the history every device reads; the local file fills in a send made
   // while the store was unreachable

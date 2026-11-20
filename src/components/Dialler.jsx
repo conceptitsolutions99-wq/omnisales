@@ -259,6 +259,9 @@ export default function Dialler({
   // Reputation guard for the one shared mailbox: allowance left and the gap to the next send
   const [sendPacing, setSendPacing] = useState(null);
   const [pacingClock, setPacingClock] = useState(Date.now());
+  // A second agent writing to the same prospect: who wrote first, and how they were matched
+  const [leadContactCheck, setLeadContactCheck] = useState(null);
+  const [sendConflict, setSendConflict] = useState(null);
   // The last message written to each lead, so an earlier one can be sent again unchanged
   const [lastDrafts, setLastDrafts] = useState(readLastDrafts);
   const [resendingEmail, setResendingEmail] = useState(false);
@@ -392,6 +395,20 @@ export default function Dialler({
   const markContacted = (lead) => {
     if (!lead) return;
     markLeadContacted(setLeads, { leadId: lead.id, email: lead.email, by: currentUser.name });
+    // The first agent to reach a prospect owns it in this browser too, so it shows immediately
+    if (lead.owner) return;
+    const address = String(lead.email || '').trim().toLowerCase();
+    setLeads(prev => prev.map(item => {
+      const matchesId = String(item.id) === String(lead.id);
+      const matchesEmail = Boolean(address) && String(item.email || '').toLowerCase() === address;
+      if (!(matchesId || matchesEmail) || item.owner) return item;
+      return {
+        ...item,
+        owner: currentUser.name,
+        ownerEmail: currentUser.email || '',
+        ownedAt: new Date().toISOString()
+      };
+    }));
   };
 
   // Build a ready-to-send outreach draft from the active lead and a template
@@ -484,6 +501,33 @@ export default function Dialler({
     return () => clearInterval(timer);
   }, [sendPacing]);
 
+  // Ask the server, once the recipient is known, whether someone else already wrote to them.
+  // The send endpoint enforces the same rule; this is the warning before the draft is finished.
+  useEffect(() => {
+    const leadId = activeLead?.id ?? null;
+    const address = emailTo.trim();
+    if (!showEmailCompose || (!address && (leadId === null || leadId === undefined))) {
+      setLeadContactCheck(null);
+      return undefined;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (leadId !== null && leadId !== undefined) params.set('checkLeadId', String(leadId));
+        if (address) params.set('checkTo', address);
+        const response = await fetch(`/api/emails?${params.toString()}`);
+        if (!response.ok) return;
+        const data = await response.json().catch(() => ({}));
+        setLeadContactCheck(data.conflict || null);
+      } catch (err) {
+        /* offline: the send path still refuses a duplicate */
+      }
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [showEmailCompose, activeLead?.id, emailTo]);
+
   const pacingWaitSeconds = sendPacing?.nextAllowedAt
     ? Math.max(0, Math.ceil((new Date(sendPacing.nextAllowedAt).getTime() - pacingClock) / 1000))
     : 0;
@@ -564,13 +608,13 @@ export default function Dialler({
     fetchEmailLog();
   };
 
-  const handleSendEmail = async (e) => {
-    e.preventDefault();
+  const sendEmail = async ({ confirmSharedContact = false } = {}) => {
     if (!emailTo.trim() || emailSending || sendingRef.current) return;
 
     sendingRef.current = true;
     setEmailSending(true);
     setEmailStatus(null);
+    setSendConflict(null);
 
     try {
       const response = await fetch('/api/emails', {
@@ -584,7 +628,8 @@ export default function Dialler({
           leadId: activeLead?.id ?? null,
           leadName: activeLead?.name || '',
           company: activeLead?.company || '',
-          sentBy: currentUser.name
+          sentBy: currentUser.name,
+          confirmSharedContact
         })
       });
 
@@ -593,7 +638,15 @@ export default function Dialler({
         setSendPacing(data.rateLimit);
         setPacingClock(Date.now());
       }
-      if (!response.ok) throw new Error(data.error || `Sending failed (${response.status}).`);
+      if (!response.ok) {
+        // The server refuses a duplicate; keep who wrote first so this agent can decide
+        if (data.conflict) {
+          setSendConflict(data.conflict);
+          setEmailStatus({ type: 'warning', message: data.error });
+          return;
+        }
+        throw new Error(data.error || `Sending failed (${response.status}).`);
+      }
 
       setEmailStatus({
         type: 'success',
@@ -619,6 +672,11 @@ export default function Dialler({
       sendingRef.current = false;
       setEmailSending(false);
     }
+  };
+
+  const handleSendEmail = (e) => {
+    e.preventDefault();
+    sendEmail();
   };
 
   // Sending the same message again because the customer lost it or did not reply. The subject,
@@ -1620,12 +1678,29 @@ export default function Dialler({
               <p className="text-xs text-indigo-100 mt-0.5">
                 {activeLead?.company} · {activeLead?.country} · {activeLead?.solution}
               </p>
+              {activeLead?.owner && (
+                <p className="text-[11px] text-indigo-100/80 mt-1">
+                  Owned by {activeLead.owner}
+                  {activeLead.ownedAt ? ` since ${new Date(activeLead.ownedAt).toLocaleDateString()}` : ''}
+                </p>
+              )}
             </div>
 
             {minutesSinceLastEmail !== null && minutesSinceLastEmail <= 1440 && (
               <div className="px-6 py-2 bg-amber-400/10 border-b border-amber-400/25 text-[11px] text-amber-600 dark:text-amber-300">
                 Already emailed {minutesSinceLastEmail <= 1 ? 'less than a minute ago' : `${minutesSinceLastEmail} minutes ago`}. The
                 same subject and wording again this soon usually ends up in spam — change the subject or wait before sending.
+              </div>
+            )}
+
+            {leadContactCheck && (
+              <div className="px-6 py-2 bg-amber-400/10 border-b border-amber-400/25 text-[11px] text-amber-600 dark:text-amber-300 flex items-start gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 mt-px shrink-0" />
+                <span>
+                  <strong>{leadContactCheck.agent}</strong> already wrote to this prospect in the last{' '}
+                  {leadContactCheck.windowHours || 24} hours ({leadContactCheck.label}) — the send will need
+                  confirmation to avoid two agents on one company.
+                </span>
               </div>
             )}
 
@@ -1744,7 +1819,9 @@ export default function Dialler({
                   className={`p-3 rounded-xl border text-xs font-medium flex items-start gap-2 ${
                     emailStatus.type === 'success'
                       ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
-                      : 'border-rose-400/30 bg-rose-500/10 text-rose-300'
+                      : emailStatus.type === 'warning'
+                        ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+                        : 'border-rose-400/30 bg-rose-500/10 text-rose-300'
                   }`}
                 >
                   {emailStatus.type === 'success' ? (
@@ -1753,6 +1830,24 @@ export default function Dialler({
                     <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
                   )}
                   <span>{emailStatus.message}</span>
+                </div>
+              )}
+
+              {sendConflict && (
+                <div className="p-3 rounded-xl border border-amber-400/30 bg-amber-400/10 text-[11px] text-amber-300 space-y-2">
+                  <p>
+                    <strong>{sendConflict.agent}</strong> contacted{' '}
+                    <strong>{sendConflict.to}</strong> on{' '}
+                    {sendConflict.sentAt ? new Date(sendConflict.sentAt).toLocaleString() : 'a recent day'} — matched
+                    by {sendConflict.label}. A second message to the same company is usually a duplicate.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => sendEmail({ confirmSharedContact: true })}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-bold"
+                  >
+                    Send anyway
+                  </button>
                 </div>
               )}
 

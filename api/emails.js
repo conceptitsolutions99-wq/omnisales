@@ -9,6 +9,8 @@ const testMail = require('../lib/deliverability-test');
 const suppression = require('../lib/suppression-store');
 const emailLogStore = require('../lib/email-log-store');
 const sendPacing = require('../lib/send-pacing');
+const contactGuard = require('../lib/contact-guard');
+const leadsStore = require('../lib/leads-store');
 const authResults = require('../lib/auth-results');
 const unsubscribe = require('../lib/unsubscribe-page');
 const { createUnsubscribeToken } = require('../lib/unsubscribe-token');
@@ -106,6 +108,18 @@ module.exports = async (req, res) => {
     origin ? `${origin}/api/emails?unsubscribe=${encodeURIComponent(createUnsubscribeToken(address))}` : '';
 
   if (req.method === 'GET') {
+    // Asked before composing: has another agent already written to this prospect?
+    const checkTo = String((req.query && req.query.checkTo) || '').trim();
+    const checkLeadId = (req.query && req.query.checkLeadId) || null;
+    if (checkTo || checkLeadId) {
+      const conflict = await contactGuard.findConflict({
+        to: checkTo,
+        leadId: checkLeadId,
+        sentBy: session.name
+      });
+      return res.status(200).json({ conflict });
+    }
+
     const stored = await emailLogStore.list(100);
     return res.status(200).json({
       configured: Boolean(transporter),
@@ -125,7 +139,7 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Use GET or POST.' });
   }
 
-  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test } = req.body || {};
+  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test, confirmSharedContact } = req.body || {};
 
   // A test goes only to the admin who asked for it, through the same transport and From as a real
   // outreach email, so a delivered test proves the path that outreach actually uses
@@ -216,6 +230,17 @@ module.exports = async (req, res) => {
       suppressed: true,
       email: blocked.email,
       reason: blocked.reason || ''
+    });
+  }
+
+  // Two lists can hold the same business: block a second agent before the duplicate goes out,
+  // unless they have seen who wrote first and chosen to send anyway
+  const conflict = await contactGuard.findConflict({ to: String(to).trim(), leadId, sentBy: session.name });
+  if (conflict && !confirmSharedContact) {
+    return res.status(409).json({
+      error: contactGuard.messageFor(conflict),
+      conflict,
+      requiresConfirmation: true
     });
   }
 
@@ -313,6 +338,11 @@ module.exports = async (req, res) => {
       subject: subjectLine,
       sentAt: entry.sentAt
     });
+
+    // Ownership is recorded server-side, so every device sees whose conversation this is
+    await leadsStore
+      .claimLead({ id: entry.leadId, email: entry.to }, session)
+      .catch((err) => console.error('Could not record the lead owner:', err.message));
 
     return res.status(200).json({ ok: true, email: entry, rateLimit: await sendPacing.status() });
   } catch (err) {
