@@ -1,6 +1,7 @@
 // POST /api/auth/login — verifies credentials on the server and starts a signed session.
 const auth = require('../../lib/auth-core');
 const store = require('../../lib/user-store');
+const signinNotify = require('../../lib/signin-notify');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -35,6 +36,9 @@ module.exports = async (req, res) => {
   }
 
   auth.clearFailures(ip);
+  // The admin is told when a staff account signs in. The note is best effort: its own failures
+  // are swallowed so a mail problem can never keep someone out of the workspace.
+  await signinNotify.notifySignIn({ account, req });
   res.setHeader('Set-Cookie', auth.cookieFor(req, auth.createSession(account)));
   return res.status(200).json({
     ok: true,
