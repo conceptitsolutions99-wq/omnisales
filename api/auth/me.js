@@ -4,8 +4,12 @@ const auth = require('../../lib/auth-core');
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
-  const session = auth.getSession(req);
-  if (!session) return res.status(401).json({ error: 'Not signed in.' });
+  const session = await auth.getSession(req);
+  if (!session) {
+    // The cookie may belong to a deleted or suspended account, so it is cleared here too
+    res.setHeader('Set-Cookie', auth.cookieFor(req, '', 0));
+    return res.status(401).json({ error: 'Not signed in.' });
+  }
 
   const user = await auth.findAccount(session.email);
   if (!user || user.status === 'Suspended') {

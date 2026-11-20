@@ -98,7 +98,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   // Every outgoing message carries a link that names its own recipient, so a click opts out only

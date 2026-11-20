@@ -15,7 +15,7 @@ const PERMISSION_PRESETS = {
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return undefined;
 
   if (!auth.isAdmin(session)) {

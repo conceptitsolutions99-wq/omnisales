@@ -283,7 +283,7 @@ app.all('/api/admin/users', require('./api/admin/users'));
 // change is recorded against the employee who made it.
 app.get('/api/leads', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   const leads = await leadsStore.listLeads();
@@ -299,7 +299,7 @@ app.get('/api/leads', async (req, res) => {
 // Deleting removes a lead for the whole team, so only an admin may do it
 app.delete('/api/leads', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   if (!auth.isAdmin(session)) return res.status(403).json({ error: 'Only an admin can delete leads.' });
@@ -316,7 +316,7 @@ app.delete('/api/leads', async (req, res) => {
 // Undo of a delete: the admin puts the batch back for the whole team
 app.patch('/api/leads', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   if (!auth.isAdmin(session)) return res.status(403).json({ error: 'Only an admin can restore leads.' });
@@ -332,7 +332,7 @@ app.patch('/api/leads', async (req, res) => {
 
 app.post('/api/leads', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   const { leads } = req.body || {};
@@ -346,7 +346,7 @@ app.post('/api/leads', async (req, res) => {
 // another site's HTML, so the lookup runs here and only the addresses come back.
 app.post('/api/find-email', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   const { website } = req.body || {};
@@ -370,7 +370,7 @@ app.all('/api/emails', async (req, res, next) => {
 });
 
 app.post('/api/emails', async (req, res) => {
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   const { to, subject, body, leadId, leadName, company, sentBy, requirements, test, confirmSharedContact, confirmRepliedContact } = req.body || {};
@@ -606,7 +606,7 @@ app.post('/api/emails', async (req, res) => {
 
 // API: Delivery log (most recent first)
 app.get('/api/emails', async (req, res) => {
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   // Asked before composing: has another agent already written to this prospect?

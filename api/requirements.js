@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true, submittedAt: saved.submittedAt });
   }
 
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   // ── staff: list the forms that were sent and the answers that came back ──

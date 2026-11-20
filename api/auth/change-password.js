@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Use POST.' });
   }
 
-  const session = auth.requireSession(req, res);
+  const session = await auth.requireSession(req, res);
   if (!session) return undefined;
 
   const { currentPassword, newPassword } = req.body || {};

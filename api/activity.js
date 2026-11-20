@@ -121,7 +121,7 @@ const handleWhatsApp = async (req, res, session) => {
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
 
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
   if (String(req.query?.whatsapp || '') === '1') {

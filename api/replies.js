@@ -54,7 +54,7 @@ const handler = async (req, res) => {
     });
   };
 
-  const session = auth.requireActiveSession(req, res);
+  const session = await auth.requireActiveSession(req, res);
   if (!session) {
     done(401, 'not_signed_in', { ip: clientIp });
     return;
