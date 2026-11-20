@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { isOwnActivity } from '../lib/activity-owner';
 import {
   BarChart3,
   TrendingUp,
@@ -315,7 +316,7 @@ export default function Analytics({ leads, callLogs, currentUser }) {
   // Role-based filtering: Admin sees all data, employees see only their own
   const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
 
-  const userInteractions = isAdmin ? callLogs : callLogs.filter(log => log.caller === currentUser.name);
+  const userInteractions = isAdmin ? callLogs : callLogs.filter(log => isOwnActivity(log, currentUser));
   // Email sends live in the same history but are not calls, so keep them out of call metrics
   const userCallLogs = userInteractions.filter(log => log.channel !== 'Email');
 

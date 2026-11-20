@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { isOwnActivity } from '../lib/activity-owner';
 import {
   Users,
   PhoneCall,
@@ -173,8 +174,14 @@ export default function MainOverview({
 }) {
   const isAdmin = currentUser.role === 'Admin' || currentUser.permissions.admin;
 
-  const userCallLogs = isAdmin ? callLogs : callLogs.filter(log => log.caller === currentUser.name);
-  const userFollowups = isAdmin ? followups : followups.filter(f => f.assignedTo === currentUser.name);
+  const userCallLogs = isAdmin ? callLogs : callLogs.filter(log => isOwnActivity(log, currentUser));
+  const userFollowups = isAdmin
+    ? followups
+    : followups.filter(f =>
+        f.assignedToEmail
+          ? String(f.assignedToEmail).toLowerCase() === String(currentUser.email || '').toLowerCase()
+          : f.assignedTo === currentUser.name
+      );
 
   const userLeadIds = new Set(userCallLogs.map(log => log.leadId));
   const userLeads = isAdmin ? leads : leads.filter(l => userLeadIds.has(l.id));

@@ -15,6 +15,15 @@ const isReviewer = (session) =>
 const ownedBy = (proof, session) =>
   String(proof?.agentEmail || '').toLowerCase() === String(session?.email || '').toLowerCase();
 
+// Ownership is the account address first, so a renamed employee keeps their history; rows
+// recorded before the address was stored fall back to the display name they carry.
+const ownsActivity = (entry, session) => {
+  const owner = String(entry?.callerEmail || '').trim().toLowerCase();
+  const viewer = String(session?.email || '').trim().toLowerCase();
+  if (owner) return Boolean(viewer) && owner === viewer;
+  return String(entry?.caller || '') === String(session?.name || '');
+};
+
 const ownsFollowup = (task, session) => {
   const ownerEmail = String(task?.assignedToEmail || '').toLowerCase();
   if (ownerEmail) return ownerEmail === String(session?.email || '').toLowerCase();
@@ -126,9 +135,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     const all = await store.listActivity();
     const admin = auth.isAdmin(session);
-    const visible = admin
-      ? all
-      : all.filter((entry) => String(entry.callerEmail || '').toLowerCase() === String(session.email || '').toLowerCase());
+    const visible = admin ? all : all.filter((entry) => ownsActivity(entry, session));
     return res.status(200).json({ ok: true, count: visible.length, activity: visible, scope: admin ? 'team' : 'own' });
   }
 
@@ -144,9 +151,7 @@ module.exports = async (req, res) => {
 
   const merged = await store.addActivity(activity, { name: session.name, email: session.email });
   const admin = auth.isAdmin(session);
-  const visible = admin
-    ? merged
-    : merged.filter((entry) => String(entry.callerEmail || '').toLowerCase() === String(session.email || '').toLowerCase());
+  const visible = admin ? merged : merged.filter((entry) => ownsActivity(entry, session));
 
   return res.status(200).json({ ok: true, count: visible.length, activity: visible, scope: admin ? 'team' : 'own' });
 };

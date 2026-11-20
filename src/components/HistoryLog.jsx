@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { History, Mail, MessageSquare, PhoneCall, Send, UserCheck } from 'lucide-react';
+import { isOwnActivity } from '../lib/activity-owner';
 
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
@@ -131,7 +132,7 @@ export default function HistoryLog({ callLogs, currentUser }) {
 
   const isAdminView = currentUser.role === 'Admin' || Boolean(currentUser.permissions?.admin);
   const filteredLogs = callLogs.filter((log) => {
-    const isUserCaller = log.caller === currentUser.name;
+    const isUserCaller = isOwnActivity(log, currentUser);
     const matchesPermission = isAdminView || isUserCaller;
     const query = callHistorySearch.toLowerCase();
     const matchesSearch =
@@ -165,7 +166,7 @@ export default function HistoryLog({ callLogs, currentUser }) {
   const historyCallers = [
     ...new Set(
       callLogs
-        .filter((log) => isAdminView || log.caller === currentUser.name)
+        .filter((log) => isAdminView || isOwnActivity(log, currentUser))
         .map((log) => String(log.caller || '').trim())
         .filter(Boolean)
     )
