@@ -254,6 +254,8 @@ export default function Dialler({
   const [emailLog, setEmailLog] = useState([]);
   // Sender audit: which From path each send took, and how many took each
   const [senderFilter, setSenderFilter] = useState('All');
+  // The same audit by person: one employee's sends can be isolated from the team's
+  const [emailSenderFilter, setEmailSenderFilter] = useState('All');
   // The last message written to each lead, so an earlier one can be sent again unchanged
   const [lastDrafts, setLastDrafts] = useState(readLastDrafts);
   const [resendingEmail, setResendingEmail] = useState(false);
@@ -829,7 +831,20 @@ export default function Dialler({
     const mode = String(entry?.fromMode || '');
     return Object.prototype.hasOwnProperty.call(SENDER_MODES, mode) ? mode : 'unknown';
   };
-  const senderCounts = emailLog.reduce(
+  // Only the employees this viewer can already see, so the picker never offers a name that
+  // would then return nothing
+  const emailLogSenders = [...new Set(
+    emailLog
+      .filter((entry) => isAdminView || String(entry.sentBy || '') === currentUser.name)
+      .map((entry) => String(entry.sentBy || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
+  // The path counts follow the employee picked, so the chips describe that person's sends
+  const emailLogForEmployee =
+    emailSenderFilter === 'All'
+      ? emailLog
+      : emailLog.filter((entry) => String(entry.sentBy || '') === emailSenderFilter);
+  const senderCounts = emailLogForEmployee.reduce(
     (counts, entry) => {
       const mode = senderModeOf(entry);
       counts[mode] = (counts[mode] || 0) + 1;
@@ -838,7 +853,9 @@ export default function Dialler({
     { unknown: 0 }
   );
   const visibleEmailLog =
-    senderFilter === 'All' ? emailLog : emailLog.filter((entry) => senderModeOf(entry) === senderFilter);
+    senderFilter === 'All'
+      ? emailLogForEmployee
+      : emailLogForEmployee.filter((entry) => senderModeOf(entry) === senderFilter);
 
   return (
     <div className="space-y-6">
@@ -1349,12 +1366,27 @@ export default function Dialler({
           </div>
         )}
 
-        {/* Which From each send used, with the count, so a month of sends can be audited here */}
+        {/* Which From each send used and which employee made it, so a month of sends can be
+            audited per path and per person */}
         <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={emailSenderFilter}
+            onChange={(e) => setEmailSenderFilter(e.target.value)}
+            aria-label="Filter the delivery log by the employee who sent the email"
+            title="Show only the sends one employee made"
+            className="py-1.5 px-3 glass-input rounded-lg text-[11px] font-semibold dark:text-white"
+          >
+            <option value="All">Everyone</option>
+            {emailLogSenders.map((sender) => (
+              <option key={sender} value={sender}>
+                {sender}
+              </option>
+            ))}
+          </select>
           {[{ key: 'All', label: 'All sends' }, ...Object.entries(SENDER_MODES).map(([key, mode]) => ({ key, label: mode.label }))]
             .concat(senderCounts.unknown > 0 ? [{ key: 'unknown', label: 'Sender not recorded' }] : [])
             .map((chip) => {
-              const count = chip.key === 'All' ? emailLog.length : senderCounts[chip.key] || 0;
+              const count = chip.key === 'All' ? emailLogForEmployee.length : senderCounts[chip.key] || 0;
               const isActive = senderFilter === chip.key;
               return (
                 <button
@@ -1382,9 +1414,13 @@ export default function Dialler({
                 </button>
               );
             })}
-          {senderFilter !== 'All' && (
+          {(senderFilter !== 'All' || emailSenderFilter !== 'All') && (
             <button
-              onClick={() => setSenderFilter('All')}
+              onClick={() => {
+                setSenderFilter('All');
+                setEmailSenderFilter('All');
+              }}
+              title="Clear the sender path and employee filters"
               className="px-2.5 py-1.5 rounded-lg glass-soft text-[11px] font-semibold text-muted hover:text-[var(--text-primary)]"
             >
               Clear
@@ -1410,7 +1446,9 @@ export default function Dialler({
                   <td colSpan="6" className="text-center py-8 text-muted">
                     {emailLog.length === 0
                       ? 'No emails sent yet. Compose one from the Email Prospect channel above.'
-                      : 'No sends used that sender. Choose another filter or clear it.'}
+                      : emailSenderFilter !== 'All'
+                        ? `No sends by ${emailSenderFilter} match these filters. Choose another employee or clear it.`
+                        : 'No sends used that sender. Choose another filter or clear it.'}
                   </td>
                 </tr>
               ) : (
