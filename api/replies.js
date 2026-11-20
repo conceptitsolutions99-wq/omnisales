@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const { fetchReplies } = require('../lib/replies-core');
 const auth = require('../lib/auth-core');
 const sentStore = require('../lib/replies-store');
+const leadsStore = require('../lib/leads-store');
 
 const smtpUser = process.env.GMAIL_USER || '';
 const smtpPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
@@ -169,6 +170,15 @@ const handler = async (req, res) => {
       return { ...reply, ...attribution, matched: Boolean(reply.matched || attribution.agent) };
     });
 
+    // The reply closes the sequence for that prospect: mark the shared lead so every device
+    // can stop offering it as a follow-up, and return the changed rows to this caller
+    const repliedLeads = await leadsStore
+      .markReplied(resolved)
+      .catch((err) => {
+        log('error', requestId, 'reply_status_failed', { message: err.message });
+        return [];
+      });
+
     // The session decides what is visible - never the query string
     const visible = auth.isReviewer(session)
       ? resolved
@@ -192,6 +202,7 @@ const handler = async (req, res) => {
       ok: true,
       count: visible.length,
       replies: visible,
+      leads: repliedLeads,
       storage: sentStore.configured() ? 'persistent' : 'memory',
       requestId
     });

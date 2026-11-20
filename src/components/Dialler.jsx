@@ -262,6 +262,9 @@ export default function Dialler({
   // A second agent writing to the same prospect: who wrote first, and how they were matched
   const [leadContactCheck, setLeadContactCheck] = useState(null);
   const [sendConflict, setSendConflict] = useState(null);
+  // A prospect who answered: the server pauses outreach until the agent confirms a reply
+  const [leadReplyCheck, setLeadReplyCheck] = useState(null);
+  const [replyBlock, setReplyBlock] = useState(null);
   // The last message written to each lead, so an earlier one can be sent again unchanged
   const [lastDrafts, setLastDrafts] = useState(readLastDrafts);
   const [resendingEmail, setResendingEmail] = useState(false);
@@ -508,6 +511,7 @@ export default function Dialler({
     const address = emailTo.trim();
     if (!showEmailCompose || (!address && (leadId === null || leadId === undefined))) {
       setLeadContactCheck(null);
+      setLeadReplyCheck(null);
       return undefined;
     }
 
@@ -520,6 +524,7 @@ export default function Dialler({
         if (!response.ok) return;
         const data = await response.json().catch(() => ({}));
         setLeadContactCheck(data.conflict || null);
+        setLeadReplyCheck(data.replied || null);
       } catch (err) {
         /* offline: the send path still refuses a duplicate */
       }
@@ -608,13 +613,14 @@ export default function Dialler({
     fetchEmailLog();
   };
 
-  const sendEmail = async ({ confirmSharedContact = false } = {}) => {
+  const sendEmail = async ({ confirmSharedContact = false, confirmRepliedContact = false } = {}) => {
     if (!emailTo.trim() || emailSending || sendingRef.current) return;
 
     sendingRef.current = true;
     setEmailSending(true);
     setEmailStatus(null);
     setSendConflict(null);
+    setReplyBlock(null);
 
     try {
       const response = await fetch('/api/emails', {
@@ -629,7 +635,8 @@ export default function Dialler({
           leadName: activeLead?.name || '',
           company: activeLead?.company || '',
           sentBy: currentUser.name,
-          confirmSharedContact
+          confirmSharedContact,
+          confirmRepliedContact
         })
       });
 
@@ -640,6 +647,11 @@ export default function Dialler({
       }
       if (!response.ok) {
         // The server refuses a duplicate; keep who wrote first so this agent can decide
+        if (data.replied) {
+          setReplyBlock(data.replied);
+          setEmailStatus({ type: 'warning', message: data.error });
+          return;
+        }
         if (data.conflict) {
           setSendConflict(data.conflict);
           setEmailStatus({ type: 'warning', message: data.error });
@@ -1693,6 +1705,18 @@ export default function Dialler({
               </div>
             )}
 
+            {leadReplyCheck && (
+              <div className="px-6 py-2 bg-emerald-400/10 border-b border-emerald-400/25 text-[11px] text-emerald-600 dark:text-emerald-300 flex items-start gap-1.5">
+                <Mail className="w-3.5 h-3.5 mt-px shrink-0" />
+                <span>
+                  <strong>{leadReplyCheck.from || 'This prospect'}</strong> replied
+                  {leadReplyCheck.repliedAt ? ` on ${new Date(leadReplyCheck.repliedAt).toLocaleString()}` : ''}
+                  {leadReplyCheck.subject ? ` about "${leadReplyCheck.subject}"` : ''} — outreach is paused until you
+                  answer them. Sending again needs confirmation.
+                </span>
+              </div>
+            )}
+
             {leadContactCheck && (
               <div className="px-6 py-2 bg-amber-400/10 border-b border-amber-400/25 text-[11px] text-amber-600 dark:text-amber-300 flex items-start gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 mt-px shrink-0" />
@@ -1845,6 +1869,24 @@ export default function Dialler({
                     type="button"
                     onClick={() => sendEmail({ confirmSharedContact: true })}
                     className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-bold"
+                  >
+                    Send anyway
+                  </button>
+                </div>
+              )}
+
+              {replyBlock && (
+                <div className="p-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-[11px] text-emerald-300 space-y-2">
+                  <p>
+                    <strong>{replyBlock.from || 'This prospect'}</strong> replied on{' '}
+                    {replyBlock.repliedAt ? new Date(replyBlock.repliedAt).toLocaleString() : 'a recent day'}
+                    {replyBlock.subject ? ` about "${replyBlock.subject}"` : ''}. Sending now continues outreach after
+                    they answered.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => sendEmail({ confirmRepliedContact: true })}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-[11px] font-bold"
                   >
                     Send anyway
                   </button>

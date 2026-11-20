@@ -524,6 +524,8 @@ export default function LeadsGenerator({
     switch (status) {
       case 'Deal Completed':
         return <span className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-full text-xs font-semibold flex items-center w-max"><CheckCircle className="w-3 h-3 mr-1" /> Deal Completed</span>;
+      case 'Replied':
+        return <span className="px-2.5 py-1 bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 rounded-full text-xs font-semibold flex items-center w-max"><MessageCircle className="w-3 h-3 mr-1" /> Replied</span>;
       case 'Considering':
         return <span className="px-2.5 py-1 bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 rounded-full text-xs font-semibold flex items-center w-max"><Clock className="w-3 h-3 mr-1" /> Considering</span>;
       case 'Qualified':

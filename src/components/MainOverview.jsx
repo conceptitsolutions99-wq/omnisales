@@ -191,7 +191,7 @@ export default function MainOverview({
   const callSeries = days.map(day => userCallLogs.filter(log => (log.timestamp || '').startsWith(day)).length);
   const leadSeries = days.map(day => userLeads.filter(lead => lead.createdAt === day).length);
 
-  const pipelineStages = ['New', 'Contacted', 'Qualified', 'Considering', 'Deal Completed', 'Denied'].map(status => ({
+  const pipelineStages = ['New', 'Contacted', 'Replied', 'Qualified', 'Considering', 'Deal Completed', 'Denied'].map(status => ({
     status,
     count: userLeads.filter(lead => lead.status === status).length,
   }));

@@ -41,6 +41,8 @@ export async function fetchReplies(currentUser) {
 
   return {
     replies: replies.map((reply) => ({ ...reply, unread: !seen.has(reply.id) })),
+    // Leads the server moved to Replied because of these replies, so the list updates at once
+    leads: Array.isArray(data.leads) ? data.leads : [],
     storage: data.storage === 'memory' ? 'memory' : 'persistent'
   };
 }

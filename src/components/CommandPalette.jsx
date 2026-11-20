@@ -27,6 +27,7 @@ const TAB_ITEMS = [
 const BADGE_TONE = {
   New: 'bg-sky-400/15 text-sky-300 border-sky-400/25',
   Contacted: 'bg-amber-400/15 text-amber-300 border-amber-400/25',
+  Replied: 'bg-teal-400/15 text-teal-300 border-teal-400/25',
   Qualified: 'bg-indigo-400/15 text-indigo-300 border-indigo-400/25',
   Considering: 'bg-violet-400/15 text-violet-300 border-violet-400/25',
   'Deal Completed': 'bg-emerald-400/15 text-emerald-300 border-emerald-400/25',

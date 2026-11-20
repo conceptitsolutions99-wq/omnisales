@@ -112,12 +112,11 @@ module.exports = async (req, res) => {
     const checkTo = String((req.query && req.query.checkTo) || '').trim();
     const checkLeadId = (req.query && req.query.checkLeadId) || null;
     if (checkTo || checkLeadId) {
-      const conflict = await contactGuard.findConflict({
-        to: checkTo,
-        leadId: checkLeadId,
-        sentBy: session.name
-      });
-      return res.status(200).json({ conflict });
+      const [conflict, replied] = await Promise.all([
+        contactGuard.findConflict({ to: checkTo, leadId: checkLeadId, sentBy: session.name }),
+        contactGuard.findUnansweredReply({ to: checkTo, leadId: checkLeadId })
+      ]);
+      return res.status(200).json({ conflict, replied });
     }
 
     const stored = await emailLogStore.list(100);
@@ -139,7 +138,7 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Use GET or POST.' });
   }
 
-  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test, confirmSharedContact } = req.body || {};
+  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test, confirmSharedContact, confirmRepliedContact } = req.body || {};
 
   // A test goes only to the admin who asked for it, through the same transport and From as a real
   // outreach email, so a delivered test proves the path that outreach actually uses
@@ -230,6 +229,17 @@ module.exports = async (req, res) => {
       suppressed: true,
       email: blocked.email,
       reason: blocked.reason || ''
+    });
+  }
+
+  // A prospect who answered is not a follow-up target: refuse until the agent confirms that
+  // this message is a deliberate reply to them, not the next step of the sequence
+  const replied = await contactGuard.findUnansweredReply({ to: String(to).trim(), leadId });
+  if (replied && !confirmRepliedContact) {
+    return res.status(409).json({
+      error: contactGuard.replyMessageFor(replied),
+      replied,
+      requiresConfirmation: true
     });
   }
 

@@ -2,7 +2,7 @@
 // server (lib/leads-store.js): a lead is one business, whichever provider found it.
 
 export const statusRank = (status) =>
-  ({ New: 0, Contacted: 1, Considering: 2, Qualified: 3, 'Deal Completed': 4, Denied: 4 }[status] ?? 1);
+  ({ New: 0, Contacted: 1, Replied: 2, Considering: 2, Qualified: 3, 'Deal Completed': 4, Denied: 4 }[status] ?? 1);
 
 export const leadKey = (lead) => {
   const digits = String(lead?.phone || '').replace(/\D/g, '');

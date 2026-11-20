@@ -103,6 +103,7 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
             <option value="All">All Statuses</option>
             <option value="Pending Transfer">Pending Transfer</option>
             <option value="Scheduled">Scheduled</option>
+            <option value="Cancelled">Cancelled (prospect replied)</option>
             <option value="Completed">Completed</option>
           </select>
         </div>
@@ -129,6 +130,7 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
                   <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
                     item.status === 'Pending Transfer' ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300' :
                     item.status === 'Completed' ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300' :
+                    item.status === 'Cancelled' ? 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300' :
                     'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
                   }`}>
                     {item.status}
@@ -174,6 +176,7 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
                 >
                   <option value="Pending Transfer">Pending Transfer</option>
                   <option value="Scheduled">Scheduled</option>
+                  <option value="Cancelled">Cancelled — prospect replied</option>
                   <option value="Completed">Completed Transfer / Task</option>
                 </select>
               </div>

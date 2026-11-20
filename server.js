@@ -373,7 +373,7 @@ app.post('/api/emails', async (req, res) => {
   const session = auth.requireActiveSession(req, res);
   if (!session) return;
 
-  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test, confirmSharedContact } = req.body || {};
+  const { to, subject, body, leadId, leadName, company, sentBy, requirements, test, confirmSharedContact, confirmRepliedContact } = req.body || {};
 
   // Every message carries a link naming its own recipient, so a click opts out only that address
   const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
@@ -468,6 +468,16 @@ app.post('/api/emails', async (req, res) => {
       suppressed: true,
       email: blocked.email,
       reason: blocked.reason || ''
+    });
+  }
+
+  // A prospect who answered is not a follow-up target: refuse until this send is confirmed
+  const replied = await contactGuard.findUnansweredReply({ to: String(to).trim(), leadId });
+  if (replied && !confirmRepliedContact) {
+    return res.status(409).json({
+      error: contactGuard.replyMessageFor(replied),
+      replied,
+      requiresConfirmation: true
     });
   }
 
@@ -600,12 +610,11 @@ app.get('/api/emails', async (req, res) => {
   const checkTo = String((req.query && req.query.checkTo) || '').trim();
   const checkLeadId = (req.query && req.query.checkLeadId) || null;
   if (checkTo || checkLeadId) {
-    const conflict = await contactGuard.findConflict({
-      to: checkTo,
-      leadId: checkLeadId,
-      sentBy: session.name
-    });
-    return res.json({ conflict });
+    const [conflict, replied] = await Promise.all([
+      contactGuard.findConflict({ to: checkTo, leadId: checkLeadId, sentBy: session.name }),
+      contactGuard.findUnansweredReply({ to: checkTo, leadId: checkLeadId })
+    ]);
+    return res.json({ conflict, replied });
   }
 
   // The shared store is the history every device reads; the local file fills in a send made

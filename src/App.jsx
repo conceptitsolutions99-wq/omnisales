@@ -321,12 +321,14 @@ function Workspace() {
       const loaded = await fetchReplies(user);
       setReplies(loaded.replies);
       setRepliesStorage(loaded.storage);
+      // A reply moves its lead to Replied on the server; adopt it without waiting for a push
+      if (loaded.leads.length > 0) applySharedLeads(loaded.leads);
     } catch (err) {
       setRepliesError(err.message === 'Failed to fetch' ? 'Cannot reach the mail service.' : err.message);
     } finally {
       setRepliesLoading(false);
     }
-  }, []);
+  }, [applySharedLeads]);
 
   // Admins need the roster to hand a reply to a specific employee
   const [staff, setStaff] = useState([]);
@@ -405,6 +407,29 @@ function Workspace() {
   useEffect(() => {
     localStorage.setItem('omnisales_followups', JSON.stringify(followups));
   }, [followups]);
+
+  // A prospect who answered is no longer a follow-up target. The task queue lives in this
+  // browser, so it is cancelled here as soon as the shared lead says it has a reply.
+  useEffect(() => {
+    const replied = leads.filter(lead => lead.repliedAt);
+    if (replied.length === 0) return;
+    const repliedIds = new Set(replied.map(lead => String(lead.id)));
+    setFollowups(prev => {
+      let changed = false;
+      const next = prev.map(task => {
+        if (!task || task.status === 'Completed' || task.status === 'Cancelled') return task;
+        if (!repliedIds.has(String(task.leadId))) return task;
+        changed = true;
+        return {
+          ...task,
+          status: 'Cancelled',
+          cancelledAt: new Date().toISOString(),
+          cancelledReason: 'Prospect replied'
+        };
+      });
+      return changed ? next : prev;
+    });
+  }, [leads]);
 
   // Dark mode class toggle & persistence
   useEffect(() => {
