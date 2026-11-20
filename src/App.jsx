@@ -8,6 +8,7 @@ import LeadsGenerator from './components/LeadsGenerator';
 import Dialler from './components/Dialler';
 import Analytics from './components/Analytics';
 import FollowUps from './components/FollowUps';
+import HistoryLog from './components/HistoryLog';
 import AdminDashboard from './components/AdminDashboard';
 import CommandPalette from './components/CommandPalette';
 import RepliesPanel from './components/RepliesPanel';
@@ -626,6 +627,13 @@ function Workspace() {
               followups={followups}
               setFollowups={setFollowups}
               selectedLeadForCall={selectedLeadForCall}
+              currentUser={currentUser}
+            />
+          )}
+
+          {activeTab === 'history' && (
+            <HistoryLog
+              callLogs={callLogs}
               currentUser={currentUser}
             />
           )}
