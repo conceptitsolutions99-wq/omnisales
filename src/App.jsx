@@ -213,20 +213,28 @@ function Workspace() {
     (async () => {
       try {
         let shared = await listFollowups();
-        // The queue used to live in this browser only: upload that copy once, when the shared
-        // queue is still empty, so nobody loses tasks they already scheduled.
-        if (shared.length === 0) {
-          let cached = [];
-          try {
-            const parsed = JSON.parse(localStorage.getItem('omnisales_followups') || '[]');
-            cached = Array.isArray(parsed) ? parsed : [];
-          } catch (err) {
-            cached = [];
+        // The queue used to live in this browser only. Upload the tasks the shared queue does
+        // not have yet, even when teammates already have entries: the id is the merge key, so a
+        // task the server already knows keeps its newer state.
+        let cached = [];
+        try {
+          const parsed = JSON.parse(localStorage.getItem('omnisales_followups') || '[]');
+          cached = Array.isArray(parsed) ? parsed : [];
+        } catch (err) {
+          cached = [];
+        }
+        if (cached.length > 0) {
+          const sharedIds = new Set(shared.map(task => String(task.id)));
+          const cachedById = new Map();
+          for (const task of cached) {
+            if (!task || task.id === undefined || task.id === null || String(task.id).trim() === '') continue;
+            cachedById.set(String(task.id), task);
           }
-          if (cached.length > 0) {
-            shared = await pushFollowups(cached);
-            localStorage.removeItem('omnisales_followups');
-          }
+          const missing = [...cachedById.values()].filter(task => !sharedIds.has(String(task.id)));
+          if (missing.length > 0) shared = await pushFollowups(missing);
+          // Only forget the cache once the merge reached the server; a failure leaves it for
+          // the next sign-in instead of losing the tasks
+          localStorage.removeItem('omnisales_followups');
         }
         if (!cancelled) seedFollowups(shared);
       } catch (err) {
