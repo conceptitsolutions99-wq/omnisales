@@ -9,6 +9,7 @@ const testMail = require('../lib/deliverability-test');
 const suppression = require('../lib/suppression-store');
 const emailLogStore = require('../lib/email-log-store');
 const notifyStatus = require('../lib/signin-notify-status');
+const deliveryResult = require('../lib/delivery-result');
 const sendPacing = require('../lib/send-pacing');
 const contactGuard = require('../lib/contact-guard');
 const leadsStore = require('../lib/leads-store');
@@ -231,8 +232,7 @@ module.exports = async (req, res) => {
         accepted: result.accepted,
         rejected: result.rejected,
         authentication,
-        logged: delivery.logged,
-        logError: delivery.error
+        ...deliveryResult.report(delivery)
       });
     } catch (err) {
       entry.status = 'failed';
@@ -244,8 +244,7 @@ module.exports = async (req, res) => {
         email: entry,
         from: SENDER.from,
         fromMode: SENDER.mode,
-        logged: delivery.logged,
-        logError: delivery.error
+        ...deliveryResult.report(delivery)
       });
     }
   }
@@ -394,8 +393,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({
       ok: true,
       email: entry,
-      logged: delivery.logged,
-      logError: delivery.error,
+      ...deliveryResult.report(delivery),
       rateLimit: await sendPacing.status()
     });
   } catch (err) {
@@ -408,8 +406,7 @@ module.exports = async (req, res) => {
     return res.status(502).json({
       error: entry.error,
       email: entry,
-      logged: delivery.logged,
-      logError: delivery.error
+      ...deliveryResult.report(delivery)
     });
   }
 };

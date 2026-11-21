@@ -29,6 +29,14 @@ const marketLine = (lead) =>
   /egypt/i.test(String(lead?.country || '')) ? 'Egypt' : 'Canada and the USA';
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
+// Both send paths report the same two log copies; this is the one place that decides what the
+// agent is told when either copy could not be written
+const deliveryLogWarning = (data) => {
+  if (data?.logged === false) return 'the delivery log entry could not be saved';
+  if (data?.localLogged === false) return 'the server could not write its local copy of the delivery log';
+  return '';
+};
+
 // What was actually written to each lead last. A resend must be the same message, not a fresh
 // draft the agent has to rebuild, and the server keeps no copy of a body after it sends it.
 const LAST_DRAFT_KEY = 'cit_last_email_drafts';
@@ -547,17 +555,12 @@ export default function Dialler({
 
       // The message left, but a delivery-log copy may be missing: say which one, instead of
       // letting the agent assume the history is complete
-      const logProblem =
-        data.logged === false
-          ? ' · the delivery log entry could not be saved'
-          : data.localLogged === false
-            ? ' · the server could not write its local copy of the delivery log'
-            : '';
+      const logProblem = deliveryLogWarning(data);
       setEmailStatus({
-        type: data.logged === false || data.localLogged === false ? 'warning' : 'success',
+        type: logProblem ? 'warning' : 'success',
         message: `Email sent to ${emailTo.trim()}${data.email?.providerId ? ` · id ${data.email.providerId}` : ''}${
           data.email?.requirementsUrl ? ' · requirements form attached' : ''
-        }${logProblem}`
+        }${logProblem ? ` · ${logProblem}` : ''}`
       });
 
       recordEmailSend(data, { to: emailTo.trim(), subject: emailSubject, lead: activeLead });
@@ -621,16 +624,11 @@ export default function Dialler({
         lead: activeLead
       });
       setLastDrafts(rememberLastDraft(activeLead, activeLastDraft));
-      setResendStatus(
-        data.logged === false
-          ? { type: 'warning', message: `Sent again to ${activeLastDraft.to}, but the delivery log entry could not be saved.` }
-          : data.localLogged === false
-            ? {
-                type: 'warning',
-                message: `Sent again to ${activeLastDraft.to}, but the server could not write its local copy of the delivery log.`
-              }
-            : { type: 'success', message: `Sent again to ${activeLastDraft.to}.` }
-      );
+      const logProblem = deliveryLogWarning(data);
+      setResendStatus({
+        type: logProblem ? 'warning' : 'success',
+        message: `Sent again to ${activeLastDraft.to}${logProblem ? `, but ${logProblem}` : ''}.`
+      });
     } catch (err) {
       setResendStatus({
         type: 'error',

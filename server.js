@@ -13,6 +13,7 @@ const testMail = require('./lib/deliverability-test');
 const suppression = require('./lib/suppression-store');
 const emailLogStore = require('./lib/email-log-store');
 const notifyStatus = require('./lib/signin-notify-status');
+const deliveryResult = require('./lib/delivery-result');
 const sendPacing = require('./lib/send-pacing');
 const contactGuard = require('./lib/contact-guard');
 const authResults = require('./lib/auth-results');
@@ -247,21 +248,25 @@ const writeEmailLog = (entries) => {
 // between devices and survives a restart. Both writes are reported: a delivery one of them could
 // not record is not a delivery the caller may be told was recorded.
 const persistEmailEntry = async (entry) => {
+  // Both copies are always attempted: one failing must not stop the other, and each reports
+  // itself in the result the send returns
+  let localLogged = true;
   let localError = null;
   try {
     writeEmailLog([entry, ...readEmailLog()]);
   } catch (err) {
+    localLogged = false;
     localError = err.message || 'The local file could not be written.';
     console.error(`Could not write the local email log (${entry.id}):`, localError);
   }
 
   try {
     await emailLogStore.record(entry);
-    return { logged: true, error: null, localLogged: !localError, localError };
+    return deliveryResult.report({ logged: true, localLogged, localError });
   } catch (err) {
     // The message already left: keep the send, but say the shared history is missing its row
     console.error(`Could not share the delivery (${entry.id}):`, err.message);
-    return { logged: false, error: err.message, localLogged: !localError, localError };
+    return deliveryResult.report({ logged: false, error: err.message, localLogged, localError });
   }
 };
 
@@ -448,10 +453,7 @@ app.post('/api/emails', async (req, res) => {
         accepted: result.accepted,
         rejected: result.rejected,
         authentication,
-        logged: delivery.logged,
-        logError: delivery.error,
-        localLogged: delivery.localLogged,
-        localError: delivery.localError
+        ...delivery
       });
     } catch (err) {
       entry.status = 'failed';
@@ -463,10 +465,7 @@ app.post('/api/emails', async (req, res) => {
         email: entry,
         from: SENDER.from,
         fromMode: SENDER.mode,
-        logged: delivery.logged,
-        logError: delivery.error,
-        localLogged: delivery.localLogged,
-        localError: delivery.localError
+        ...delivery
       });
     }
   }
@@ -611,10 +610,7 @@ app.post('/api/emails', async (req, res) => {
     res.json({
       ok: true,
       email: entry,
-      logged: delivery.logged,
-      logError: delivery.error,
-      localLogged: delivery.localLogged,
-      localError: delivery.localError,
+      ...delivery,
       rateLimit: await sendPacing.status()
     });
   } catch (err) {
@@ -627,10 +623,7 @@ app.post('/api/emails', async (req, res) => {
     res.status(502).json({
       error: entry.error,
       email: entry,
-      logged: delivery.logged,
-      logError: delivery.error,
-      localLogged: delivery.localLogged,
-      localError: delivery.localError
+      ...delivery
     });
   }
 });
