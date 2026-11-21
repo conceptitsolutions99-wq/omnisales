@@ -30,7 +30,10 @@ module.exports = async (req, res) => {
 
   const account = await auth.resolveAccount(email);
   const suspended = Boolean(account) && account.status === 'Suspended';
-  const passwordOk = Boolean(account) && !suspended && store.verifyPassword(password, account.passwordHash);
+  // The password is still checked for a suspended account: a correct one proves the credential
+  // was never revoked, which is exactly what the admin needs to hear about
+  const passwordMatches = Boolean(account) && store.verifyPassword(password, account.passwordHash);
+  const passwordOk = passwordMatches && !suspended;
 
   // Same answer for an unknown account and a wrong password
   if (!account || suspended || !passwordOk) {
@@ -50,6 +53,12 @@ module.exports = async (req, res) => {
         first: throttle.first,
         req
       });
+    }
+
+    // A suspended account signing in with its real password means a former employee (or whoever
+    // holds their credential) can keep trying; the suspension refuses entry, not the password
+    if (suspended && passwordMatches) {
+      await signinNotify.notifySuspendedSignIn({ account, ip, at: Date.now(), req });
     }
 
     // A run of wrong passwords for a real account is what the admin hears about. Unknown
