@@ -1,5 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, RefreshCw, CheckCircle2, XCircle, Settings, Mail, MailOpen, MapPin, Bell } from 'lucide-react';
+import {
+  X,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  Settings,
+  Mail,
+  MailOpen,
+  MapPin,
+  Bell,
+  Gauge,
+  ShieldAlert,
+  UserX
+} from 'lucide-react';
 import { hasGeoapifyKey } from '../lib/leads';
 
 const IDLE = { state: 'loading', detail: '' };
@@ -12,6 +25,43 @@ const NOTIFY_REASONS = {
   failed: 'the mail server refused it',
   unknown: 'the reason was not recorded'
 };
+
+// One row per kind of admin note: each is sent separately, so each can fail on its own while the
+// others keep working. The endpoint reports the latest outcome of every kind it knows about.
+const NOTIFY_TYPES = [
+  {
+    type: 'signin',
+    icon: Bell,
+    title: 'Staff sign-in notes',
+    description: 'Sent when a staff account signs in.',
+    waiting: 'No staff sign-in has been recorded yet.',
+    fix: 'Check SIGNIN_NOTIFY_EMAIL (or ADMIN_EMAIL) and that the Gmail app password is still valid, then sign in as a staff account.'
+  },
+  {
+    type: 'failed',
+    icon: ShieldAlert,
+    title: 'Failed sign-in alerts',
+    description: 'Sent after several wrong passwords in a row for one account.',
+    waiting: 'No failed sign-in alert has been triggered yet.',
+    fix: 'Uses the same mail settings as the sign-in note: check the app password, then enter wrong passwords for one account to test.'
+  },
+  {
+    type: 'throttle',
+    icon: Gauge,
+    title: 'Sign-in throttle alerts',
+    description: 'Sent when one IP address fails repeatedly across accounts.',
+    waiting: 'No throttle alert has been triggered yet.',
+    fix: 'Uses the same mail settings as the sign-in note: check the app password and the recipient address.'
+  },
+  {
+    type: 'suspended',
+    icon: UserX,
+    title: 'Suspended account alerts',
+    description: 'Sent when a suspended account tries its real password.',
+    waiting: 'No suspended account has tried to sign in yet.',
+    fix: 'Uses the same mail settings as the sign-in note: check the app password and the recipient address.'
+  }
+];
 
 const StatusPill = ({ state }) => {
   if (state === 'ok') {
@@ -68,10 +118,10 @@ const Row = ({ icon: Icon, title, description, status, fix }) => (
 export default function SetupChecklist({ open, onClose }) {
   const [emailStatus, setEmailStatus] = useState(IDLE);
   const [replyStatus, setReplyStatus] = useState(IDLE);
-  // The endpoint only reports this for an admin, and reports null before any note has been
-  // attempted: presence is what decides whether the row shows, not a truthy record
+  // The endpoint only reports this for an admin, and reports an empty map before any note has
+  // been attempted: presence is what decides whether the rows show, not a truthy record
   const [notifyVisible, setNotifyVisible] = useState(false);
-  const [notifyStatus, setNotifyStatus] = useState(null);
+  const [notifyStatuses, setNotifyStatuses] = useState({});
   const [checking, setChecking] = useState(false);
 
   const check = useCallback(async () => {
@@ -88,8 +138,8 @@ export default function SetupChecklist({ open, onClose }) {
           ? { state: 'ok', detail: `Sending as ${data.sender || data.from || 'the configured account'}` }
           : { state: 'missing', detail: 'The endpoint answered, but no mail credentials were found.' }
       );
-      setNotifyVisible(data.signinNotify !== undefined);
-      setNotifyStatus(data.signinNotify ?? null);
+      setNotifyVisible(data.notifyStatus !== undefined);
+      setNotifyStatuses(data.notifyStatus ?? {});
     } catch (err) {
       setEmailStatus({
         state: 'missing',
@@ -121,29 +171,20 @@ export default function SetupChecklist({ open, onClose }) {
 
   if (!open) return null;
 
-  const notifyRow = (() => {
-    if (!notifyStatus || !notifyStatus.at) {
-      return {
-        state: 'waiting',
-        detail: 'No sign-in note has been attempted yet. The next staff sign-in will be recorded here.'
-      };
+  const notifyStatusFor = (type, waiting) => {
+    const last = notifyStatuses ? notifyStatuses[type] : null;
+    if (!last || !last.at) return { state: 'waiting', detail: waiting };
+
+    const when = new Date(last.at).toLocaleString();
+    if (last.sent) {
+      return { state: 'ok', detail: `Last note sent ${when} to ${last.to || 'the admin address'}.` };
     }
-    const when = new Date(notifyStatus.at).toLocaleString();
-    if (notifyStatus.sent) {
-      return {
-        state: 'ok',
-        detail: `Last note sent ${when} to ${notifyStatus.to || 'the admin address'}.`
-      };
-    }
-    const reason =
-      NOTIFY_REASONS[notifyStatus.reason] || notifyStatus.reason || 'the reason was not recorded';
+    const reason = NOTIFY_REASONS[last.reason] || last.reason || 'the reason was not recorded';
     return {
       state: 'missing',
-      detail: `Last note was not sent (${when}): ${reason}${
-        notifyStatus.error ? ` — ${notifyStatus.error}` : ''
-      }.`
+      detail: `Last note was not sent (${when}): ${reason}${last.error ? ` — ${last.error}` : ''}.`
     };
-  })();
+  };
 
   const geoapifyStatus = hasGeoapifyKey
     ? { state: 'ok', detail: 'Fallback key is present in this build.' }
@@ -206,15 +247,17 @@ export default function SetupChecklist({ open, onClose }) {
             fix="Reply tracking reuses the same Gmail credentials — fix email sending first."
           />
 
-          {notifyVisible && (
-            <Row
-              icon={Bell}
-              title="Sign-in notifications"
-              description="The admin note sent when a staff account signs in."
-              status={notifyRow}
-              fix="Check SIGNIN_NOTIFY_EMAIL (or ADMIN_EMAIL) and that the Gmail app password is still valid, then sign in as a staff account to test."
-            />
-          )}
+          {notifyVisible &&
+            NOTIFY_TYPES.map(({ type, icon, title, description, waiting, fix }) => (
+              <Row
+                key={type}
+                icon={icon}
+                title={title}
+                description={description}
+                status={notifyStatusFor(type, waiting)}
+                fix={fix}
+              />
+            ))}
         </div>
 
         <div className="px-5 py-3 border-t border-white/10 text-[11px] text-muted">

@@ -667,7 +667,7 @@ app.get('/api/emails', async (req, res) => {
     rateLimit: await sendPacing.status(),
     emails: mergeEmailLogs(stored, readEmailLog()).filter(canSee).slice(0, 100),
     // Same admin-only fact the deployed function returns, so local checks match production
-    ...(auth.isAdmin(session) ? { signinNotify: await notifyStatus.read() } : {})
+    ...(auth.isAdmin(session) ? { notifyStatus: await notifyStatus.readAll() } : {})
   });
 });
 

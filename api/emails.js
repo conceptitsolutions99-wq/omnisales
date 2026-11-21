@@ -158,9 +158,9 @@ module.exports = async (req, res) => {
       // The remaining allowance travels with the log: the compose card reads it before sending
       rateLimit: await sendPacing.status(),
       emails,
-      // Admins also see whether the last sign-in note reached anyone. This is an admin panel
+      // Admins also see whether the last note of each kind reached anyone. This is an admin panel
       // fact, so it is not put on the response an agent gets.
-      ...(auth.isAdmin(session) ? { signinNotify: await notifyStatus.read() } : {})
+      ...(auth.isAdmin(session) ? { notifyStatus: await notifyStatus.readAll() } : {})
     });
   }
 
