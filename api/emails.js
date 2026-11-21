@@ -8,6 +8,7 @@ const requirementsStore = require('../lib/requirements-store');
 const testMail = require('../lib/deliverability-test');
 const suppression = require('../lib/suppression-store');
 const emailLogStore = require('../lib/email-log-store');
+const notifyStatus = require('../lib/signin-notify-status');
 const sendPacing = require('../lib/send-pacing');
 const contactGuard = require('../lib/contact-guard');
 const leadsStore = require('../lib/leads-store');
@@ -155,7 +156,10 @@ module.exports = async (req, res) => {
       sender: smtpUser,
       // The remaining allowance travels with the log: the compose card reads it before sending
       rateLimit: await sendPacing.status(),
-      emails
+      emails,
+      // Admins also see whether the last sign-in note reached anyone. This is an admin panel
+      // fact, so it is not put on the response an agent gets.
+      ...(auth.isAdmin(session) ? { signinNotify: await notifyStatus.read() } : {})
     });
   }
 

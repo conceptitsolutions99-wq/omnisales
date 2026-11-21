@@ -1,14 +1,30 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, RefreshCw, CheckCircle2, XCircle, Settings, Mail, MailOpen, MapPin } from 'lucide-react';
+import { X, RefreshCw, CheckCircle2, XCircle, Settings, Mail, MailOpen, MapPin, Bell } from 'lucide-react';
 import { hasGeoapifyKey } from '../lib/leads';
 
 const IDLE = { state: 'loading', detail: '' };
+
+// Why a sign-in note was not sent, in words an admin can act on
+const NOTIFY_REASONS = {
+  disabled: 'sign-in notifications are turned off',
+  'no-recipient': 'no notification address is set',
+  'not-configured': 'SMTP is not configured',
+  failed: 'the mail server refused it',
+  unknown: 'the reason was not recorded'
+};
 
 const StatusPill = ({ state }) => {
   if (state === 'ok') {
     return (
       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-400/15 text-emerald-300">
         <CheckCircle2 className="w-3 h-3" /> Ready
+      </span>
+    );
+  }
+  if (state === 'waiting') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/10 text-muted">
+        Waiting
       </span>
     );
   }
@@ -52,6 +68,8 @@ const Row = ({ icon: Icon, title, description, status, fix }) => (
 export default function SetupChecklist({ open, onClose }) {
   const [emailStatus, setEmailStatus] = useState(IDLE);
   const [replyStatus, setReplyStatus] = useState(IDLE);
+  // Null until the endpoint reports it, which it only does for an admin
+  const [notifyStatus, setNotifyStatus] = useState(null);
   const [checking, setChecking] = useState(false);
 
   const check = useCallback(async () => {
@@ -68,6 +86,7 @@ export default function SetupChecklist({ open, onClose }) {
           ? { state: 'ok', detail: `Sending as ${data.sender || data.from || 'the configured account'}` }
           : { state: 'missing', detail: 'The endpoint answered, but no mail credentials were found.' }
       );
+      setNotifyStatus(data.signinNotify === undefined ? null : data.signinNotify);
     } catch (err) {
       setEmailStatus({
         state: 'missing',
@@ -98,6 +117,30 @@ export default function SetupChecklist({ open, onClose }) {
   }, [open, check]);
 
   if (!open) return null;
+
+  const notifyRow = (() => {
+    if (!notifyStatus || !notifyStatus.at) {
+      return {
+        state: 'waiting',
+        detail: 'No sign-in note has been attempted since this deployment was last changed.'
+      };
+    }
+    const when = new Date(notifyStatus.at).toLocaleString();
+    if (notifyStatus.sent) {
+      return {
+        state: 'ok',
+        detail: `Last note sent ${when} to ${notifyStatus.to || 'the admin address'}.`
+      };
+    }
+    const reason =
+      NOTIFY_REASONS[notifyStatus.reason] || notifyStatus.reason || 'the reason was not recorded';
+    return {
+      state: 'missing',
+      detail: `Last note was not sent (${when}): ${reason}${
+        notifyStatus.error ? ` — ${notifyStatus.error}` : ''
+      }.`
+    };
+  })();
 
   const geoapifyStatus = hasGeoapifyKey
     ? { state: 'ok', detail: 'Fallback key is present in this build.' }
@@ -159,6 +202,16 @@ export default function SetupChecklist({ open, onClose }) {
             status={replyStatus}
             fix="Reply tracking reuses the same Gmail credentials — fix email sending first."
           />
+
+          {notifyStatus !== null && (
+            <Row
+              icon={Bell}
+              title="Sign-in notifications"
+              description="The admin note sent when a staff account signs in."
+              status={notifyRow}
+              fix="Check SIGNIN_NOTIFY_EMAIL (or ADMIN_EMAIL) and that the Gmail app password is still valid, then sign in as a staff account to test."
+            />
+          )}
         </div>
 
         <div className="px-5 py-3 border-t border-white/10 text-[11px] text-muted">

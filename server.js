@@ -12,6 +12,7 @@ const { findEmails } = require('./lib/find-email');
 const testMail = require('./lib/deliverability-test');
 const suppression = require('./lib/suppression-store');
 const emailLogStore = require('./lib/email-log-store');
+const notifyStatus = require('./lib/signin-notify-status');
 const sendPacing = require('./lib/send-pacing');
 const contactGuard = require('./lib/contact-guard');
 const authResults = require('./lib/auth-results');
@@ -650,7 +651,9 @@ app.get('/api/emails', async (req, res) => {
     signature: deliverability.signatureFooter(),
     sender: smtpUser,
     rateLimit: await sendPacing.status(),
-    emails: mergeEmailLogs(stored, readEmailLog()).filter(canSee).slice(0, 100)
+    emails: mergeEmailLogs(stored, readEmailLog()).filter(canSee).slice(0, 100),
+    // Same admin-only fact the deployed function returns, so local checks match production
+    ...(auth.isAdmin(session) ? { signinNotify: await notifyStatus.read() } : {})
   });
 });
 
