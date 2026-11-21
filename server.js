@@ -239,25 +239,29 @@ const readEmailLog = () => {
 };
 
 const writeEmailLog = (entries) => {
-  try {
-    fs.mkdirSync(path.dirname(emailLogPath), { recursive: true });
-    fs.writeFileSync(emailLogPath, JSON.stringify(entries.slice(0, 250), null, 2));
-  } catch (err) {
-    console.error('Could not persist email log:', err.message);
-  }
+  fs.mkdirSync(path.dirname(emailLogPath), { recursive: true });
+  fs.writeFileSync(emailLogPath, JSON.stringify(entries.slice(0, 250), null, 2));
 };
 
 // Every send goes to the shared log as well as the local file, so the history follows the team
-// between devices and survives a restart
+// between devices and survives a restart. Both writes are reported: a delivery one of them could
+// not record is not a delivery the caller may be told was recorded.
 const persistEmailEntry = async (entry) => {
-  writeEmailLog([entry, ...readEmailLog()]);
+  let localError = null;
+  try {
+    writeEmailLog([entry, ...readEmailLog()]);
+  } catch (err) {
+    localError = err.message || 'The local file could not be written.';
+    console.error(`Could not write the local email log (${entry.id}):`, localError);
+  }
+
   try {
     await emailLogStore.record(entry);
-    return { logged: true, error: null };
+    return { logged: true, error: null, localLogged: !localError, localError };
   } catch (err) {
     // The message already left: keep the send, but say the shared history is missing its row
     console.error(`Could not share the delivery (${entry.id}):`, err.message);
-    return { logged: false, error: err.message };
+    return { logged: false, error: err.message, localLogged: !localError, localError };
   }
 };
 
@@ -426,7 +430,7 @@ app.post('/api/emails', async (req, res) => {
       entry.sentAt = result.sentAt;
       entry.status = 'sent';
       entry.providerId = result.messageId;
-      await persistEmailEntry(entry);
+      const delivery = await persistEmailEntry(entry);
       logSender('email_test_sent', { to: entry.to, messageId: entry.providerId });
 
       // The verdicts the receiver recorded for the delivered copy, read back over IMAP
@@ -443,18 +447,26 @@ app.post('/api/emails', async (req, res) => {
         messageId: entry.providerId,
         accepted: result.accepted,
         rejected: result.rejected,
-        authentication
+        authentication,
+        logged: delivery.logged,
+        logError: delivery.error,
+        localLogged: delivery.localLogged,
+        localError: delivery.localError
       });
     } catch (err) {
       entry.status = 'failed';
       entry.error = err.message || 'The test email could not be sent.';
-      await persistEmailEntry(entry);
+      const delivery = await persistEmailEntry(entry);
       logSender('email_test_failed', { to: entry.to, error: entry.error });
       return res.status(502).json({
         error: entry.error,
         email: entry,
         from: SENDER.from,
-        fromMode: SENDER.mode
+        fromMode: SENDER.mode,
+        logged: delivery.logged,
+        logError: delivery.error,
+        localLogged: delivery.localLogged,
+        localError: delivery.localError
       });
     }
   }
@@ -601,6 +613,8 @@ app.post('/api/emails', async (req, res) => {
       email: entry,
       logged: delivery.logged,
       logError: delivery.error,
+      localLogged: delivery.localLogged,
+      localError: delivery.localError,
       rateLimit: await sendPacing.status()
     });
   } catch (err) {
@@ -610,7 +624,14 @@ app.post('/api/emails', async (req, res) => {
     entry.error = err.message || 'Sending failed.';
     const delivery = await persistEmailEntry(entry);
     logSender('email_failed', { agent: entry.sentBy, error: entry.error });
-    res.status(502).json({ error: entry.error, email: entry, logged: delivery.logged, logError: delivery.error });
+    res.status(502).json({
+      error: entry.error,
+      email: entry,
+      logged: delivery.logged,
+      logError: delivery.error,
+      localLogged: delivery.localLogged,
+      localError: delivery.localError
+    });
   }
 });
 
