@@ -189,14 +189,26 @@ export default function HistoryLog({ callLogs, currentUser }) {
     return String(entry.sentBy || '') === currentUser.name;
   };
   const emailLogForViewer = emailLog.filter((entry) => isAdminView || isOwnEmail(entry));
+  // Use stable account addresses as filter keys, so a rename cannot split one person's history.
+  // Legacy rows without an address fall back to their display name; label each option with the
+  // latest display name seen for that key.
+  const employeeKeyOf = (entry) => {
+    const email = String(entry.sentByEmail || '').trim().toLowerCase();
+    return email || String(entry.sentBy || '').trim();
+  };
   const emailLogSenders = [
-    ...new Set(emailLogForViewer.map((entry) => String(entry.sentBy || '').trim()).filter(Boolean))
-  ].sort((a, b) => a.localeCompare(b));
+    ...new Map(
+      emailLogForViewer
+        .map((entry) => [employeeKeyOf(entry), String(entry.sentBy || '').trim() || employeeKeyOf(entry)])
+        .filter(([key]) => Boolean(key))
+        .sort((a, b) => a[1].localeCompare(b[1]))
+    )
+  ];
   // The path counts follow the employee picked, so the chips describe that person's sends
   const emailLogForEmployee =
     emailSenderFilter === 'All'
       ? emailLogForViewer
-      : emailLogForViewer.filter((entry) => String(entry.sentBy || '') === emailSenderFilter);
+      : emailLogForViewer.filter((entry) => employeeKeyOf(entry) === emailSenderFilter);
   const senderCounts = emailLogForEmployee.reduce(
     (counts, entry) => {
       const mode = senderModeOf(entry);
@@ -509,9 +521,9 @@ export default function HistoryLog({ callLogs, currentUser }) {
             className="py-1.5 px-3 glass-input rounded-lg text-[11px] font-semibold dark:text-white"
           >
             <option value="All">Everyone</option>
-            {emailLogSenders.map((sender) => (
-              <option key={sender} value={sender}>
-                {sender}
+            {emailLogSenders.map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
               </option>
             ))}
           </select>
@@ -581,7 +593,7 @@ export default function HistoryLog({ callLogs, currentUser }) {
                         ? 'No emails sent yet. Compose one in the Dialler.'
                         : 'You have not sent any emails yet. This log shows only your own sends.'
                       : emailSenderFilter !== 'All'
-                        ? `No sends by ${emailSenderFilter} match these filters. Choose another employee or clear it.`
+                        ? `No sends by ${emailLogSenders.find(([key]) => key === emailSenderFilter)?.[1] || emailSenderFilter} match these filters. Choose another employee or clear it.`
                         : 'No sends used that sender. Choose another filter or clear it.'}
                   </td>
                 </tr>

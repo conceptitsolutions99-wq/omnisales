@@ -39,10 +39,13 @@ module.exports = async (req, res) => {
     // A run of wrong passwords for a single account is the per-account alert's business. This one
     // covers the other shape: one source trying many addresses, which that alert cannot see. The
     // attempt that reaches the limit reports every address the IP tried, and no password.
-    if (throttle.tripped) {
+    // One person mistyping repeatedly is handled by the per-account alert, not the IP spray
+    // alert. Require at least three distinct addresses before notifying about an IP throttle.
+    if (throttle.tripped && throttle.distinctAccounts >= 3) {
       await signinNotify.notifyThrottledIp({
         ip,
         emails: throttle.emails,
+        distinctAccounts: throttle.distinctAccounts,
         attempts: throttle.count,
         first: throttle.first,
         req
