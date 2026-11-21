@@ -119,7 +119,7 @@ const readJson = (body) => {
 // says the area was limited so the agent knows why the list is town-centre shaped.
 const MAX_SEARCH_SPAN_DEGREES = 0.25;
 
-const limitBox = (bbox) => {
+const limitBox = (bbox, centre) => {
   if (!bbox) return null;
 
   const latSpan = bbox.north - bbox.south;
@@ -127,8 +127,15 @@ const limitBox = (bbox) => {
   const limited = latSpan > MAX_SEARCH_SPAN_DEGREES || lonSpan > MAX_SEARCH_SPAN_DEGREES;
   if (!limited) return { ...bbox, limited: false };
 
-  const latCentre = (bbox.north + bbox.south) / 2;
-  const lonCentre = (bbox.east + bbox.west) / 2;
+  // A city name can resolve to a state or a country of the same name ("New York" is all three),
+  // and the middle of such a box is farmland or desert: a US search then came back with a
+  // handful of listings and no contact details. The resolved place's own point is where the name
+  // actually is, so the window is centred there whenever the geocoder gives one.
+  const pointLat = Number(centre?.lat);
+  const pointLon = Number(centre?.lon);
+  const anchored = Number.isFinite(pointLat) && Number.isFinite(pointLon);
+  const latCentre = anchored ? pointLat : (bbox.north + bbox.south) / 2;
+  const lonCentre = anchored ? pointLon : (bbox.east + bbox.west) / 2;
   const latHalf = Math.min(latSpan, MAX_SEARCH_SPAN_DEGREES) / 2;
   const lonHalf = Math.min(lonSpan, MAX_SEARCH_SPAN_DEGREES) / 2;
 
@@ -167,7 +174,10 @@ const geocodeCity = async (city, country = '') => {
   if (!Array.isArray(results) || results.length === 0) return null;
 
   const [south, north, west, east] = results[0].boundingbox.map(Number);
-  const bbox = limitBox({ south, north, west, east, label: results[0].display_name });
+  const bbox = limitBox(
+    { south, north, west, east, label: results[0].display_name },
+    { lat: results[0].lat, lon: results[0].lon }
+  );
   geocodeCache.set(key, { at: Date.now(), bbox });
   return bbox;
 };
@@ -297,22 +307,35 @@ const searchWithOverpass = async ({ city, category, limit, country, bbox }) => {
 // Geoapify can resolve the city itself, so the fallback still works when Nominatim fails
 const geocodeWithGeoapify = async (city, country = '') => {
   const code = COUNTRY_CODES[country] || '';
-  const url =
+  const base =
     `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(city)}` +
     `&limit=1&format=json${code ? `&filter=countrycode:${code}` : ''}` +
     `&apiKey=${encodeURIComponent(GEOAPIFY_KEY)}`;
-  const response = await requestWithTimeout(url, { headers: JSON_HEADERS }, 8000);
-  if (!response.ok) return null;
 
-  const data = readJson(response.body);
-  // Without format=json Geoapify answers a GeoJSON FeatureCollection, which has no `results`:
-  // reading only that shape silently returned nothing and left every US search empty. Both
-  // shapes are accepted now, so a change on their side cannot break the fallback again.
-  const first = data?.results?.[0] || data?.features?.[0]?.properties;
+  const ask = async (extra) => {
+    const response = await requestWithTimeout(`${base}${extra}`, { headers: JSON_HEADERS }, 8000);
+    if (!response.ok) return null;
+
+    const data = readJson(response.body);
+    // Without format=json Geoapify answers a GeoJSON FeatureCollection, which has no `results`:
+    // reading only that shape silently returned nothing and left every US search empty. Both
+    // shapes are accepted now, so a change on their side cannot break the fallback again.
+    return data?.results?.[0] || data?.features?.[0]?.properties || null;
+  };
+
+  // "New York" without a type resolves to the state, whose 0.25-degree window lands upstate and
+  // returns a handful of listings with no contact details. The city is asked for first, and a
+  // district or neighbourhood name that is not a city falls back to the untyped answer, which is
+  // then anchored on the result's own point.
+  if (!GEOAPIFY_KEY) return null;
+  const first = (await ask('&type=city')) || (await ask(''));
   const box = first?.bbox;
   if (!box) return null;
 
-  return limitBox({ west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: first.formatted });
+  return limitBox(
+    { west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: first.formatted },
+    { lat: first.lat, lon: first.lon }
+  );
 };
 
 // The same business has a different id on each provider, so a listing saved from OpenStreetMap
