@@ -3,7 +3,7 @@
 // A send appears twice — once in this browser's copy, once in the copy the server returned —
 // and those two copies share the entry's id, so the id identifies the event. Two separate
 // sends have different ids and both stay, even within the same minute.
-const eventKey = (entry) => {
+export const activityEventKey = (entry) => {
   const id = entry.id;
   if (id !== undefined && id !== null && id !== '') {
     return `id:${id}|${String(entry.leadName || entry.company || '').toLowerCase()}`;
@@ -16,13 +16,21 @@ const eventKey = (entry) => {
   ].join('|');
 };
 
+// An admin deleted an entry, and this browser still holds its own copy: the server names the keys
+// it deleted, so the copy is dropped here instead of being merged back and pushed again.
+export const dropDeleted = (entries, deletedKeys) => {
+  const deleted = new Set((deletedKeys || []).map(String));
+  if (deleted.size === 0) return entries || [];
+  return (entries || []).filter((entry) => !deleted.has(activityEventKey(entry)));
+};
+
 export const mergeActivity = (local, remote) => {
   const byKey = new Map();
 
   // The server's copy is authoritative, so it is folded in first and wins a tie
   for (const entry of [...(remote || []), ...(local || [])]) {
     if (!entry || entry.id === undefined || entry.id === null) continue;
-    const key = eventKey(entry);
+    const key = activityEventKey(entry);
     if (!byKey.has(key)) byKey.set(key, entry);
   }
 

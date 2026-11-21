@@ -17,7 +17,11 @@ const parseActivity = async (pending) => {
   const response = await pending;
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `Activity sync failed (${response.status}).`);
-  return Array.isArray(data.activity) ? data.activity : [];
+  return {
+    activity: Array.isArray(data.activity) ? data.activity : [],
+    // Keys an admin deleted: every browser drops its cached copy instead of pushing it back
+    deleted: Array.isArray(data.deleted) ? data.deleted : []
+  };
 };
 
 // An admin receives the whole team's history; an employee receives only their own
@@ -26,6 +30,18 @@ export const listActivity = async () => parseActivity(fetch('/api/activity', { c
 // Admin only on the server: clears the shared history for every device
 export const clearSharedActivity = async () =>
   parseActivity(fetch('/api/activity', { method: 'DELETE', credentials: 'same-origin' }));
+
+// Admin only on the server: removes the entries the admin selected, for the whole team. An entry is
+// named by its key and its id, so an older row without an id can still be deleted.
+export const deleteSharedActivity = async ({ keys = [], ids = [] } = {}) =>
+  parseActivity(
+    fetch('/api/activity', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys, ids })
+    })
+  );
 
 export const pushActivity = async (activity) =>
   parseActivity(

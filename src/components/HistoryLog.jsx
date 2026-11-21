@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { History, Mail, MessageSquare, PhoneCall, Send, UserCheck } from 'lucide-react';
+import { History, Mail, MessageSquare, PhoneCall, Send, Trash2, UserCheck } from 'lucide-react';
 import { isOwnActivity } from '../lib/activity-owner';
+import { activityEventKey } from '../lib/activity-merge';
 
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
@@ -76,7 +77,7 @@ const readLocalEmailLog = () => {
   }
 };
 
-export default function HistoryLog({ callLogs, currentUser }) {
+export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) {
   // Call and WhatsApp history filters
   const [callHistorySearch, setCallHistorySearch] = useState('');
   const [historyName, setHistoryName] = useState('');
@@ -84,6 +85,13 @@ export default function HistoryLog({ callLogs, currentUser }) {
   const [historyTo, setHistoryTo] = useState('');
   const [historyCaller, setHistoryCaller] = useState('All');
   const [channelFilter, setChannelFilter] = useState('All');
+
+  // Deleting history is an admin action and it applies to the whole team. Entries are selected by
+  // their event key, which every recorded event has even when it predates ids.
+  const [selectedLogKeys, setSelectedLogKeys] = useState([]);
+  const [deletingHistory, setDeletingHistory] = useState(false);
+  const [historyMessage, setHistoryMessage] = useState('');
+  const [historyError, setHistoryError] = useState('');
 
   // Email delivery log
   const [emailLog, setEmailLog] = useState([]);
@@ -160,6 +168,61 @@ export default function HistoryLog({ callLogs, currentUser }) {
           : channel !== 'Email' && channel !== 'WhatsApp');
     return matchesPermission && matchesSearch && matchesChannel && matchesName && matchesDate && matchesCaller;
   });
+
+  const logKey = (log) => activityEventKey(log);
+  // The selection survives a filter change, so the count and the delete always describe the same
+  // entries, not just the ones currently visible
+  const selectedLogs = callLogs.filter((log) => selectedLogKeys.includes(logKey(log)));
+  const visibleLogKeys = filteredLogs.map(logKey);
+  const allVisibleSelected =
+    visibleLogKeys.length > 0 && visibleLogKeys.every((key) => selectedLogKeys.includes(key));
+
+  const toggleLogSelection = (log) => {
+    const key = logKey(log);
+    setSelectedLogKeys((prev) => (prev.includes(key) ? prev.filter((value) => value !== key) : [...prev, key]));
+  };
+
+  const toggleSelectAllVisibleLogs = () => {
+    setSelectedLogKeys((prev) =>
+      allVisibleSelected
+        ? prev.filter((key) => !visibleLogKeys.includes(key))
+        : [...new Set([...prev, ...visibleLogKeys])]
+    );
+  };
+
+  const handleDeleteSelectedHistory = async () => {
+    if (!isAdminView || selectedLogs.length === 0 || deletingHistory || !onDeleteActivity) return;
+
+    const count = selectedLogs.length;
+    const label = count === 1 ? 'entry' : 'entries';
+    if (
+      !window.confirm(
+        `Delete ${count} history ${label} for the whole team?\n\nThis removes calls, WhatsApp contacts and emails logged by anyone, and cannot be undone.`
+      )
+    )
+      return;
+
+    setDeletingHistory(true);
+    setHistoryError('');
+    setHistoryMessage('');
+    try {
+      await onDeleteActivity({
+        keys: selectedLogs.map(logKey),
+        ids: selectedLogs.map((log) => log.id).filter((id) => id !== undefined && id !== null)
+      });
+      setSelectedLogKeys([]);
+      setHistoryMessage(`Deleted ${count} history ${label} for the whole team.`);
+      setTimeout(() => setHistoryMessage(''), 8000);
+    } catch (err) {
+      setHistoryError(
+        err.message === 'Failed to fetch'
+          ? 'Cannot reach the server, so nothing was deleted.'
+          : err.message
+      );
+    } finally {
+      setDeletingHistory(false);
+    }
+  };
 
   // Only the employees this viewer can already see, so the list never offers a name that would
   // then return nothing
@@ -276,6 +339,17 @@ export default function HistoryLog({ callLogs, currentUser }) {
             Outbound Call &amp; Email History ({filteredLogs.length})
           </h3>
           <div className="flex flex-wrap items-center gap-2">
+            {isAdminView && (
+              <button
+                onClick={handleDeleteSelectedHistory}
+                disabled={selectedLogs.length === 0 || deletingHistory}
+                title="Delete the selected history entries for the whole team"
+                className="px-3 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-[11px] font-semibold rounded-xl inline-flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deletingHistory ? 'Deleting…' : `Delete Selected (${selectedLogs.length})`}
+              </button>
+            )}
             <div className="flex items-center gap-1 p-1 rounded-xl glass-soft" role="group" aria-label="Filter history by channel">
               {['All', 'Calls', 'Emails', 'WhatsApp'].map((option) => {
                 const isActive = channelFilter === option;
@@ -366,10 +440,33 @@ export default function HistoryLog({ callLogs, currentUser }) {
           </div>
         </div>
 
+        {historyMessage && (
+          <div className="p-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 text-[11px] font-medium">
+            {historyMessage}
+          </div>
+        )}
+        {historyError && (
+          <div className="p-3 rounded-xl border border-rose-400/30 bg-rose-400/10 text-rose-300 text-[11px] font-medium">
+            {historyError}
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="glass-head text-xs font-semibold uppercase tracking-wider text-muted">
+                {isAdminView && (
+                  <th className="py-3.5 px-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleSelectAllVisibleLogs}
+                      aria-label="Select all history entries shown"
+                      title="Select every entry the current filters show"
+                      className="h-4 w-4 rounded accent-blue-600 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-3 px-4">Contact / Company</th>
                 <th className="py-3 px-4">Channel</th>
                 <th className="py-3 px-4">Caller</th>
@@ -382,11 +479,24 @@ export default function HistoryLog({ callLogs, currentUser }) {
             <tbody className="divide-y divide-white/[0.07] text-sm">
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-8 text-muted">No calls or emails recorded yet.</td>
+                  <td colSpan={isAdminView ? 8 : 7} className="text-center py-8 text-muted">
+                    No calls or emails recorded yet.
+                  </td>
                 </tr>
               ) : (
                 filteredLogs.map((log) => (
-                  <tr key={log.id} className="row-hover">
+                  <tr key={logKey(log)} className="row-hover">
+                    {isAdminView && (
+                      <td className="py-3.5 px-3 align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedLogKeys.includes(logKey(log))}
+                          onChange={() => toggleLogSelection(log)}
+                          aria-label={`Select the ${log.channel || 'call'} entry for ${log.leadName || 'this lead'}`}
+                          className="mt-1 h-4 w-4 rounded accent-blue-600 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-[var(--text-primary)]">{log.leadName}</div>
                       <div className="text-xs text-muted">{log.company}</div>

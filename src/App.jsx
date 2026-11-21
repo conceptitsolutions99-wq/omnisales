@@ -27,11 +27,12 @@ import {
   listActivity,
   pushActivity,
   clearSharedActivity,
+  deleteSharedActivity,
   deleteSharedLeads
 } from './lib/leads-api';
 import { listFollowups, pushFollowups, clearFollowups } from './lib/followups';
 import { leadKey, mergeLeadLists } from './lib/lead-key';
-import { mergeActivity } from './lib/activity-merge';
+import { dropDeleted, mergeActivity } from './lib/activity-merge';
 
 function AmbientBackdrop() {
   return (
@@ -324,12 +325,25 @@ function Workspace() {
     [currentUser?.email]
   );
 
-  const applySharedActivity = useCallback((shared) => {
+  const applySharedActivity = useCallback((shared, deleted = []) => {
     setCallLogs(prev => {
-      const merged = mergeActivity(prev, shared);
+      // The server is authoritative about what was deleted, so this browser's cached copy of those
+      // entries is dropped before the merge can keep it alive
+      const merged = mergeActivity(dropDeleted(prev, deleted), shared);
       return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged;
     });
   }, []);
+
+  // An admin removes the entries they selected; the result carries the remaining history and the
+  // keys that were deleted, so every open tab drops the same rows
+  const handleDeleteActivity = useCallback(
+    async (selection) => {
+      const result = await deleteSharedActivity(selection);
+      applySharedActivity(result.activity, result.deleted);
+      return result;
+    },
+    [applySharedActivity]
+  );
 
   useEffect(() => {
     if (!currentUser) {
@@ -341,7 +355,7 @@ function Workspace() {
     (async () => {
       try {
         const merged = await pushActivity(ownActivity(callLogsRef.current));
-        if (!cancelled) applySharedActivity(merged);
+        if (!cancelled) applySharedActivity(merged.activity, merged.deleted);
       } catch (err) {
         /* offline: the cached history keeps working */
       } finally {
@@ -360,7 +374,7 @@ function Workspace() {
     clearTimeout(activityPushTimer.current);
     activityPushTimer.current = setTimeout(() => {
       pushActivity(ownActivity(callLogsRef.current))
-        .then(merged => applySharedActivity(merged))
+        .then(merged => applySharedActivity(merged.activity, merged.deleted))
         .catch(() => {});
     }, 1200);
 
@@ -375,7 +389,7 @@ function Workspace() {
         .then(synced => applySharedLeads(synced.leads, synced.deleted))
         .catch(() => {});
       listActivity()
-        .then(shared => applySharedActivity(shared))
+        .then(shared => applySharedActivity(shared.activity, shared.deleted))
         .catch(() => {});
       if (!followupsPending.current) {
         listFollowups()
@@ -697,6 +711,7 @@ function Workspace() {
             <HistoryLog
               callLogs={callLogs}
               currentUser={currentUser}
+              onDeleteActivity={handleDeleteActivity}
             />
           )}
 

@@ -144,15 +144,38 @@ module.exports = async (req, res) => {
     const all = await store.listActivity();
     const admin = auth.isAdmin(session);
     const visible = admin ? all : all.filter((entry) => ownsActivity(entry, session));
-    return res.status(200).json({ ok: true, count: visible.length, activity: visible, scope: admin ? 'team' : 'own' });
+    return res.status(200).json({
+      ok: true,
+      count: visible.length,
+      activity: visible,
+      // Keys an admin deleted, so a browser drops its cached copy instead of showing it again
+      deleted: await store.listDeletedKeys(),
+      scope: admin ? 'team' : 'own'
+    });
   }
 
+  // An admin removes the entries they selected, or the whole history when nothing is named
   if (req.method === 'DELETE') {
     if (!auth.isAdmin(session)) {
-      return res.status(403).json({ error: 'Only an admin can clear the shared history.' });
+      return res.status(403).json({ error: 'Only an admin can delete shared history.' });
     }
-    const activity = await store.clearActivity();
-    return res.status(200).json({ ok: true, count: activity.length, activity, scope: 'team' });
+
+    const { keys, ids } = req.body || {};
+    if ((keys !== undefined && !Array.isArray(keys)) || (ids !== undefined && !Array.isArray(ids))) {
+      return res.status(400).json({ error: 'Send the deleted entries as keys or ids arrays.' });
+    }
+
+    const selected = (keys?.length || 0) + (ids?.length || 0) > 0;
+    const activity = selected ? await store.deleteActivity({ keys, ids }) : await store.clearActivity();
+    const admin = auth.isAdmin(session);
+    return res.status(200).json({
+      ok: true,
+      count: activity.length,
+      activity,
+      deleted: await store.listDeletedKeys(),
+      removed: selected ? true : false,
+      scope: admin ? 'team' : 'own'
+    });
   }
 
   if (req.method !== 'POST') {
@@ -169,5 +192,11 @@ module.exports = async (req, res) => {
   const admin = auth.isAdmin(session);
   const visible = admin ? merged : merged.filter((entry) => ownsActivity(entry, session));
 
-  return res.status(200).json({ ok: true, count: visible.length, activity: visible, scope: admin ? 'team' : 'own' });
+  return res.status(200).json({
+    ok: true,
+    count: visible.length,
+    activity: visible,
+    deleted: await store.listDeletedKeys(),
+    scope: admin ? 'team' : 'own'
+  });
 };
