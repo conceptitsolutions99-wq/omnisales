@@ -55,7 +55,7 @@ const Row = ({ icon: Icon, title, description, status, fix }) => (
           {status.detail && (
             <p className="text-[11px] mt-1 text-[var(--text-secondary)] break-words">{status.detail}</p>
           )}
-          {status.state !== 'ok' && status.state !== 'loading' && fix && (
+          {status.state === 'missing' && fix && (
             <p className="text-[11px] mt-1.5 text-amber-300/90">{fix}</p>
           )}
         </div>
@@ -68,7 +68,9 @@ const Row = ({ icon: Icon, title, description, status, fix }) => (
 export default function SetupChecklist({ open, onClose }) {
   const [emailStatus, setEmailStatus] = useState(IDLE);
   const [replyStatus, setReplyStatus] = useState(IDLE);
-  // Null until the endpoint reports it, which it only does for an admin
+  // The endpoint only reports this for an admin, and reports null before any note has been
+  // attempted: presence is what decides whether the row shows, not a truthy record
+  const [notifyVisible, setNotifyVisible] = useState(false);
   const [notifyStatus, setNotifyStatus] = useState(null);
   const [checking, setChecking] = useState(false);
 
@@ -86,7 +88,8 @@ export default function SetupChecklist({ open, onClose }) {
           ? { state: 'ok', detail: `Sending as ${data.sender || data.from || 'the configured account'}` }
           : { state: 'missing', detail: 'The endpoint answered, but no mail credentials were found.' }
       );
-      setNotifyStatus(data.signinNotify === undefined ? null : data.signinNotify);
+      setNotifyVisible(data.signinNotify !== undefined);
+      setNotifyStatus(data.signinNotify ?? null);
     } catch (err) {
       setEmailStatus({
         state: 'missing',
@@ -122,7 +125,7 @@ export default function SetupChecklist({ open, onClose }) {
     if (!notifyStatus || !notifyStatus.at) {
       return {
         state: 'waiting',
-        detail: 'No sign-in note has been attempted since this deployment was last changed.'
+        detail: 'No sign-in note has been attempted yet. The next staff sign-in will be recorded here.'
       };
     }
     const when = new Date(notifyStatus.at).toLocaleString();
@@ -203,7 +206,7 @@ export default function SetupChecklist({ open, onClose }) {
             fix="Reply tracking reuses the same Gmail credentials — fix email sending first."
           />
 
-          {notifyStatus !== null && (
+          {notifyVisible && (
             <Row
               icon={Bell}
               title="Sign-in notifications"
