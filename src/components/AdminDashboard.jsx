@@ -106,7 +106,12 @@ export default function AdminDashboard({ currentUser, onClearDatabase }) {
 
   const handleResetPassword = (user) => {
     if (busyEmail) return;
-    if (!window.confirm(`Issue a new temporary password for ${user.name}? Their current password stops working immediately.`)) return;
+    if (
+      !window.confirm(
+        `Issue a new temporary password for ${user.name}? Their current password stops working immediately and every device signed in as them is signed out.`
+      )
+    )
+      return;
     runAction(user.email, async () => {
       const result = await resetStaffPassword(user.email);
       setCopied(false);

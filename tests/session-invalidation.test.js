@@ -79,6 +79,25 @@ test('a role change applies to an existing session on the next request', async (
   assert.equal(session.role, 'Analyst');
 });
 
+test('an admin password reset rejects the session already in the browser', async () => {
+  await store.setPassword(EMAIL, 'AgentPass!2028');
+  const token = await signIn(EMAIL);
+  assert.ok(await auth.getSession(withCookie(token)));
+
+  await store.resetPassword(EMAIL);
+  assert.equal(
+    await auth.getSession(withCookie(token)),
+    null,
+    'the device holding the old session must sign in again with the temporary password'
+  );
+
+  // The replacement password is the only way back in, and it still forces a change
+  const fresh = await signIn(EMAIL);
+  const session = await auth.getSession(withCookie(fresh));
+  assert.equal(session.email, EMAIL);
+  assert.equal(session.mustChange, true);
+});
+
 test('the password-change gate follows the current account', async () => {
   await store.resetPassword(EMAIL);
   const token = await signIn(EMAIL);
