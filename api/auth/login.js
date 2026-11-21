@@ -34,7 +34,20 @@ module.exports = async (req, res) => {
 
   // Same answer for an unknown account and a wrong password
   if (!account || suspended || !passwordOk) {
-    auth.recordFailure(ip);
+    const throttle = auth.recordFailure(ip, email);
+
+    // A run of wrong passwords for a single account is the per-account alert's business. This one
+    // covers the other shape: one source trying many addresses, which that alert cannot see. The
+    // attempt that reaches the limit reports every address the IP tried, and no password.
+    if (throttle.tripped) {
+      await signinNotify.notifyThrottledIp({
+        ip,
+        emails: throttle.emails,
+        attempts: throttle.count,
+        first: throttle.first,
+        req
+      });
+    }
 
     // A run of wrong passwords for a real account is what the admin hears about. Unknown
     // addresses, suspended accounts and correct passwords are not counted, and the alert
