@@ -122,12 +122,26 @@ export default function RepliesPanel({
                       {reply.fromName}
                     </span>
                     <span className="text-[11px] text-muted font-mono truncate">{reply.from}</span>
+                    {!reply.matched && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 shrink-0">
+                        Not matched
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1 text-[13px] text-[var(--text-secondary)] truncate" title={reply.subject}>
                     {reply.subject || '(no subject)'}
                   </p>
                   {reply.leadName && (
                     <p className="mt-0.5 text-[11px] text-muted">Lead: {reply.leadName}</p>
+                  )}
+                  {!reply.matched && (
+                    <p className="mt-1 flex items-start gap-1.5 text-[11px] text-amber-300">
+                      <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
+                      <span>
+                        Not an answer to an outreach email we sent, so the lead's status stays as it was and outreach
+                        to it is not paused.
+                      </span>
+                    </p>
                   )}
                 </div>
                 <div className="text-right shrink-0">
@@ -168,7 +182,8 @@ export default function RepliesPanel({
 
         <div className="px-5 py-3 border-t border-white/10 text-[11px] text-muted">
           Replies are read from {canReview ? 'the shared inbox' : 'your sent threads'} · attributed to whoever sent the
-          original email · refreshed every two minutes
+          original email · only a reply that answers one of those emails moves its lead to Replied and pauses outreach ·
+          refreshed every two minutes
           {isAdmin && storage === 'memory' && (
             <span className="mt-1 flex items-center gap-1.5 text-amber-300">
               <AlertTriangle className="w-3 h-3 shrink-0" />
