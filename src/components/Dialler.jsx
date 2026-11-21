@@ -31,6 +31,39 @@ const EMAIL_LOG_KEY = 'cit_email_delivery_log';
 
 // Both send paths report the same two log copies; this is the one place that decides what the
 // agent is told when either copy could not be written
+// The last resort when neither WhatsApp Desktop nor WhatsApp Web takes over: the same chat as a
+// plain link, so a blocked tab or an unsupported browser is never a dead end
+const WhatsAppFallback = ({ fallback }) => {
+  if (!fallback) return null;
+  const label = fallback.leadName ? ` for ${fallback.leadName}` : '';
+  return (
+    <div className="max-w-md mx-auto rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3 text-left space-y-1.5">
+      <p className="text-[11px] font-semibold text-[var(--text-primary)]">
+        {fallback.blocked
+          ? 'The browser blocked the WhatsApp tab. Open the chat yourself:'
+          : 'WhatsApp did not open. Open the chat yourself:'}
+      </p>
+      <a
+        href={fallback.deepLink}
+        className="block text-[11px] font-semibold text-emerald-600 dark:text-emerald-300 underline"
+      >
+        Open WhatsApp Desktop{label}
+      </a>
+      <a
+        href={fallback.webLink}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="block text-[11px] font-semibold text-emerald-600 dark:text-emerald-300 underline break-all"
+      >
+        Open this chat in WhatsApp Web
+      </a>
+      <p className="text-[10px] text-muted">
+        The message is already written, so either link opens the conversation with it filled in.
+      </p>
+    </div>
+  );
+};
+
 const deliveryLogWarning = (data) => {
   if (data?.logged === false) return 'the delivery log entry could not be saved';
   if (data?.localLogged === false) return 'the server could not write its local copy of the delivery log';
@@ -173,6 +206,10 @@ export default function Dialler({
   const [isCalling, setIsCalling] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [callNotes, setCallNotes] = useState('');
+  // The links offered when WhatsApp neither opened as an app nor as a tab
+  const [whatsAppFallback, setWhatsAppFallback] = useState(null);
+  // A fallback link belongs to the lead it was built for, so it goes when the lead does
+  useEffect(() => setWhatsAppFallback(null), [activeLead?.id]);
   const [callOutcome, setCallOutcome] = useState('Considering');
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   // Email channel
@@ -188,6 +225,22 @@ export default function Dialler({
   const [emailTemplate, setEmailTemplate] = useState('intro');
   // Optional requirements form the customer fills in from the email
   const [emailRequirements, setEmailRequirements] = useState('');
+  // Reputation guard for the one shared mailbox: allowance left and the gap to the next send
+  const [sendPacing, setSendPacing] = useState(null);
+  const [pacingClock, setPacingClock] = useState(Date.now());
+  // A second agent writing to the same prospect: who wrote first, and how they were matched
+  const [leadContactCheck, setLeadContactCheck] = useState(null);
+  const [sendConflict, setSendConflict] = useState(null);
+  // A prospect who answered: the server pauses outreach until the agent confirms a reply
+  const [leadReplyCheck, setLeadReplyCheck] = useState(null);
+  const [replyBlock, setReplyBlock] = useState(null);
+  // The last message actually sent to each lead, so it can be sent again without retyping
+  const [lastDrafts, setLastDrafts] = useState(readLastDrafts);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendStatus, setResendStatus] = useState(null);
+  // Why the WhatsApp channel is unavailable for this lead, and the proof the contact produced
+  const [whatsAppIssue, setWhatsAppIssue] = useState('');
+  const [proofLead, setProofLead] = useState(null);
 
   // The call timer only exists while a call is running; ending the call removes it immediately
   useEffect(() => {
@@ -252,7 +305,41 @@ export default function Dialler({
     }
 
     setWhatsAppIssue('');
-    window.open(`https://wa.me/${number}?text=${encodeURIComponent(buildWhatsAppMessage(activeLead))}`, '_blank');
+    const text = encodeURIComponent(buildWhatsAppMessage(activeLead));
+    const deepLink = `whatsapp://send?phone=${number}&text=${text}`;
+    const webLink = `https://wa.me/${number}?text=${text}`;
+
+    // WhatsApp Desktop first: it opens the chat even in a browser WhatsApp Web refuses to run in.
+    // A deep link cannot report success, so the page being hidden is the only sign the app took over.
+    let handedOff = false;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') handedOff = true;
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    // An anchor rather than assigning location, so the app tab is never the one that goes away
+    // when the scheme is unhandled
+    const opener = document.createElement('a');
+    opener.href = deepLink;
+    opener.target = '_blank';
+    opener.rel = 'noopener';
+    document.body.appendChild(opener);
+    opener.click();
+    opener.remove();
+
+    setTimeout(() => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (handedOff) return;
+
+      // No app answered: try the web chat, and leave clickable links for when that is blocked too
+      const popup = window.open(webLink, '_blank');
+      if (popup) popup.opener = null;
+      setWhatsAppFallback({
+        webLink,
+        deepLink,
+        blocked: !popup,
+        leadName: activeLead?.name || activeLead?.company || ''
+      });
+    }, 1500);
 
     // The chat opens first, then the screenshot step: the contact is only recorded once the
     // conversation it produced is on file for the admin and analyst to review.
@@ -876,6 +963,8 @@ export default function Dialler({
                       <span>End Call & Log Outcome</span>
                     </button>
                   </div>
+
+                  <WhatsAppFallback fallback={whatsAppFallback} />
                 </div>
               ) : (
                 <div className="text-center space-y-4 w-full">
@@ -944,6 +1033,8 @@ export default function Dialler({
                   {whatsAppIssue && (
                     <p className="text-[11px] text-amber-500 max-w-md mx-auto">{whatsAppIssue}</p>
                   )}
+
+                  <WhatsAppFallback fallback={whatsAppFallback} />
 
                   {activeLead && !activePhoneDigits && (
                     <p className="text-[11px] text-amber-500">This lead has no phone number on file, so only email is available.</p>
