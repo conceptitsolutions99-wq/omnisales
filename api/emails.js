@@ -68,8 +68,20 @@ const recordDelivery = async (entry) => {
   deliveries.unshift(entry);
   try {
     await emailLogStore.record(entry);
+    return { logged: true, error: null };
   } catch (err) {
-    console.error('Could not persist the delivery:', err.message);
+    // The message has already left, so the send still counts; what the caller must not be told is
+    // that the history has the row. The failure travels back with the send's own result.
+    const line = JSON.stringify({
+      at: new Date().toISOString(),
+      level: 'error',
+      event: 'delivery_log_failed',
+      id: entry.id,
+      status: entry.status,
+      message: err.message
+    });
+    console.error(line);
+    return { logged: false, error: err.message };
   }
 };
 
@@ -196,7 +208,7 @@ module.exports = async (req, res) => {
       entry.sentAt = result.sentAt;
       entry.status = 'sent';
       entry.providerId = result.messageId;
-      await recordDelivery(entry);
+      const delivery = await recordDelivery(entry);
       logSender('email_test_sent', { to: entry.to, messageId: entry.providerId });
 
       // Read the delivered copy back over IMAP, so the report shows the receiver's own SPF, DKIM
@@ -214,18 +226,22 @@ module.exports = async (req, res) => {
         messageId: entry.providerId,
         accepted: result.accepted,
         rejected: result.rejected,
-        authentication
+        authentication,
+        logged: delivery.logged,
+        logError: delivery.error
       });
     } catch (err) {
       entry.status = 'failed';
       entry.error = err.message || 'The test email could not be sent.';
-      await recordDelivery(entry);
+      const delivery = await recordDelivery(entry);
       logSender('email_test_failed', { to: entry.to, error: entry.error });
       return res.status(502).json({
         error: entry.error,
         email: entry,
         from: SENDER.from,
-        fromMode: SENDER.mode
+        fromMode: SENDER.mode,
+        logged: delivery.logged,
+        logError: delivery.error
       });
     }
   }
@@ -352,7 +368,7 @@ module.exports = async (req, res) => {
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
     entry.requirementsUrl = requirementsUrl;
-    await recordDelivery(entry);
+    const delivery = await recordDelivery(entry);
     logSender('email_sent', { agent: entry.sentBy, lead: entry.leadName || entry.company || '' });
 
     // Record who sent what, so the reply can be attributed even if the IMAP scan misses it
@@ -371,14 +387,25 @@ module.exports = async (req, res) => {
       .claimLead({ id: entry.leadId, email: entry.to }, session)
       .catch((err) => console.error('Could not record the lead owner:', err.message));
 
-    return res.status(200).json({ ok: true, email: entry, rateLimit: await sendPacing.status() });
+    return res.status(200).json({
+      ok: true,
+      email: entry,
+      logged: delivery.logged,
+      logError: delivery.error,
+      rateLimit: await sendPacing.status()
+    });
   } catch (err) {
     // A message SMTP refused never reached the mailbox, so its slot goes back
     if (entry.status !== 'sent') await sendPacing.release(slot.stamp);
     entry.status = 'failed';
     entry.error = err.message || 'Sending failed.';
-    await recordDelivery(entry);
+    const delivery = await recordDelivery(entry);
     logSender('email_failed', { agent: entry.sentBy, error: entry.error });
-    return res.status(502).json({ error: entry.error, email: entry });
+    return res.status(502).json({
+      error: entry.error,
+      email: entry,
+      logged: delivery.logged,
+      logError: delivery.error
+    });
   }
 };

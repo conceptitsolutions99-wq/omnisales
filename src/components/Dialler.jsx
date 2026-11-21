@@ -545,11 +545,13 @@ export default function Dialler({
         throw new Error(data.error || `Sending failed (${response.status}).`);
       }
 
+      // The message left, but the shared history may not have its row: say so instead of letting
+      // the agent assume the delivery log is complete
       setEmailStatus({
-        type: 'success',
+        type: data.logged === false ? 'warning' : 'success',
         message: `Email sent to ${emailTo.trim()}${data.email?.providerId ? ` · id ${data.email.providerId}` : ''}${
           data.email?.requirementsUrl ? ' · requirements form attached' : ''
-        }`
+        }${data.logged === false ? ' · the delivery log entry could not be saved' : ''}`
       });
 
       recordEmailSend(data, { to: emailTo.trim(), subject: emailSubject, lead: activeLead });
@@ -613,7 +615,11 @@ export default function Dialler({
         lead: activeLead
       });
       setLastDrafts(rememberLastDraft(activeLead, activeLastDraft));
-      setResendStatus({ type: 'success', message: `Sent again to ${activeLastDraft.to}.` });
+      setResendStatus(
+        data.logged === false
+          ? { type: 'warning', message: `Sent again to ${activeLastDraft.to}, but the delivery log entry could not be saved.` }
+          : { type: 'success', message: `Sent again to ${activeLastDraft.to}.` }
+      );
     } catch (err) {
       setResendStatus({
         type: 'error',

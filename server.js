@@ -252,8 +252,11 @@ const persistEmailEntry = async (entry) => {
   writeEmailLog([entry, ...readEmailLog()]);
   try {
     await emailLogStore.record(entry);
+    return { logged: true, error: null };
   } catch (err) {
-    console.error('Could not share the delivery:', err.message);
+    // The message already left: keep the send, but say the shared history is missing its row
+    console.error(`Could not share the delivery (${entry.id}):`, err.message);
+    return { logged: false, error: err.message };
   }
 };
 
@@ -573,7 +576,7 @@ app.post('/api/emails', async (req, res) => {
 
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
-    await persistEmailEntry(entry);
+    const delivery = await persistEmailEntry(entry);
     logSender('email_sent', { agent: entry.sentBy, lead: entry.leadName || entry.company || '' });
 
     // Lets the reply tracker attribute an answer to the agent who wrote it
@@ -592,15 +595,21 @@ app.post('/api/emails', async (req, res) => {
       .claimLead({ id: entry.leadId, email: entry.to }, session)
       .catch((err) => console.error('Could not record the lead owner:', err.message));
 
-    res.json({ ok: true, email: entry, rateLimit: await sendPacing.status() });
+    res.json({
+      ok: true,
+      email: entry,
+      logged: delivery.logged,
+      logError: delivery.error,
+      rateLimit: await sendPacing.status()
+    });
   } catch (err) {
     // A hand-off SMTP refused never reached the mailbox, so its slot goes back
     if (entry.status !== 'sent') await sendPacing.release(slot.stamp);
     entry.status = 'failed';
     entry.error = err.message || 'Sending failed.';
-    await persistEmailEntry(entry);
+    const delivery = await persistEmailEntry(entry);
     logSender('email_failed', { agent: entry.sentBy, error: entry.error });
-    res.status(502).json({ error: entry.error, email: entry });
+    res.status(502).json({ error: entry.error, email: entry, logged: delivery.logged, logError: delivery.error });
   }
 });
 
