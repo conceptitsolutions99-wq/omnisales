@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Undo2 } from 'lucide-react';
 import {
   ShieldAlert,
   UserPlus,
@@ -20,7 +21,14 @@ import {
 } from 'lucide-react';
 import { listStaff, createStaff, resetStaffPassword, setStaffStatus, updateStaff, deleteStaff } from '../lib/staff';
 
-export default function AdminDashboard({ currentUser, onClearDatabase }) {
+export default function AdminDashboard({
+  currentUser,
+  onClearDatabase,
+  clearedHistoryCount = 0,
+  historyUndoSeconds = 0,
+  restoringClearedHistory = false,
+  onUndoClearHistory
+}) {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
 
   // Accounts live on the server, so the screen reads them instead of keeping its own copy
@@ -207,11 +215,28 @@ export default function AdminDashboard({ currentUser, onClearDatabase }) {
         </div>
       </div>
 
+      {clearedHistoryCount > 0 && (
+        <div className="p-4 rounded-2xl border border-amber-300/60 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20 text-xs flex flex-wrap items-center justify-between gap-3">
+          <span className="flex items-center gap-2 font-medium text-amber-800 dark:text-amber-300">
+            <Undo2 className="w-4 h-4" />
+            Cleared {clearedHistoryCount} history {clearedHistoryCount === 1 ? 'entry' : 'entries'} for the whole
+            team. Undo available for {historyUndoSeconds}s.
+          </span>
+          <button
+            onClick={onUndoClearHistory}
+            disabled={restoringClearedHistory}
+            className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold"
+          >
+            {restoringClearedHistory ? 'Restoring…' : 'Undo clear'}
+          </button>
+        </div>
+      )}
+
       {/* Security Notice */}
       <div className="p-4 accent-pill rounded-2xl border border-blue-200 dark:border-blue-900 flex items-start space-x-3 text-xs text-blue-800 dark:text-blue-300">
         <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
         <div>
-          <strong>Admin Privilege Center:</strong> The <strong>Clear Database</strong> button removes every shared lead, call and email history entry, and follow-up task for the whole team, so every device starts fresh. This cannot be undone.
+          <strong>Admin Privilege Center:</strong> The <strong>Clear Database</strong> button removes every shared lead, call and email history entry, and follow-up task for the whole team, so every device starts fresh. The call and email history can be put back for 30 seconds from this screen; leads and follow-ups cannot.
         </div>
       </div>
 

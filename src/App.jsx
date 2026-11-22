@@ -48,6 +48,9 @@ function AmbientBackdrop() {
 // Users saved in localStorage keep an older display name until renamed here
 const LEGACY_NAMES = [['Alex Developer', 'Seif Amr']];
 
+// How long a cleared history can be put back, the same window the history delete offers
+const CLEAR_UNDO_WINDOW_MS = 30000;
+
 const renameLegacyUser = (user) => {
   if (!user || typeof user.name !== 'string') return user;
   const name = LEGACY_NAMES.reduce((current, [from, to]) => current.split(from).join(to), user.name);
@@ -337,6 +340,35 @@ function Workspace() {
 
   // An admin removes the entries they selected; the result carries the remaining history and the
   // keys that were deleted, so every open tab drops the same rows
+  // A clear-all is a bigger mis-click than a selection, so its undo window works the same way:
+  // the rows the server removed are held here until it closes
+  const [clearedHistory, setClearedHistory] = useState(null);
+  const [historyUndoSeconds, setHistoryUndoSeconds] = useState(0);
+  const [restoringClearedHistory, setRestoringClearedHistory] = useState(false);
+  const historyUndoDeadline = useRef(0);
+
+  useEffect(() => {
+    if (!clearedHistory) return undefined;
+    let timer = null;
+    let done = false;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((historyUndoDeadline.current - Date.now()) / 1000));
+      setHistoryUndoSeconds(left);
+      if (left === 0) {
+        done = true;
+        if (timer) clearInterval(timer);
+        timer = null;
+        setClearedHistory(null);
+      }
+    };
+    tick();
+    if (!done) timer = setInterval(tick, 1000);
+    return () => {
+      done = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [clearedHistory]);
+
   const handleDeleteActivity = useCallback(
     async (selection) => {
       const result = await deleteSharedActivity(selection);
@@ -356,6 +388,22 @@ function Workspace() {
     },
     [applySharedActivity]
   );
+
+  const handleUndoClearHistory = useCallback(async () => {
+    if (!clearedHistory || restoringClearedHistory) return;
+
+    setRestoringClearedHistory(true);
+    try {
+      const result = await restoreSharedActivity(clearedHistory);
+      applySharedActivity(result.activity, result.deleted);
+      setClearedHistory(null);
+      setHistoryUndoSeconds(0);
+    } catch (err) {
+      alert(`The history was not restored: ${err.message}`);
+    } finally {
+      setRestoringClearedHistory(false);
+    }
+  }, [clearedHistory, restoringClearedHistory, applySharedActivity]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -595,14 +643,14 @@ function Workspace() {
   const handleClearDatabase = async () => {
     if (
       !window.confirm(
-        'Clear every shared lead, call and email history entry, and follow-up task for the whole team?\n\nThis cannot be undone.'
+        'Clear every shared lead, call and email history entry, and follow-up task for the whole team?\n\nThe call and email history can be put back for 30 seconds. Leads and follow-ups cannot.'
       )
     )
       return;
 
     try {
       const { leads: sharedLeads } = await listSharedLeads();
-      await Promise.all([
+      const [, history] = await Promise.all([
         sharedLeads.length > 0 ? deleteSharedLeads(sharedLeads) : null,
         clearSharedActivity(),
         clearFollowups()
@@ -614,6 +662,16 @@ function Workspace() {
       localStorage.removeItem('omnisales_leads');
       localStorage.removeItem('omnisales_call_logs');
       localStorage.removeItem('omnisales_followups');
+
+      // The rows the clear removed stay on this screen for half a minute, so a mis-click can be
+      // put back for the whole team
+      if (history?.cleared?.length) {
+        historyUndoDeadline.current = Date.now() + CLEAR_UNDO_WINDOW_MS;
+        setClearedHistory(history.cleared);
+        setHistoryUndoSeconds(Math.ceil(CLEAR_UNDO_WINDOW_MS / 1000));
+      } else {
+        setClearedHistory(null);
+      }
       alert('The shared lead list, call history and follow-up queue were cleared for the whole team.');
     } catch (err) {
       alert(`The database was not cleared: ${err.message}`);
@@ -751,6 +809,10 @@ function Workspace() {
               setUsers={setUsers}
               currentUser={currentUser}
               onClearDatabase={handleClearDatabase}
+              clearedHistoryCount={clearedHistory ? clearedHistory.length : 0}
+              historyUndoSeconds={historyUndoSeconds}
+              restoringClearedHistory={restoringClearedHistory}
+              onUndoClearHistory={handleUndoClearHistory}
             />
           )}
         </div>

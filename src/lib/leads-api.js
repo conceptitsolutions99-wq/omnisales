@@ -20,7 +20,9 @@ const parseActivity = async (pending) => {
   return {
     activity: Array.isArray(data.activity) ? data.activity : [],
     // Keys an admin deleted: every browser drops its cached copy instead of pushing it back
-    deleted: Array.isArray(data.deleted) ? data.deleted : []
+    deleted: Array.isArray(data.deleted) ? data.deleted : [],
+    // A clear-all names the rows it removed, so the admin can undo it for the whole team
+    cleared: Array.isArray(data.cleared) ? data.cleared : []
   };
 };
 

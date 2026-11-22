@@ -188,12 +188,16 @@ module.exports = async (req, res) => {
     }
 
     const selected = (keys?.length || 0) + (ids?.length || 0) > 0;
-    const activity = selected ? await store.deleteActivity({ keys, ids }) : await store.clearActivity();
+    // A clear-all returns what it removed under its own field: `activity` is what the history now
+    // holds, and the admin's undo needs the rows themselves to put them back
+    const cleared = selected ? null : await store.clearActivity();
+    const activity = selected ? await store.deleteActivity({ keys, ids }) : [];
     const admin = auth.isAdmin(session);
     return res.status(200).json({
       ok: true,
       count: activity.length,
       activity,
+      ...(cleared ? { cleared } : {}),
       deleted: await store.listDeletedKeys(),
       removed: selected ? true : false,
       scope: admin ? 'team' : 'own'

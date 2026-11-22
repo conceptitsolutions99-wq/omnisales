@@ -103,6 +103,25 @@ test('undo puts a deleted entry back, still credited to the employee who recorde
   );
 });
 
+test('clearing the whole history hands back the rows so the admin can undo it', async () => {
+  await store.addActivity([entry('clear-1', 'Iota Ltd'), entry('clear-2', 'Kappa Ltd')], actor);
+  const before = (await store.listActivity()).map((row) => row.leadName).sort();
+  assert.ok(before.includes('Iota Ltd') && before.includes('Kappa Ltd'));
+
+  const cleared = await store.clearActivity();
+  assert.deepEqual(await store.listActivity(), [], 'the history is empty after the clear');
+  assert.deepEqual(
+    cleared.map((row) => row.leadName).sort(),
+    before,
+    'the clear names every row it removed'
+  );
+
+  // The admin's undo sends those rows back, and the clear's tombstones must not keep them out
+  const restored = await store.restoreActivity(cleared);
+  assert.deepEqual(restored.map((row) => row.leadName).sort(), before);
+  assert.deepEqual((await store.listActivity()).map((row) => row.leadName).sort(), before);
+});
+
 test('undoing one entry does not bring back another entry that was deleted', async () => {
   await store.addActivity([entry('undo-2', 'Eta Ltd'), entry('undo-3', 'Theta Ltd')], actor);
   const rows = await store.listActivity();
