@@ -19,9 +19,12 @@ export const LEAD_MARKETS = [
   },
   {
     country: 'Egypt',
+    // Checked against the live provider: Mansoura, Sohag and Minya returned no contactable
+    // listings, so the sweep uses these instead
     areas: [
-      'Cairo', 'Alexandria', 'Giza', 'Port Said', 'Suez', 'Luxor', 'Aswan', 'Mansoura',
-      'Tanta', 'Ismailia', 'Hurghada', 'Sharm El Sheikh', 'Minya', 'Sohag', 'Damietta'
+      'Cairo', 'Alexandria', 'Giza', 'Port Said', 'Suez', 'Luxor', 'Aswan', 'Tanta',
+      'Ismailia', 'Hurghada', 'Sharm El Sheikh', 'Damietta', '6th of October City',
+      'New Cairo', '10th of Ramadan City'
     ]
   }
 ];
