@@ -1,6 +1,6 @@
 // A mixed fetch sweeps areas spread across each country and merges the answers. The mix has to be
 // visible from the first rows, the same business must not be added twice, and the sweep has to
-// keep moving so repeated searches do not land in the same city.
+// reach every area of every country before it starts over.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -49,36 +49,100 @@ test('a fetch sweeps two areas from each country, interleaved', async () => {
     'Canada', 'USA', 'Egypt', 'Canada', 'USA', 'Egypt'
   ]);
   for (const market of LEAD_MARKETS) {
-    const areas = market.areas;
     assert.deepEqual(
       plan.markets.filter((entry) => entry.country === market.country).map((entry) => entry.city),
-      [areas[0], areas[1]]
+      [market.areas[0], market.areas[1]]
     );
-    assert.equal(plan.nextCursors[market.country], 2);
+    assert.deepEqual(plan.nextCursors[market.country], [0, 1]);
   }
+});
+
+test('every area is reached before the sweep repeats, even with an even-length list', async () => {
+  const { nextAreas } = await markets();
+
+  // Six areas, two per fetch: the old offset cursor stepped 0,2,4 and never saw 1,3,5
+  const areas = ['a', 'b', 'c', 'd', 'e', 'f'];
+  let cursor = [];
+  const seen = [];
+  for (let step = 0; step < 3; step += 1) {
+    const next = nextAreas(areas, cursor);
+    seen.push(...next.areas);
+    cursor = next.nextVisited;
+  }
+
+  assert.deepEqual([...new Set(seen)].sort(), [...areas].sort());
+  assert.equal(seen.length, areas.length);
+});
+
+test('an odd-length list is fully covered too, without skipping the tail', async () => {
+  const { nextAreas } = await markets();
+  const areas = ['a', 'b', 'c', 'd', 'e'];
+  let cursor = [];
+  const seen = [];
+  for (let step = 0; step < 3; step += 1) {
+    const next = nextAreas(areas, cursor);
+    seen.push(...next.areas);
+    cursor = next.nextVisited;
+  }
+
+  assert.deepEqual([...new Set(seen)].sort(), [...areas].sort());
+  // The last fetch finishes the old cycle and opens the next one, so one area repeats
+  assert.equal(seen.length, areas.length + 1);
+});
+
+test('a completed cycle starts again from the first area', async () => {
+  const { planAreaSearch, LEAD_MARKETS } = await markets();
+  const canada = LEAD_MARKETS.find((market) => market.country === 'Canada').areas;
+  const plan = planAreaSearch(['Canada'], { Canada: canada.map((_, index) => index) });
+
+  assert.deepEqual(plan.markets.map((market) => market.city), [canada[0], canada[1]]);
+  assert.deepEqual(plan.nextCursors.Canada, [0, 1]);
 });
 
 test('picking one country sweeps only that country and keeps its own cursor', async () => {
   const { planAreaSearch, LEAD_MARKETS } = await markets();
   const usa = LEAD_MARKETS.find((market) => market.country === 'USA').areas;
-  const plan = planAreaSearch(['USA'], { USA: 4, Canada: 9 });
+  const plan = planAreaSearch(['USA'], { USA: [0, 1, 2, 3], Canada: [9] });
 
   assert.deepEqual(plan.markets.map((market) => market.city), [usa[4], usa[5]]);
-  assert.equal(plan.nextCursors.USA, 6);
-  assert.equal(plan.nextCursors.Canada, 9);
+  assert.deepEqual(plan.nextCursors.USA, [0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(plan.nextCursors.Canada, [9]);
 });
 
-test('the sweep wraps around the area list', async () => {
+test('an older numeric cursor keeps its progress', async () => {
   const { planAreaSearch, LEAD_MARKETS } = await markets();
   const egypt = LEAD_MARKETS.find((market) => market.country === 'Egypt').areas;
-  const plan = planAreaSearch(['Egypt'], { Egypt: egypt.length - 1 });
+  const plan = planAreaSearch(['Egypt'], { Egypt: 2 });
 
-  assert.deepEqual(plan.markets.map((market) => market.city), [egypt[egypt.length - 1], egypt[0]]);
-  assert.equal(plan.nextCursors.Egypt, 1);
+  assert.deepEqual(plan.markets.map((market) => market.city), [egypt[2], egypt[3]]);
+  assert.deepEqual(plan.nextCursors.Egypt, [0, 1, 2, 3]);
 });
 
-test('each country carries a spread of areas, not one city', async () => {
+test('every area of every real market is reachable', async () => {
+  const { planAreaSearch, LEAD_MARKETS, AREAS_PER_SEARCH } = await markets();
+
+  for (const market of LEAD_MARKETS) {
+    const fetches = Math.ceil(market.areas.length / AREAS_PER_SEARCH);
+    let cursors = {};
+    const seen = [];
+    for (let step = 0; step < fetches; step += 1) {
+      const plan = planAreaSearch([market.country], cursors);
+      seen.push(...plan.markets.map((entry) => entry.city));
+      cursors = plan.nextCursors;
+    }
+    assert.deepEqual(
+      [...new Set(seen)].sort(),
+      [...market.areas].sort(),
+      `${market.country} reaches every area`
+    );
+  }
+});
+
+test('each country carries a spread of cities and smaller regions', async () => {
   const { LEAD_MARKETS } = await markets();
   assert.deepEqual(LEAD_MARKETS.map((market) => market.country), ['Canada', 'USA', 'Egypt']);
-  for (const market of LEAD_MARKETS) assert.ok(market.areas.length >= 10, `${market.country} areas`);
+  for (const market of LEAD_MARKETS) {
+    assert.ok(market.areas.length >= 25, `${market.country} has ${market.areas.length} areas`);
+    assert.equal(new Set(market.areas).size, market.areas.length, `${market.country} areas are unique`);
+  }
 });
