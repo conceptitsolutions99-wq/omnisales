@@ -4,6 +4,8 @@
 // takes over. Geoapify requires a browser key to be domain-restricted.
 // Data © OpenStreetMap contributors (ODbL) · Powered by Geoapify.
 
+import { firstGeoapifyResult, windowFromGeoapify, windowFromNominatim } from './geo-window.mjs';
+
 const JSON_HEADERS = { Accept: 'application/json' };
 
 // osm.ch only carries Swiss data, so it is deliberately excluded
@@ -113,41 +115,8 @@ const readJson = (body) => {
   }
 };
 
-// A geocoder answers with the whole municipality: Cairo's box is about 160 km across, and a map
-// query over that much ground takes a minute or is refused outright. The search is bounded to a
-// window around the city centre instead, which is where a city's businesses are, and the result
-// says the area was limited so the agent knows why the list is town-centre shaped.
-const MAX_SEARCH_SPAN_DEGREES = 0.25;
-
-const limitBox = (bbox, centre) => {
-  if (!bbox) return null;
-
-  const latSpan = bbox.north - bbox.south;
-  const lonSpan = bbox.east - bbox.west;
-  const limited = latSpan > MAX_SEARCH_SPAN_DEGREES || lonSpan > MAX_SEARCH_SPAN_DEGREES;
-  if (!limited) return { ...bbox, limited: false };
-
-  // A city name can resolve to a state or a country of the same name ("New York" is all three),
-  // and the middle of such a box is farmland or desert: a US search then came back with a
-  // handful of listings and no contact details. The resolved place's own point is where the name
-  // actually is, so the window is centred there whenever the geocoder gives one.
-  const pointLat = Number(centre?.lat);
-  const pointLon = Number(centre?.lon);
-  const anchored = Number.isFinite(pointLat) && Number.isFinite(pointLon);
-  const latCentre = anchored ? pointLat : (bbox.north + bbox.south) / 2;
-  const lonCentre = anchored ? pointLon : (bbox.east + bbox.west) / 2;
-  const latHalf = Math.min(latSpan, MAX_SEARCH_SPAN_DEGREES) / 2;
-  const lonHalf = Math.min(lonSpan, MAX_SEARCH_SPAN_DEGREES) / 2;
-
-  return {
-    south: latCentre - latHalf,
-    north: latCentre + latHalf,
-    west: lonCentre - lonHalf,
-    east: lonCentre + lonHalf,
-    label: bbox.label,
-    limited: true
-  };
-};
+// The search window and the reading of a geocoder's answer live in geo-window.mjs, so the node
+// tests can check them without the browser's fetch and Vite key.
 
 // Resolve the city to a bounding box so matching does not depend on exact OSM names
 const geocodeCache = new Map();
@@ -170,14 +139,7 @@ const geocodeCity = async (city, country = '') => {
   }
   if (!response.ok) return null;
 
-  const results = readJson(response.body);
-  if (!Array.isArray(results) || results.length === 0) return null;
-
-  const [south, north, west, east] = results[0].boundingbox.map(Number);
-  const bbox = limitBox(
-    { south, north, west, east, label: results[0].display_name },
-    { lat: results[0].lat, lon: results[0].lon }
-  );
+  const bbox = windowFromNominatim(readJson(response.body));
   geocodeCache.set(key, { at: Date.now(), bbox });
   return bbox;
 };
@@ -316,11 +278,7 @@ const geocodeWithGeoapify = async (city, country = '') => {
     const response = await requestWithTimeout(`${base}${extra}`, { headers: JSON_HEADERS }, 8000);
     if (!response.ok) return null;
 
-    const data = readJson(response.body);
-    // Without format=json Geoapify answers a GeoJSON FeatureCollection, which has no `results`:
-    // reading only that shape silently returned nothing and left every US search empty. Both
-    // shapes are accepted now, so a change on their side cannot break the fallback again.
-    return data?.results?.[0] || data?.features?.[0]?.properties || null;
+    return firstGeoapifyResult(readJson(response.body));
   };
 
   // "New York" without a type resolves to the state, whose 0.25-degree window lands upstate and
@@ -329,13 +287,7 @@ const geocodeWithGeoapify = async (city, country = '') => {
   // then anchored on the result's own point.
   if (!GEOAPIFY_KEY) return null;
   const first = (await ask('&type=city')) || (await ask(''));
-  const box = first?.bbox;
-  if (!box) return null;
-
-  return limitBox(
-    { west: box.lon1, south: box.lat1, east: box.lon2, north: box.lat2, label: first.formatted },
-    { lat: first.lat, lon: first.lon }
-  );
+  return windowFromGeoapify(first);
 };
 
 // The same business has a different id on each provider, so a listing saved from OpenStreetMap
