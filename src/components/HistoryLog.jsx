@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { History, Mail, MessageSquare, PhoneCall, Send, Trash2, UserCheck } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { History, Mail, MessageSquare, PhoneCall, Send, Trash2, Undo2, UserCheck } from 'lucide-react';
 import { isOwnActivity } from '../lib/activity-owner';
 import { activityEventKey } from '../lib/activity-merge';
 
 const EMAIL_LOG_KEY = 'cit_email_delivery_log';
+
+// A wrong selection is cheap to undo for half a minute, the same window the lead delete offers
+const UNDO_WINDOW_MS = 30000;
 
 // How the From of a recorded send was decided, so the log explains itself without the server logs
 const SENDER_MODES = {
@@ -85,7 +88,7 @@ const writeLocalEmailLog = (entries) => {
   }
 };
 
-export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) {
+export default function HistoryLog({ callLogs, currentUser, onDeleteActivity, onRestoreActivity }) {
   // Call and WhatsApp history filters
   const [callHistorySearch, setCallHistorySearch] = useState('');
   const [historyName, setHistoryName] = useState('');
@@ -100,6 +103,11 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
   const [deletingHistory, setDeletingHistory] = useState(false);
   const [historyMessage, setHistoryMessage] = useState('');
   const [historyError, setHistoryError] = useState('');
+  // The entries just deleted, and the moment their undo stops being offered
+  const [deletedHistory, setDeletedHistory] = useState(null);
+  const [undoSeconds, setUndoSeconds] = useState(0);
+  const [restoringHistory, setRestoringHistory] = useState(false);
+  const undoDeadline = useRef(0);
 
   // Email delivery log
   const [emailLog, setEmailLog] = useState([]);
@@ -217,7 +225,7 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
     const label = count === 1 ? 'entry' : 'entries';
     if (
       !window.confirm(
-        `Delete ${count} history ${label} for the whole team?\n\nThis removes calls, WhatsApp contacts and emails logged by anyone, and cannot be undone.`
+        `Delete ${count} history ${label} for the whole team?\n\nThis removes calls, WhatsApp contacts and emails logged by anyone. You can undo it for 30 seconds.`
       )
     )
       return;
@@ -231,8 +239,11 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
         ids: selectedLogs.map((log) => log.id).filter((id) => id !== undefined && id !== null)
       });
       setSelectedLogKeys([]);
-      setHistoryMessage(`Deleted ${count} history ${label} for the whole team.`);
-      setTimeout(() => setHistoryMessage(''), 8000);
+      // The undo strip takes over from the plain message: it names the same batch and says how
+      // long the entries can still be put back
+      undoDeadline.current = Date.now() + UNDO_WINDOW_MS;
+      setDeletedHistory(selectedLogs);
+      setUndoSeconds(Math.ceil(UNDO_WINDOW_MS / 1000));
     } catch (err) {
       setHistoryError(
         err.message === 'Failed to fetch'
@@ -241,6 +252,54 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
       );
     } finally {
       setDeletingHistory(false);
+    }
+  };
+
+  // The window closes on its own, so a stale offer never sits on screen after the server would
+  // have to refuse it. The interval clears itself at zero instead of ticking forever.
+  useEffect(() => {
+    if (!deletedHistory) return undefined;
+    let timer = null;
+    let done = false;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((undoDeadline.current - Date.now()) / 1000));
+      setUndoSeconds(left);
+      if (left === 0) {
+        done = true;
+        if (timer) clearInterval(timer);
+        timer = null;
+        setDeletedHistory(null);
+      }
+    };
+    tick();
+    if (!done) timer = setInterval(tick, 1000);
+    return () => {
+      done = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [deletedHistory]);
+
+  const handleUndoDeleteHistory = async () => {
+    if (!deletedHistory || restoringHistory || !onRestoreActivity) return;
+
+    const batch = deletedHistory;
+    const label = batch.length === 1 ? 'entry' : 'entries';
+    setRestoringHistory(true);
+    setHistoryError('');
+    try {
+      await onRestoreActivity(batch);
+      setDeletedHistory(null);
+      setUndoSeconds(0);
+      setHistoryMessage(`Restored ${batch.length} history ${label} for the whole team.`);
+      setTimeout(() => setHistoryMessage(''), 8000);
+    } catch (err) {
+      setHistoryError(
+        err.message === 'Failed to fetch'
+          ? 'Cannot reach the server, so nothing was restored.'
+          : err.message
+      );
+    } finally {
+      setRestoringHistory(false);
     }
   };
 
@@ -521,6 +580,22 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
           </div>
         </div>
 
+        {deletedHistory && (
+          <div className="p-3 rounded-xl border border-amber-300/60 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20 text-[11px] flex flex-wrap items-center justify-between gap-3">
+            <span className="flex items-center gap-2 font-medium text-amber-800 dark:text-amber-300">
+              <Undo2 className="w-4 h-4" />
+              Deleted {deletedHistory.length} history {deletedHistory.length === 1 ? 'entry' : 'entries'} for the
+              whole team. Undo available for {undoSeconds}s.
+            </span>
+            <button
+              onClick={handleUndoDeleteHistory}
+              disabled={restoringHistory}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[11px] font-semibold"
+            >
+              {restoringHistory ? 'Restoring…' : 'Undo delete'}
+            </button>
+          </div>
+        )}
         {historyMessage && (
           <div className="p-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 text-[11px] font-medium">
             {historyMessage}

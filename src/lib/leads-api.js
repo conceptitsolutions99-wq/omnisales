@@ -43,6 +43,17 @@ export const deleteSharedActivity = async ({ keys = [], ids = [] } = {}) =>
     })
   );
 
+// Admin only on the server: undo of a history delete, so the entries come back for the whole team
+export const restoreSharedActivity = async (activity) =>
+  parseActivity(
+    fetch('/api/activity', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activity })
+    })
+  );
+
 export const pushActivity = async (activity) =>
   parseActivity(
     fetch('/api/activity', {

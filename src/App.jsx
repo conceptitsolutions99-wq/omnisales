@@ -28,6 +28,7 @@ import {
   pushActivity,
   clearSharedActivity,
   deleteSharedActivity,
+  restoreSharedActivity,
   deleteSharedLeads
 } from './lib/leads-api';
 import { listFollowups, pushFollowups, clearFollowups } from './lib/followups';
@@ -339,6 +340,17 @@ function Workspace() {
   const handleDeleteActivity = useCallback(
     async (selection) => {
       const result = await deleteSharedActivity(selection);
+      applySharedActivity(result.activity, result.deleted);
+      return result;
+    },
+    [applySharedActivity]
+  );
+
+  // Undo: the entries the admin just deleted come back for the whole team, still credited to the
+  // employee who recorded them
+  const handleRestoreActivity = useCallback(
+    async (entries) => {
+      const result = await restoreSharedActivity(entries);
       applySharedActivity(result.activity, result.deleted);
       return result;
     },
@@ -712,6 +724,7 @@ function Workspace() {
               callLogs={callLogs}
               currentUser={currentUser}
               onDeleteActivity={handleDeleteActivity}
+              onRestoreActivity={handleRestoreActivity}
             />
           )}
 

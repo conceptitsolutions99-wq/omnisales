@@ -154,6 +154,28 @@ module.exports = async (req, res) => {
     });
   }
 
+  // An admin puts back what they just deleted. The entries carry the employee they were credited
+  // to, so the undo restores the row as it was rather than re-crediting it to the admin.
+  if (req.method === 'PATCH') {
+    if (!auth.isAdmin(session)) {
+      return res.status(403).json({ error: 'Only an admin can restore deleted history.' });
+    }
+
+    const { activity } = req.body || {};
+    if (!Array.isArray(activity) || activity.length === 0) {
+      return res.status(400).json({ error: 'Send the entries to restore as an array.' });
+    }
+
+    const restored = await store.restoreActivity(activity);
+    return res.status(200).json({
+      ok: true,
+      count: restored.length,
+      activity: restored,
+      deleted: await store.listDeletedKeys(),
+      scope: 'team'
+    });
+  }
+
   // An admin removes the entries they selected, or the whole history when nothing is named
   if (req.method === 'DELETE') {
     if (!auth.isAdmin(session)) {
@@ -179,8 +201,8 @@ module.exports = async (req, res) => {
   }
 
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'GET, POST, DELETE');
-    return res.status(405).json({ error: 'Use GET, POST or DELETE.' });
+    res.setHeader('Allow', 'GET, POST, PATCH, DELETE');
+    return res.status(405).json({ error: 'Use GET, POST, PATCH or DELETE.' });
   }
 
   const { activity } = req.body || {};

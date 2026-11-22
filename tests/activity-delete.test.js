@@ -80,3 +80,38 @@ test('a key that matches no entry deletes nothing', async () => {
   const after = await store.deleteActivity({ keys: ['call|nobody|nothing|2026-01-01 00:00'] });
   assert.deepEqual(after, before);
 });
+
+test('undo puts a deleted entry back, still credited to the employee who recorded it', async () => {
+  const agent = { name: 'Zeta Agent', email: 'zeta@example.com' };
+  // A fresh browser entry carries no owner yet: the store credits it to the session that recorded it
+  const { callerEmail, ...fresh } = entry('undo-1', 'Zeta Ltd');
+  await store.addActivity([fresh], agent);
+  const [stored] = (await store.listActivity()).filter((row) => row.leadName === 'Zeta Ltd');
+
+  await store.deleteActivity({ ids: ['undo-1'] });
+  assert.equal((await store.listActivity()).some((row) => row.leadName === 'Zeta Ltd'), false);
+
+  const restored = await store.restoreActivity([stored]);
+  const row = restored.find((item) => item.leadName === 'Zeta Ltd');
+  assert.ok(row, 'the entry is back');
+  assert.equal(row.caller, 'Zeta Agent', 'the undo does not re-credit the row to the admin');
+  assert.equal(row.callerEmail, 'zeta@example.com');
+  assert.equal(
+    (await store.listDeletedKeys()).includes(`id:undo-1|zeta ltd`),
+    false,
+    'its tombstone is gone, so the entry stays'
+  );
+});
+
+test('undoing one entry does not bring back another entry that was deleted', async () => {
+  await store.addActivity([entry('undo-2', 'Eta Ltd'), entry('undo-3', 'Theta Ltd')], actor);
+  const rows = await store.listActivity();
+  const eta = rows.find((row) => row.leadName === 'Eta Ltd');
+
+  await store.deleteActivity({ ids: ['undo-2', 'undo-3'] });
+  await store.restoreActivity([eta]);
+
+  const after = await store.listActivity();
+  assert.equal(after.some((row) => row.leadName === 'Eta Ltd'), true);
+  assert.equal(after.some((row) => row.leadName === 'Theta Ltd'), false);
+});
