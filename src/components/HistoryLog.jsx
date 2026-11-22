@@ -77,6 +77,14 @@ const readLocalEmailLog = () => {
   }
 };
 
+const writeLocalEmailLog = (entries) => {
+  try {
+    localStorage.setItem(EMAIL_LOG_KEY, JSON.stringify(entries.slice(0, 100)));
+  } catch (err) {
+    /* storage unavailable: the server copy is still the record */
+  }
+};
+
 export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) {
   // Call and WhatsApp history filters
   const [callHistorySearch, setCallHistorySearch] = useState('');
@@ -104,6 +112,13 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
   const [testEmailBusy, setTestEmailBusy] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState(null);
 
+  // Deleting a delivery is an admin action too, and it covers the whole team: the log is the
+  // shared record of what left the mailbox. Rows are selected by their id.
+  const [selectedEmailIds, setSelectedEmailIds] = useState([]);
+  const [deletingEmails, setDeletingEmails] = useState(false);
+  const [emailLogMessage, setEmailLogMessage] = useState('');
+  const [emailLogError, setEmailLogError] = useState('');
+
   const canSendTest = currentUser.role === 'Admin' || Boolean(currentUser.permissions?.admin);
 
   const fetchEmailLog = async () => {
@@ -113,10 +128,15 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
       if (!response.ok) throw new Error(`Log unavailable (${response.status})`);
       const data = await response.json();
       const serverEmails = Array.isArray(data.emails) ? data.emails : [];
+      // An admin deleted some rows: this browser's own copy drops them instead of merging them
+      // back, and the stored copy is rewritten so they do not return on the next visit
+      const deleted = new Set((Array.isArray(data.deleted) ? data.deleted : []).map(String));
+      const keptLocal = local.filter((entry) => !deleted.has(String(entry.id)));
+      if (keptLocal.length !== local.length) writeLocalEmailLog(keptLocal);
       // The server's copy of a send records the From it left with; the browser copy keeps what
       // a warm serverless instance may have forgotten, so a duplicate keeps both sets of facts
       const byId = new Map();
-      for (const entry of local) byId.set(entry.id, entry);
+      for (const entry of keptLocal) byId.set(entry.id, entry);
       for (const entry of serverEmails) {
         const existing = byId.get(entry.id);
         const filled = Object.fromEntries(
@@ -284,6 +304,67 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
     senderFilter === 'All'
       ? emailLogForEmployee
       : emailLogForEmployee.filter((entry) => senderModeOf(entry) === senderFilter);
+
+  // The selection survives a filter change, so the count and the delete describe the same rows
+  const visibleEmailIds = visibleEmailLog.map((entry) => String(entry.id));
+  const allVisibleEmailsSelected =
+    visibleEmailIds.length > 0 && visibleEmailIds.every((id) => selectedEmailIds.includes(id));
+
+  const toggleEmailSelection = (entry) => {
+    const id = String(entry.id);
+    setSelectedEmailIds((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllVisibleEmails = () => {
+    setSelectedEmailIds((prev) =>
+      allVisibleEmailsSelected
+        ? prev.filter((id) => !visibleEmailIds.includes(id))
+        : [...new Set([...prev, ...visibleEmailIds])]
+    );
+  };
+
+  const handleDeleteSelectedEmails = async () => {
+    if (!isAdminView || selectedEmailIds.length === 0 || deletingEmails) return;
+
+    const count = selectedEmailIds.length;
+    const label = count === 1 ? 'delivery' : 'deliveries';
+    if (
+      !window.confirm(
+        `Delete ${count} ${label} from the delivery log for the whole team?\n\nThis removes the record of those sends for everyone, and cannot be undone.`
+      )
+    )
+      return;
+
+    setDeletingEmails(true);
+    setEmailLogError('');
+    setEmailLogMessage('');
+    try {
+      const response = await fetch('/api/emails', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedEmailIds })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `The delete failed (${response.status}).`);
+
+      const deleted = new Set((Array.isArray(data.deleted) ? data.deleted : []).map(String));
+      writeLocalEmailLog(readLocalEmailLog().filter((entry) => !deleted.has(String(entry.id))));
+      setEmailLog((prev) => prev.filter((entry) => !deleted.has(String(entry.id))));
+      setSelectedEmailIds([]);
+      setEmailLogMessage(`Deleted ${count} ${label} from the delivery log for the whole team.`);
+      setTimeout(() => setEmailLogMessage(''), 8000);
+    } catch (err) {
+      setEmailLogError(
+        err.message === 'Failed to fetch'
+          ? 'Cannot reach the server, so nothing was deleted.'
+          : err.message
+      );
+    } finally {
+      setDeletingEmails(false);
+    }
+  };
 
   const handleSendTestEmail = async () => {
     if (testEmailBusy) return;
@@ -561,6 +642,17 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
             Email Delivery Log ({emailLogForViewer.length})
           </h3>
           <div className="text-[11px] text-muted sm:text-right space-y-1">
+            {isAdminView && (
+              <button
+                onClick={handleDeleteSelectedEmails}
+                disabled={selectedEmailIds.length === 0 || deletingEmails}
+                title="Delete the selected deliveries from the log for the whole team"
+                className="mr-2 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-[11px] font-semibold inline-flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deletingEmails ? 'Deleting…' : `Delete Selected (${selectedEmailIds.length})`}
+              </button>
+            )}
             {canSendTest && (
               <button
                 onClick={handleSendTestEmail}
@@ -617,6 +709,17 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
             ) : (
               <span>{testEmailResult.error}</span>
             )}
+          </div>
+        )}
+
+        {emailLogMessage && (
+          <div className="p-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 text-[11px] font-medium">
+            {emailLogMessage}
+          </div>
+        )}
+        {emailLogError && (
+          <div className="p-3 rounded-xl border border-rose-400/30 bg-rose-400/10 text-rose-300 text-[11px] font-medium">
+            {emailLogError}
           </div>
         )}
 
@@ -686,6 +789,18 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="glass-head text-xs font-semibold uppercase tracking-wider text-muted">
+                {isAdminView && (
+                  <th className="py-3 px-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleEmailsSelected}
+                      onChange={toggleSelectAllVisibleEmails}
+                      aria-label="Select all deliveries shown"
+                      title="Select every delivery the current filters show"
+                      className="h-4 w-4 rounded accent-blue-600 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-3 px-4">Recipient</th>
                 <th className="py-3 px-4">Subject</th>
                 <th className="py-3 px-4">Sender</th>
@@ -697,7 +812,7 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
             <tbody className="divide-y divide-white/[0.07] text-sm">
               {visibleEmailLog.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-8 text-muted">
+                  <td colSpan={isAdminView ? 7 : 6} className="text-center py-8 text-muted">
                     {emailLogForViewer.length === 0
                       ? emailLog.length === 0
                         ? 'No emails sent yet. Compose one in the Dialler.'
@@ -710,6 +825,17 @@ export default function HistoryLog({ callLogs, currentUser, onDeleteActivity }) 
               ) : (
                 visibleEmailLog.map((entry) => (
                   <tr key={entry.id} className="row-hover">
+                    {isAdminView && (
+                      <td className="py-3.5 px-3 align-top">
+                        <input
+                          type="checkbox"
+                          checked={selectedEmailIds.includes(String(entry.id))}
+                          onChange={() => toggleEmailSelection(entry)}
+                          aria-label={`Select the delivery to ${entry.to || 'this recipient'}`}
+                          className="mt-1 h-4 w-4 rounded accent-blue-600 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-[var(--text-primary)]">{entry.leadName || entry.to}</div>
                       <div className="text-xs text-muted font-mono">{entry.to}</div>

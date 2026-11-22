@@ -147,7 +147,13 @@ module.exports = async (req, res) => {
       return Boolean(viewerName) && String(entry.sentBy || '').trim() === viewerName;
     };
     const stored = await emailLogStore.list(300);
-    const emails = mergeDeliveryLog(stored, deliveries).filter(canSee).slice(0, 50);
+    // A row an admin removed stays removed, even when this instance still holds its own copy
+    const deleted = await emailLogStore.deletedIds();
+    const gone = new Set(deleted.map(String));
+    const emails = mergeDeliveryLog(stored, deliveries)
+      .filter((entry) => !gone.has(String(entry.id)))
+      .filter(canSee)
+      .slice(0, 50);
     return res.status(200).json({
       configured: Boolean(transporter),
       from: SENDER.from,
@@ -158,15 +164,46 @@ module.exports = async (req, res) => {
       // The remaining allowance travels with the log: the compose card reads it before sending
       rateLimit: await sendPacing.status(),
       emails,
+      // The browser's own copy of what it sent drops these instead of merging them back
+      deleted,
       // Admins also see whether the last note of each kind reached anyone. This is an admin panel
       // fact, so it is not put on the response an agent gets.
       ...(auth.isAdmin(session) ? { notifyStatus: await notifyStatus.readAll() } : {})
     });
   }
 
+  // Removing rows from the delivery log is an admin action, and it covers the whole team: the log
+  // is the shared record of what left the mailbox, so an agent cannot erase their own sends.
+  if (req.method === 'DELETE') {
+    if (!auth.isAdmin(session)) {
+      return res.status(403).json({ error: 'Only an admin can delete delivery log rows.' });
+    }
+
+    const ids = Array.isArray(req.body?.ids)
+      ? [...new Set(req.body.ids.map(String).filter(Boolean))].slice(0, 500)
+      : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'Choose at least one delivery to delete.' });
+    }
+
+    const remaining = await emailLogStore.deleteEntries(ids);
+    // This instance's warm copy would otherwise merge the rows straight back into the answer
+    const removed = new Set(ids);
+    for (let index = deliveries.length - 1; index >= 0; index -= 1) {
+      if (removed.has(String(deliveries[index].id))) deliveries.splice(index, 1);
+    }
+
+    return res.status(200).json({
+      ok: true,
+      removed: ids.length,
+      deleted: await emailLogStore.deletedIds(),
+      emails: mergeDeliveryLog(remaining, deliveries).slice(0, 50)
+    });
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'GET, POST');
-    return res.status(405).json({ error: 'Use GET or POST.' });
+    res.setHeader('Allow', 'GET, POST, DELETE');
+    return res.status(405).json({ error: 'Use GET, POST or DELETE.' });
   }
 
   const { to, subject, body, leadId, leadName, company, sentBy, requirements, test, confirmSharedContact, confirmRepliedContact } = req.body || {};

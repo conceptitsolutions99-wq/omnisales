@@ -671,6 +671,34 @@ app.get('/api/emails', async (req, res) => {
   });
 });
 
+// API: delete selected deliveries from the log. Same contract as the deployed function: an admin
+// removes rows for the whole team, and the ids travel back so a browser's own copy drops them.
+app.delete('/api/emails', async (req, res) => {
+  const session = await auth.requireActiveSession(req, res);
+  if (!session) return;
+  if (!auth.isAdmin(session)) {
+    return res.status(403).json({ error: 'Only an admin can delete delivery log rows.' });
+  }
+
+  const ids = Array.isArray(req.body?.ids)
+    ? [...new Set(req.body.ids.map(String).filter(Boolean))].slice(0, 500)
+    : [];
+  if (ids.length === 0) {
+    return res.status(400).json({ error: 'Choose at least one delivery to delete.' });
+  }
+
+  const removed = new Set(ids);
+  writeEmailLog(readEmailLog().filter((entry) => !removed.has(String(entry.id))));
+  const remaining = await emailLogStore.deleteEntries(ids);
+
+  res.json({
+    ok: true,
+    removed: ids.length,
+    deleted: await emailLogStore.deletedIds(),
+    emails: mergeEmailLogs(remaining, readEmailLog()).slice(0, 100)
+  });
+});
+
 // API: customer replies, attribution and admin reassignment (shared with the deployment)
 app.all('/api/replies', require('./api/replies'));
 app.all('/api/requirements', require('./api/requirements'));
