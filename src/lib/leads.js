@@ -5,7 +5,7 @@
 // Data © OpenStreetMap contributors (ODbL) · Powered by Geoapify.
 
 import { firstGeoapifyResult, windowFromGeoapify, windowFromNominatim } from './geo-window.mjs';
-import { LEAD_MARKETS, mixLeads } from './lead-markets.mjs';
+import { mixLeads } from './lead-markets.mjs';
 
 const JSON_HEADERS = { Accept: 'application/json' };
 
@@ -548,7 +548,7 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
 // answers are mixed together. A market that fails (busy map server, thin coverage) is reported
 // on its own instead of taking the whole search down with it.
 export async function searchLeadsAcrossMarkets({
-  markets = LEAD_MARKETS,
+  markets = [],
   category = 'offices',
   limit = 10,
   offsets = {},

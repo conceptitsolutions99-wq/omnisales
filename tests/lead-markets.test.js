@@ -1,5 +1,6 @@
-// A mixed fetch searches one city per market and merges the answers. The mix has to be visible
-// from the first rows, and the same business found twice must not be added twice.
+// A mixed fetch sweeps areas spread across each country and merges the answers. The mix has to be
+// visible from the first rows, the same business must not be added twice, and the sweep has to
+// keep moving so repeated searches do not land in the same city.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -40,8 +41,44 @@ test('the same business is kept once, by id or by phone', async () => {
   assert.deepEqual(mixLeads([canada, usa]).map((lead) => lead.id), ['same-id', 'c2', 'u3']);
 });
 
-test('the three markets cover Canada, the USA and Egypt', async () => {
+test('a fetch sweeps two areas from each country, interleaved', async () => {
+  const { planAreaSearch, LEAD_MARKETS } = await markets();
+  const plan = planAreaSearch(['Canada', 'USA', 'Egypt'], {});
+
+  assert.deepEqual(plan.markets.map((market) => market.country), [
+    'Canada', 'USA', 'Egypt', 'Canada', 'USA', 'Egypt'
+  ]);
+  for (const market of LEAD_MARKETS) {
+    const areas = market.areas;
+    assert.deepEqual(
+      plan.markets.filter((entry) => entry.country === market.country).map((entry) => entry.city),
+      [areas[0], areas[1]]
+    );
+    assert.equal(plan.nextCursors[market.country], 2);
+  }
+});
+
+test('picking one country sweeps only that country and keeps its own cursor', async () => {
+  const { planAreaSearch, LEAD_MARKETS } = await markets();
+  const usa = LEAD_MARKETS.find((market) => market.country === 'USA').areas;
+  const plan = planAreaSearch(['USA'], { USA: 4, Canada: 9 });
+
+  assert.deepEqual(plan.markets.map((market) => market.city), [usa[4], usa[5]]);
+  assert.equal(plan.nextCursors.USA, 6);
+  assert.equal(plan.nextCursors.Canada, 9);
+});
+
+test('the sweep wraps around the area list', async () => {
+  const { planAreaSearch, LEAD_MARKETS } = await markets();
+  const egypt = LEAD_MARKETS.find((market) => market.country === 'Egypt').areas;
+  const plan = planAreaSearch(['Egypt'], { Egypt: egypt.length - 1 });
+
+  assert.deepEqual(plan.markets.map((market) => market.city), [egypt[egypt.length - 1], egypt[0]]);
+  assert.equal(plan.nextCursors.Egypt, 1);
+});
+
+test('each country carries a spread of areas, not one city', async () => {
   const { LEAD_MARKETS } = await markets();
   assert.deepEqual(LEAD_MARKETS.map((market) => market.country), ['Canada', 'USA', 'Egypt']);
-  assert.deepEqual(LEAD_MARKETS.map((market) => market.city), ['Toronto', 'New York', 'Cairo']);
+  for (const market of LEAD_MARKETS) assert.ok(market.areas.length >= 10, `${market.country} areas`);
 });

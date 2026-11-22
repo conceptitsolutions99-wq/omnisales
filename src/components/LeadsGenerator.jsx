@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { searchLeadsAcrossMarkets } from '../lib/leads';
-import { LEAD_MARKETS } from '../lib/lead-markets.mjs';
+import { LEAD_MARKETS, planAreaSearch } from '../lib/lead-markets.mjs';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import {
   Users,
-  MapPin,
   Search,
   Filter,
   Plus,
@@ -64,7 +63,6 @@ export default function LeadsGenerator({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
-  const [fetchCity, setFetchCity] = useState('Toronto');
   const [fetchCategory, setFetchCategory] = useState('offices');
   // Picking a country can pre-select the category that country's listings are richest in, but
   // only until the agent chooses a category themselves
@@ -87,11 +85,6 @@ export default function LeadsGenerator({
 
   const handleCountryChange = (value) => {
     setCountryFilter(value);
-    // Choosing a country puts that market's city in the box, so a USA search never runs with
-    // "Toronto" still in it and labels Toronto listings as USA. Type your own city after picking
-    // the country.
-    const market = LEAD_MARKETS.find(entry => entry.country === value);
-    if (market) setFetchCity(market.city);
     if (value === 'Egypt') {
       setFetchCategory(EGYPT_SEARCH_CATEGORY);
       setCategoryChosenByAgent(false);
@@ -146,8 +139,26 @@ export default function LeadsGenerator({
     });
   };
 
+  // Which areas each country searches next. The sweep continues across sessions, so a country is
+  // covered region by region instead of every search landing in the same city.
+  const AREA_CURSOR_KEY = 'omnisales_country_area_cursors';
+  const readAreaCursors = () => {
+    try {
+      return JSON.parse(localStorage.getItem(AREA_CURSOR_KEY) || '{}');
+    } catch (err) {
+      return {};
+    }
+  };
+  const saveAreaCursors = (cursors) => {
+    try {
+      localStorage.setItem(AREA_CURSOR_KEY, JSON.stringify(cursors));
+    } catch (err) {
+      // A browser with storage disabled still gets its search; only the sweep position is lost
+    }
+  };
+
   // Each search walks a little further through the provider's results, otherwise a second
-  // search in the same city only ever sees businesses that are already in the list.
+  // search in the same area only ever sees businesses that are already in the list.
   const OFFSET_KEY = 'omnisales_lead_offsets';
   const nextSearchOffset = (city, category) => {
     try {
@@ -162,39 +173,30 @@ export default function LeadsGenerator({
     }
   };
 
-  // Pull real businesses (with a published phone number) from OpenStreetMap's Overpass API.
-  // "All Countries" runs one search per market, so a single fetch returns a mixed list instead
-  // of only the country named in the city box.
+  // Pull real businesses from OpenStreetMap's Overpass API, falling back to Geoapify. Every fetch
+  // sweeps a couple of areas in each selected country and advances a cursor, so repeated searches
+  // spread the list across the whole country instead of pinning one city to each market.
   const handleFetchLiveLeads = async () => {
-    const mixed = countryFilter === 'All';
-    const city = fetchCity.trim();
+    const countries = countryFilter === 'All' ? LEAD_MARKETS.map(market => market.country) : [countryFilter];
+    const mixed = countries.length > 1;
     const categoryLabel = CATEGORY_OPTIONS.find(option => option.value === fetchCategory)?.label || 'businesses';
 
-    if (!mixed && city.length < 2) {
-      setFetchMessage('Enter a city or region to search, for example Toronto, Dallas or Cairo.');
-      return;
-    }
+    const plan = planAreaSearch(countries, readAreaCursors());
+    saveAreaCursors(plan.nextCursors);
 
-    // Egyptian listings are richest in shops and restaurants, so the mixed search uses the same
-    // default the country picker applies, unless the agent chose a category themselves.
-    const markets = mixed
-      ? LEAD_MARKETS.map(market => ({
-          ...market,
-          category:
-            market.country === 'Egypt' && !categoryChosenByAgent ? EGYPT_SEARCH_CATEGORY : fetchCategory
-        }))
-      : [{ city, country: countryFilter, category: fetchCategory }];
+    // Egyptian listings are richest in shops and restaurants, so the sweep uses the same default
+    // the country picker applies, unless the agent chose a category themselves.
+    const markets = plan.markets.map(market => ({
+      ...market,
+      category: market.country === 'Egypt' && !categoryChosenByAgent ? EGYPT_SEARCH_CATEGORY : fetchCategory
+    }));
 
-    // Every market walks its own results, so the second mixed search does not repeat the first
+    // Every area walks its own results, so the second sweep does not repeat the first
     const offsets = {};
     for (const market of markets) offsets[market.city] = nextSearchOffset(market.city, market.category);
 
     setIsFetchingLive(true);
-    setFetchMessage(
-      mixed
-        ? `Searching ${markets.map(market => market.city).join(', ')} for ${categoryLabel.toLowerCase()}…`
-        : `Searching OpenStreetMap for ${categoryLabel} in ${city}…`
-    );
+    setFetchMessage(`Searching ${markets.map(market => market.city).join(', ')} for ${categoryLabel.toLowerCase()}…`);
 
     try {
       // Places already saved never need their details bought again, so the search is told
@@ -202,7 +204,7 @@ export default function LeadsGenerator({
       const data = await searchLeadsAcrossMarkets({
         markets,
         category: fetchCategory,
-        limit: mixed ? 10 : 30,
+        limit: 6,
         offsets,
         knownIds: new Set(leads.map(lead => lead.id)),
         // A business saved from OpenStreetMap comes back with a Geoapify id, so its name and
@@ -214,34 +216,27 @@ export default function LeadsGenerator({
 
       const fetched = Array.isArray(data.leads) ? data.leads : [];
 
-      // A single-market search keeps its specific error, because that is the one thing the agent
-      // can act on (a rejected key, a busy map server, nothing in that city)
-      if (!mixed && data.markets[0]?.error) throw new Error(data.markets[0].error);
+      // A single-country sweep keeps its specific error, because that is the one thing the agent
+      // can act on (a rejected key, a busy map server, thin coverage)
+      if (!mixed && data.markets.every(market => market.error)) {
+        throw new Error(data.markets[0].error);
+      }
 
       if (fetched.length === 0 && data.allKnown) {
         setFetchMessage(
-          (mixed
-            ? 'Every result is already in your list, so no credits were spent. Search again to move to the next page.'
-            : `All ${data.skippedKnown} results for ${city} are already in your list, so no credits were spent. Search again to move to the next page.`) +
-            (data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name to cover another part of the city.' : '')
+          'Every result in these areas is already in your list, so no credits were spent. Search again to sweep the next areas.' +
+            (data.areaLimited ? ' The map was queried around each city centre to keep it fast.' : '')
         );
         setTimeout(() => setFetchMessage(''), 10000);
         return;
       }
       if (fetched.length === 0) {
-        if (mixed) {
-          const details = data.markets
-            .map(market =>
-              `${market.city}${market.error ? `: ${market.error}` : market.allKnown ? ': all results already saved' : ': no businesses with contact details'}`
-            )
-            .join(' · ');
-          setFetchMessage(`No new leads this time — ${details}. Try another category.`);
-          return;
-        }
-        setFetchMessage(
-          `No ${categoryLabel.toLowerCase()} with a published phone or email were found in ${city}. Try another city or category.` +
-            (data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name to cover another part of the city.' : '')
-        );
+        const details = data.markets
+          .map(market =>
+            `${market.city}${market.error ? `: ${market.error}` : market.allKnown ? ': all results already saved' : ': none with contact details'}`
+          )
+          .join(' · ');
+        setFetchMessage(`No new leads this time — ${details}. Try another category.`);
         return;
       }
 
@@ -273,20 +268,21 @@ export default function LeadsGenerator({
         counts[key] = (counts[key] || 0) + 1;
         return counts;
       }, {});
-      const spread = markets.map(market => `${market.country} ${byCountry[market.country] || 0}`).join(' · ');
+      const spread = countries.map(country => `${country} ${byCountry[country] || 0}`).join(' · ');
       const failedMarkets = data.markets.filter(market => market.error);
+      const searched = markets.map(market => market.city).join(', ');
 
       setFetchMessage(
         fresh.length > 0
-          ? (mixed
-              ? `Added ${fresh.length} real business leads across ${spread}.`
-              : `Added ${fresh.length} real business leads from ${city} (${data.attribution || '© OpenStreetMap contributors'}).`) +
+          ? `Added ${fresh.length} real business lead${fresh.length === 1 ? '' : 's'} ` +
+              (mixed ? `across ${spread}` : `in ${countries[0]}`) +
+              ` (searched ${searched}).` +
               (skipped ? ` ${skipped} already in your list were skipped.` : '') +
               (failedMarkets.length
                 ? ` Could not search ${failedMarkets.map(market => `${market.city} (${market.error})`).join(', ')}.`
                 : '') +
               areaNote
-          : `No new businesses this time: all ${skipped} results are already in your list. Search again to move on to the next page, or switch category.`
+          : `No new businesses this time: all ${skipped} results are already in your list. Search again to sweep the next areas, or switch category.`
       );
       setTimeout(() => setFetchMessage(''), 10000);
     } catch (err) {
@@ -623,21 +619,6 @@ export default function LeadsGenerator({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
-            <input
-              type="text"
-              value={countryFilter === 'All' ? '' : fetchCity}
-              onChange={(e) => setFetchCity(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleFetchLiveLeads();
-              }}
-              disabled={countryFilter === 'All'}
-              placeholder={countryFilter === 'All' ? 'Mixed: Toronto · New York · Cairo' : 'City (e.g. Toronto, Cairo)'}
-              title={countryFilter === 'All' ? 'All Countries searches one city per market; pick a country to search a city of your own' : undefined}
-              className="w-44 pl-8 pr-3 py-2.5 glass-input rounded-xl text-sm disabled:opacity-70"
-            />
-          </div>
           <select
             value={fetchCategory}
             onChange={(e) => {
@@ -690,10 +671,10 @@ export default function LeadsGenerator({
 
         {countryFilter === 'All' && (
           <p className="text-[11px] text-muted">
-            A mixed search queries <span className="font-semibold text-[var(--text-primary)]">Toronto (Canada)</span>,
-            {' '}<span className="font-semibold text-[var(--text-primary)]">New York (USA)</span> and
-            {' '}<span className="font-semibold text-[var(--text-primary)]">Cairo (Egypt)</span> in one go and merges
-            the results. Pick a country to search a single city instead.
+            Each search sweeps two areas across <span className="font-semibold text-[var(--text-primary)]">Canada</span>,
+            the <span className="font-semibold text-[var(--text-primary)]">USA</span> and
+            {' '}<span className="font-semibold text-[var(--text-primary)]">Egypt</span>, rotating through regions all over
+            each country, and merges the results. Search again to sweep the next areas; pick a country to sweep only that one.
           </p>
         )}
 
