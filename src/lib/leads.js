@@ -5,6 +5,7 @@
 // Data © OpenStreetMap contributors (ODbL) · Powered by Geoapify.
 
 import { firstGeoapifyResult, windowFromGeoapify, windowFromNominatim } from './geo-window.mjs';
+import { LEAD_MARKETS, mixLeads } from './lead-markets.mjs';
 
 const JSON_HEADERS = { Accept: 'application/json' };
 
@@ -540,5 +541,58 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
     location: bbox?.label || city,
     source: 'OpenStreetMap',
     attribution: '© OpenStreetMap contributors'
+  };
+}
+
+// One fetch, several markets: each city is searched with its own country and offset, and the
+// answers are mixed together. A market that fails (busy map server, thin coverage) is reported
+// on its own instead of taking the whole search down with it.
+export async function searchLeadsAcrossMarkets({
+  markets = LEAD_MARKETS,
+  category = 'offices',
+  limit = 10,
+  offsets = {},
+  knownIds,
+  knownPlaces,
+  knownPhones
+} = {}) {
+  const results = await Promise.all(
+    markets.map(async (market) => {
+      try {
+        const data = await searchLeads({
+          city: market.city,
+          category: market.category || category,
+          limit,
+          country: market.country,
+          offset: Number(offsets[market.city] || 0),
+          knownIds,
+          knownPlaces,
+          knownPhones
+        });
+        return { market, data };
+      } catch (err) {
+        return { market, error: err };
+      }
+    })
+  );
+
+  const leads = mixLeads(results.map((result) => result.data?.leads || []));
+
+  return {
+    leads,
+    count: leads.length,
+    markets: results.map(({ market, data, error }) => ({
+      city: market.city,
+      country: market.country,
+      count: data?.leads?.length || 0,
+      allKnown: Boolean(data?.allKnown),
+      areaLimited: Boolean(data?.areaLimited),
+      error: error ? error.message : ''
+    })),
+    skippedKnown: results.reduce((total, result) => total + (result.data?.skippedKnown || 0), 0),
+    allKnown: results.length > 0 && results.every((result) => result.data?.allKnown),
+    areaLimited: results.some((result) => result.data?.areaLimited),
+    source: 'OpenStreetMap + Geoapify',
+    attribution: '© OpenStreetMap contributors · Powered by Geoapify'
   };
 }

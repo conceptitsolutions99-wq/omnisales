@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { searchLeads } from '../lib/leads';
+import { searchLeadsAcrossMarkets } from '../lib/leads';
+import { LEAD_MARKETS } from '../lib/lead-markets.mjs';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import {
@@ -86,6 +87,11 @@ export default function LeadsGenerator({
 
   const handleCountryChange = (value) => {
     setCountryFilter(value);
+    // Choosing a country puts that market's city in the box, so a USA search never runs with
+    // "Toronto" still in it and labels Toronto listings as USA. Type your own city after picking
+    // the country.
+    const market = LEAD_MARKETS.find(entry => entry.country === value);
+    if (market) setFetchCity(market.city);
     if (value === 'Egypt') {
       setFetchCategory(EGYPT_SEARCH_CATEGORY);
       setCategoryChosenByAgent(false);
@@ -156,28 +162,48 @@ export default function LeadsGenerator({
     }
   };
 
-  // Pull real businesses (with a published phone number) from OpenStreetMap's Overpass API
+  // Pull real businesses (with a published phone number) from OpenStreetMap's Overpass API.
+  // "All Countries" runs one search per market, so a single fetch returns a mixed list instead
+  // of only the country named in the city box.
   const handleFetchLiveLeads = async () => {
+    const mixed = countryFilter === 'All';
     const city = fetchCity.trim();
     const categoryLabel = CATEGORY_OPTIONS.find(option => option.value === fetchCategory)?.label || 'businesses';
 
-    if (city.length < 2) {
+    if (!mixed && city.length < 2) {
       setFetchMessage('Enter a city or region to search, for example Toronto, Dallas or Cairo.');
       return;
     }
 
+    // Egyptian listings are richest in shops and restaurants, so the mixed search uses the same
+    // default the country picker applies, unless the agent chose a category themselves.
+    const markets = mixed
+      ? LEAD_MARKETS.map(market => ({
+          ...market,
+          category:
+            market.country === 'Egypt' && !categoryChosenByAgent ? EGYPT_SEARCH_CATEGORY : fetchCategory
+        }))
+      : [{ city, country: countryFilter, category: fetchCategory }];
+
+    // Every market walks its own results, so the second mixed search does not repeat the first
+    const offsets = {};
+    for (const market of markets) offsets[market.city] = nextSearchOffset(market.city, market.category);
+
     setIsFetchingLive(true);
-    setFetchMessage(`Searching OpenStreetMap for ${categoryLabel} in ${city}…`);
+    setFetchMessage(
+      mixed
+        ? `Searching ${markets.map(market => market.city).join(', ')} for ${categoryLabel.toLowerCase()}…`
+        : `Searching OpenStreetMap for ${categoryLabel} in ${city}…`
+    );
 
     try {
       // Places already saved never need their details bought again, so the search is told
       // which ids are on file before it spends anything
-      const data = await searchLeads({
-        city,
+      const data = await searchLeadsAcrossMarkets({
+        markets,
         category: fetchCategory,
-        limit: 30,
-        country: countryFilter === 'All' ? '' : countryFilter,
-        offset: nextSearchOffset(city, fetchCategory),
+        limit: mixed ? 10 : 30,
+        offsets,
         knownIds: new Set(leads.map(lead => lead.id)),
         // A business saved from OpenStreetMap comes back with a Geoapify id, so its name and
         // position travel too and it is recognised before its details are bought
@@ -187,15 +213,31 @@ export default function LeadsGenerator({
       });
 
       const fetched = Array.isArray(data.leads) ? data.leads : [];
+
+      // A single-market search keeps its specific error, because that is the one thing the agent
+      // can act on (a rejected key, a busy map server, nothing in that city)
+      if (!mixed && data.markets[0]?.error) throw new Error(data.markets[0].error);
+
       if (fetched.length === 0 && data.allKnown) {
         setFetchMessage(
-          `All ${data.skippedKnown} results for ${city} are already in your list, so no credits were spent. Search again to move to the next page.` +
+          (mixed
+            ? 'Every result is already in your list, so no credits were spent. Search again to move to the next page.'
+            : `All ${data.skippedKnown} results for ${city} are already in your list, so no credits were spent. Search again to move to the next page.`) +
             (data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name to cover another part of the city.' : '')
         );
         setTimeout(() => setFetchMessage(''), 10000);
         return;
       }
       if (fetched.length === 0) {
+        if (mixed) {
+          const details = data.markets
+            .map(market =>
+              `${market.city}${market.error ? `: ${market.error}` : market.allKnown ? ': all results already saved' : ': no businesses with contact details'}`
+            )
+            .join(' · ');
+          setFetchMessage(`No new leads this time — ${details}. Try another category.`);
+          return;
+        }
         setFetchMessage(
           `No ${categoryLabel.toLowerCase()} with a published phone or email were found in ${city}. Try another city or category.` +
             (data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name to cover another part of the city.' : '')
@@ -226,10 +268,23 @@ export default function LeadsGenerator({
 
       const areaNote = data.areaLimited ? ' The map was queried around the city centre to keep it fast — try a district name for another part of the city.' : '';
 
+      const byCountry = fresh.reduce((counts, lead) => {
+        const key = lead.country || 'Other';
+        counts[key] = (counts[key] || 0) + 1;
+        return counts;
+      }, {});
+      const spread = markets.map(market => `${market.country} ${byCountry[market.country] || 0}`).join(' · ');
+      const failedMarkets = data.markets.filter(market => market.error);
+
       setFetchMessage(
         fresh.length > 0
-          ? `Added ${fresh.length} real business leads from ${city} (${data.attribution || '© OpenStreetMap contributors'}).` +
+          ? (mixed
+              ? `Added ${fresh.length} real business leads across ${spread}.`
+              : `Added ${fresh.length} real business leads from ${city} (${data.attribution || '© OpenStreetMap contributors'}).`) +
               (skipped ? ` ${skipped} already in your list were skipped.` : '') +
+              (failedMarkets.length
+                ? ` Could not search ${failedMarkets.map(market => `${market.city} (${market.error})`).join(', ')}.`
+                : '') +
               areaNote
           : `No new businesses this time: all ${skipped} results are already in your list. Search again to move on to the next page, or switch category.`
       );
@@ -572,13 +627,15 @@ export default function LeadsGenerator({
             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
             <input
               type="text"
-              value={fetchCity}
+              value={countryFilter === 'All' ? '' : fetchCity}
               onChange={(e) => setFetchCity(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleFetchLiveLeads();
               }}
-              placeholder="City (e.g. Toronto, Cairo)"
-              className="w-44 pl-8 pr-3 py-2.5 glass-input rounded-xl text-sm"
+              disabled={countryFilter === 'All'}
+              placeholder={countryFilter === 'All' ? 'Mixed: Toronto · New York · Cairo' : 'City (e.g. Toronto, Cairo)'}
+              title={countryFilter === 'All' ? 'All Countries searches one city per market; pick a country to search a city of your own' : undefined}
+              className="w-44 pl-8 pr-3 py-2.5 glass-input rounded-xl text-sm disabled:opacity-70"
             />
           </div>
           <select
@@ -630,6 +687,15 @@ export default function LeadsGenerator({
             </button>
           )}
         </div>
+
+        {countryFilter === 'All' && (
+          <p className="text-[11px] text-muted">
+            A mixed search queries <span className="font-semibold text-[var(--text-primary)]">Toronto (Canada)</span>,
+            {' '}<span className="font-semibold text-[var(--text-primary)]">New York (USA)</span> and
+            {' '}<span className="font-semibold text-[var(--text-primary)]">Cairo (Egypt)</span> in one go and merges
+            the results. Pick a country to search a single city instead.
+          </p>
+        )}
 
         {countryFilter === 'Egypt' && (
           <p className="text-[11px] text-muted">
@@ -692,7 +758,7 @@ export default function LeadsGenerator({
               onChange={(e) => handleCountryChange(e.target.value)}
               className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
             >
-              <option value="All">All Countries</option>
+              <option value="All">All Countries (mixed search)</option>
               <option value="Canada">Canada</option>
               <option value="USA">USA</option>
               <option value="Egypt">Egypt</option>
