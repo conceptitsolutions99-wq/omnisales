@@ -55,14 +55,18 @@ const LEAD_CATEGORIES = {
   trades: [...withContactTags(CRAFT), ...withContactTags(REPAIR)]
 };
 
-// Geoapify taxonomy equivalents of the same six categories
+// "All" is the union of the six, so one search returns every kind of business the sweep covers
+LEAD_CATEGORIES.all = [...new Set(Object.values(LEAD_CATEGORIES).flat())];
+
+// Geoapify taxonomy equivalents of the same six categories; "all" asks for every one of them
 const GEOAPIFY_CATEGORIES = {
   offices: 'office',
   professional: 'office',
   retail: 'commercial',
   food: 'catering',
   health: 'healthcare',
-  trades: 'service'
+  trades: 'service',
+  all: 'commercial,office,catering,healthcare,service'
 };
 
 const GEOAPIFY_KEY = import.meta.env.VITE_GEOAPIFY_API_KEY || '';

@@ -32,6 +32,7 @@ import {
 const UNDO_WINDOW_MS = 30000;
 
 const CATEGORY_OPTIONS = [
+  { value: 'all', label: 'All categories' },
   { value: 'offices', label: 'Offices' },
   { value: 'professional', label: 'Professional services' },
   { value: 'retail', label: 'Retail & shops' },
