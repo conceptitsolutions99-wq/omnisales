@@ -223,8 +223,16 @@ export default function Dialler({
   // The postal identity and opt-out the server would add, so the signature can carry them once
   const [companySignature, setCompanySignature] = useState({ disclosure: '', optOut: '' });
   const [emailTemplate, setEmailTemplate] = useState('intro');
-  // Optional requirements form the customer fills in from the email
-  const [emailRequirements, setEmailRequirements] = useState('');
+  // Optional requirements forms the customer fills in from the email; one email can carry several
+  const REQUIREMENT_FORM_OPTIONS = [
+    { value: 'website', label: 'Website project requirements' },
+    { value: 'mobile', label: 'Mobile app requirements' },
+    { value: 'desktop', label: 'Desktop app requirements' }
+  ];
+  const [emailRequirements, setEmailRequirements] = useState([]);
+  const toggleEmailRequirement = (value) => {
+    setEmailRequirements((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]));
+  };
   // Reputation guard for the one shared mailbox: allowance left and the gap to the next send
   const [sendPacing, setSendPacing] = useState(null);
   const [pacingClock, setPacingClock] = useState(Date.now());
@@ -418,7 +426,7 @@ export default function Dialler({
     if (!activeLead) return;
     setEmailTo(activeLead.email || '');
     setEmailCopied(false);
-    setEmailRequirements('');
+    setEmailRequirements([]);
     applyEmailTemplate('intro');
     setShowEmailCompose(true);
   };
@@ -1288,21 +1296,24 @@ export default function Dialler({
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">
-                  Requirements form
+                  Requirements forms
                 </label>
-                <select
-                  value={emailRequirements}
-                  onChange={(e) => setEmailRequirements(e.target.value)}
-                  className="w-full px-3 py-2.5 glass-input rounded-xl text-sm dark:text-white"
-                >
-                  <option value="">No form — plain email</option>
-                  <option value="website">Website project requirements</option>
-                  <option value="mobile">Mobile app requirements</option>
-                  <option value="desktop">Desktop app requirements</option>
-                </select>
+                <div className="rounded-xl glass-input p-2.5 space-y-1.5">
+                  {REQUIREMENT_FORM_OPTIONS.map((option) => (
+                    <label key={option.value} className="flex items-center gap-2 text-sm dark:text-white cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={emailRequirements.includes(option.value)}
+                        onChange={() => toggleEmailRequirement(option.value)}
+                        className="accent-blue-600"
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
                 <p className="mt-1.5 text-[11px] text-muted leading-relaxed">
-                  The customer gets a link in the email to tick exactly what they need. Their answers appear under
-                  Requirements, ready for a quote.
+                  Each ticked form travels as its own link, so the customer can answer one per project. Their answers
+                  appear under Requirements, ready for a quote.
                 </p>
               </div>
 

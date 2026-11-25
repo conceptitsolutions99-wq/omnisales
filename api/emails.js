@@ -5,6 +5,7 @@ const auth = require('../lib/auth-core');
 const deliverability = require('../lib/mail-deliverability');
 const sentStore = require('../lib/replies-store');
 const requirementsStore = require('../lib/requirements-store');
+const requirementsEmail = require('../lib/requirements-email');
 const testMail = require('../lib/deliverability-test');
 const suppression = require('../lib/suppression-store');
 const emailLogStore = require('../lib/email-log-store');
@@ -364,14 +365,16 @@ module.exports = async (req, res) => {
 
   // Email clients strip real form controls, so the requirements form travels as a link that
   // carries its own token; the customer's answers come back into the app.
-  const formType = String(requirements || '').trim();
-  let requirementsUrl = null;
+  // One email can carry several forms: the customer ticks what they need for each project type,
+  // and each form gets its own link because each link is its own record
+  const formTypes = requirementsEmail.cleanTypes(requirements);
+  const formLinks = [];
   let messageBody = body;
 
-  if (requirementsStore.TYPES.includes(formType)) {
+  for (const type of formTypes) {
     try {
       const request = await requirementsStore.createRequest({
-        type: formType,
+        type,
         leadId: entry.leadId ?? null,
         leadEmail: entry.to,
         leadName: entry.leadName,
@@ -379,12 +382,17 @@ module.exports = async (req, res) => {
         agent: entry.sentBy,
         agentEmail: session.email
       });
-      requirementsUrl = `${origin}/#/requirements/${request.token}`;
-      messageBody = `${body}\n\n---\nProject requirements form\nTell us exactly what you need - open the link, tick the options and send it back:\n${requirementsUrl}\n\nIf you prefer, reply to this email with your answers and we will fill it in for you.\n`;
+      formLinks.push({
+        type,
+        label: requirementsStore.labelFor(type),
+        url: `${origin}/#/requirements/${request.token}`
+      });
     } catch (err) {
-      console.error('Could not create the requirements link:', err.message);
+      console.error(`Could not create the ${type} requirements link:`, err.message);
     }
   }
+
+  messageBody = `${body}${requirementsEmail.requirementsSection(formLinks)}`;
 
   const unsubscribeUrl = unsubscribeUrlFor(entry.to);
   messageBody = deliverability.withFooter(messageBody, { unsubscribeUrl });
@@ -407,7 +415,8 @@ module.exports = async (req, res) => {
 
     entry.status = 'sent';
     entry.providerId = info.messageId || null;
-    entry.requirementsUrl = requirementsUrl;
+    entry.requirementsUrl = formLinks[0]?.url || null;
+    entry.requirementsUrls = formLinks.map((link) => link.url);
     const delivery = await recordDelivery(entry);
     logSender('email_sent', { agent: entry.sentBy, lead: entry.leadName || entry.company || '' });
 

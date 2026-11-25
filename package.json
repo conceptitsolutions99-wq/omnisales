@@ -8,7 +8,7 @@
     "build": "vite build",
     "start": "node server.js",
     "lint": "oxlint",
-    "test": "node --test tests/delivery-log.test.js tests/send-pacing.test.js tests/reply-attribution.test.js tests/session-invalidation.test.js tests/signin-failures.test.js tests/signin-timeout.test.js tests/signin-throttle.test.js tests/signin-throttle-login.test.js tests/signin-notify-status.test.js tests/signin-notify-types.test.js tests/db-pooler.test.js tests/activity-delete.test.js tests/signin-suspended.test.js tests/signin-notify-admin.test.js tests/geo-window.test.js tests/lead-markets.test.js tests/lead-filters.test.js tests/email-log-delete.test.js",
+    "test": "node --test tests/delivery-log.test.js tests/send-pacing.test.js tests/reply-attribution.test.js tests/session-invalidation.test.js tests/signin-failures.test.js tests/signin-timeout.test.js tests/signin-throttle.test.js tests/signin-throttle-login.test.js tests/signin-notify-status.test.js tests/signin-notify-types.test.js tests/db-pooler.test.js tests/activity-delete.test.js tests/signin-suspended.test.js tests/signin-notify-admin.test.js tests/geo-window.test.js tests/lead-markets.test.js tests/lead-filters.test.js tests/requirements-email.test.js tests/email-log-delete.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
