@@ -6,6 +6,7 @@
 
 import { firstGeoapifyResult, windowFromGeoapify, windowFromNominatim } from './geo-window.mjs';
 import { mixLeads } from './lead-markets.mjs';
+import { nonProspectReason } from './lead-filters.mjs';
 
 const JSON_HEADERS = { Accept: 'application/json' };
 
@@ -262,7 +263,22 @@ const searchWithOverpass = async ({ city, category, limit, country, bbox }) => {
   const query = bbox ? buildBboxQuery(bbox, category, limit) : buildAreaQuery(city, category, limit);
   const payload = await queryOverpass(query);
   const elements = Array.isArray(payload.elements) ? payload.elements : [];
-  return elements.map((element) => mapOverpassLead(element, city, country)).filter(Boolean);
+
+  // A consulate or a museum is tagged with a phone number like any shop, so it is dropped before
+  // it reaches the list; the count is kept so the agent can see what the sweep left out
+  const leads = [];
+  let skippedNonProspects = 0;
+  for (const element of elements) {
+    const tags = element.tags || {};
+    if (nonProspectReason({ name: tags.name || tags.operator || '', tags })) {
+      skippedNonProspects += 1;
+      continue;
+    }
+    const lead = mapOverpassLead(element, city, country);
+    if (lead) leads.push(lead);
+  }
+
+  return { leads, skippedNonProspects };
 };
 
 // Geoapify Places returns the listings; phone/email/website live in Place Details,
@@ -375,13 +391,30 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
   const data = readJson(response.body);
   const places = (data?.features || []).map((feature) => feature.properties).filter((place) => place?.place_id);
 
+  // A consulate costs the same detail credit as a real business, so the listings that are not
+  // prospects are dropped before anything is bought
+  const prospects = [];
+  let skippedNonProspects = 0;
+  for (const place of places) {
+    const nonProspect = nonProspectReason({
+      name: place.name || place.address_line1 || '',
+      tags: place.datasource?.raw || {},
+      categories: place.categories || []
+    });
+    if (nonProspect) {
+      skippedNonProspects += 1;
+      continue;
+    }
+    prospects.push(place);
+  }
+
   // Details cost one credit each, so businesses already in the list are dropped before the
   // spend instead of after it: a repeat search pays only for places the agent has not seen.
   // Saved numbers arrive in whatever format the list holds, so they are reduced once here
   const phoneIndex = new Set([...(knownPhones || [])].map(normalPhone).filter(Boolean));
 
-  const unknown = places.filter((place) => !isAlreadySaved(place, knownIds, knownPlaces, phoneIndex));
-  const skippedKnown = places.length - unknown.length;
+  const unknown = prospects.filter((place) => !isAlreadySaved(place, knownIds, knownPlaces, phoneIndex));
+  const skippedKnown = prospects.length - unknown.length;
 
   const expanded = await Promise.all(
     unknown.slice(0, 12).map(async (place) => {
@@ -449,7 +482,7 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     };
     });
 
-  return { leads, skippedKnown, hadResults: places.length > 0 };
+  return { leads, skippedKnown, skippedNonProspects, hadResults: places.length > 0 };
 };
 
 export async function searchLeads({ city, category = 'offices', limit = 30, country = '', offset = 0, knownIds, knownPlaces, knownPhones }) {
@@ -459,10 +492,13 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
   const options = { city, category, limit, country: resolvedCountry, bbox, offset, knownIds, knownPlaces, knownPhones };
 
   let overpassLeads = [];
+  let overpassSkipped = 0;
   let overpassError = null;
 
   try {
-    overpassLeads = await searchWithOverpass(options);
+    const result = await searchWithOverpass(options);
+    overpassLeads = result.leads;
+    overpassSkipped = result.skippedNonProspects;
   } catch (err) {
     overpassError = err;
   }
@@ -475,7 +511,8 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       source: 'OpenStreetMap',
       attribution: '© OpenStreetMap contributors',
       areaLimited,
-      skippedKnown: 0
+      skippedKnown: 0,
+      skippedNonProspects: overpassSkipped
     };
   }
 
@@ -488,11 +525,13 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
 
   let geoapifyLeads = [];
   let geoapifySkipped = 0;
+  let geoapifyNonProspects = 0;
   let geoapifyError = null;
   try {
     const result = await searchWithGeoapify(options);
     geoapifyLeads = result.leads;
     geoapifySkipped = result.skippedKnown;
+    geoapifyNonProspects = result.skippedNonProspects;
   } catch (err) {
     geoapifyError = err;
   }
@@ -505,7 +544,8 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       source: 'Geoapify',
       attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors',
       areaLimited,
-      skippedKnown: geoapifySkipped
+      skippedKnown: geoapifySkipped,
+      skippedNonProspects: geoapifyNonProspects
     };
   }
 
@@ -519,7 +559,8 @@ export async function searchLeads({ city, category = 'offices', limit = 30, coun
       source: 'Geoapify',
       attribution: 'Powered by Geoapify · Data © OpenStreetMap contributors',
       areaLimited,
-      skippedKnown: geoapifySkipped
+      skippedKnown: geoapifySkipped,
+      skippedNonProspects: geoapifyNonProspects
     };
   }
 
@@ -587,9 +628,11 @@ export async function searchLeadsAcrossMarkets({
       count: data?.leads?.length || 0,
       allKnown: Boolean(data?.allKnown),
       areaLimited: Boolean(data?.areaLimited),
+      skippedNonProspects: data?.skippedNonProspects || 0,
       error: error ? error.message : ''
     })),
     skippedKnown: results.reduce((total, result) => total + (result.data?.skippedKnown || 0), 0),
+    skippedNonProspects: results.reduce((total, result) => total + (result.data?.skippedNonProspects || 0), 0),
     allKnown: results.length > 0 && results.every((result) => result.data?.allKnown),
     areaLimited: results.some((result) => result.data?.areaLimited),
     source: 'OpenStreetMap + Geoapify',

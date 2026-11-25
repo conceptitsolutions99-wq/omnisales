@@ -270,6 +270,12 @@ export default function LeadsGenerator({
       }, {});
       const spread = countries.map(country => `${country} ${byCountry[country] || 0}`).join(' · ');
       const failedMarkets = data.markets.filter(market => market.error);
+      // Consulates, government offices and landmarks publish a switchboard number like a business
+      // does, so the fetch drops them and says how many it left out
+      const nonProspects = data.skippedNonProspects || 0;
+      const nonProspectsNote = nonProspects > 0
+        ? ` ${nonProspects} consulate, government or landmark listing${nonProspects === 1 ? '' : 's'} kept out.`
+        : '';
       const searched = markets.map(market => market.city).join(', ');
 
       setFetchMessage(
@@ -281,7 +287,8 @@ export default function LeadsGenerator({
               (failedMarkets.length
                 ? ` Could not search ${failedMarkets.map(market => `${market.city} (${market.error})`).join(', ')}.`
                 : '') +
-              areaNote
+              areaNote +
+              nonProspectsNote
           : `No new businesses this time: all ${skipped} results are already in your list. Search again to sweep the next areas, or switch category.`
       );
       setTimeout(() => setFetchMessage(''), 10000);
