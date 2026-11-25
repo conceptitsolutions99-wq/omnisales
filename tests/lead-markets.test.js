@@ -157,6 +157,8 @@ test('a country with no leads is swept on to its next area, a country with leads
   assert.deepEqual(plan.nextCursors.USA, [0, 1, 2]);
   assert.deepEqual(plan.nextCursors.Canada, [0, 1]);
   assert.equal(plan.tried.Egypt, 1);
+  // The message names the areas that came back empty, not the ones about to be tried
+  assert.deepEqual(plan.emptyAreas.sort(), ['Alexandria', 'Cairo', 'New York']);
 });
 
 test('one click tries a bounded number of extra areas per country', async () => {

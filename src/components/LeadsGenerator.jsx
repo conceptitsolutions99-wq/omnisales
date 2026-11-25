@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { searchLeadsAcrossMarkets } from '../lib/leads';
 import { LEAD_MARKETS, mixLeads, planAreaSearch, planEmptyMarketNextArea } from '../lib/lead-markets.mjs';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
+import { leadKey } from '../lib/lead-key';
 import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import {
@@ -237,7 +238,7 @@ export default function LeadsGenerator({
         tried = next.tried;
         const extraMarkets = next.markets.map(areaMarket);
         setFetchMessage(
-          `Nothing contactable in ${next.markets.map(market => market.city).join(', ')} — trying ` +
+          `Nothing contactable in ${next.emptyAreas.join(', ')} — trying ` +
             `${extraMarkets.map(market => market.city).join(', ')}…`
         );
 
@@ -280,9 +281,8 @@ export default function LeadsGenerator({
         return;
       }
 
-      // Businesses that publish an email but no phone have no number to compare, so the email
-      // stands in for it when deciding what is already in the list
-      const leadKey = (lead) => (lead.phone ? `phone:${lead.phone}` : `email:${String(lead.email || '').toLowerCase()}`);
+      // The same key the shared list merges by (the last ten digits of the number, then the email),
+      // so a business that merge would fold into an existing row is not counted as a new lead
       const existingKeys = new Set(leads.map(leadKey));
       const fresh = fetched.filter(lead => !existingKeys.has(leadKey(lead)));
       const skipped = fetched.length - fresh.length + (data.skippedKnown || 0);

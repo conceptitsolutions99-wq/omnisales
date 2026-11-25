@@ -160,11 +160,21 @@ export const planEmptyMarketNextArea = (reports, countries, cursors = {}, tried 
     return (tried[country] || 0) < maxExtra;
   });
 
-  if (empty.length === 0) return { markets: [], nextCursors: cursors, tried };
+  if (empty.length === 0) return { markets: [], nextCursors: cursors, tried, emptyAreas: [] };
 
   const plan = planAreaSearch(empty, cursors, 1);
   const nextTried = { ...tried };
   for (const country of empty) nextTried[country] = (nextTried[country] || 0) + 1;
 
-  return { markets: plan.markets, nextCursors: plan.nextCursors, tried: nextTried };
+  // The areas that came back empty, so the message can name them instead of the area it is about
+  // to try
+  const emptyAreas = [
+    ...new Set(
+      empty.flatMap((country) =>
+        (reports || []).filter((report) => report.country === country).map((report) => report.city)
+      )
+    )
+  ];
+
+  return { markets: plan.markets, nextCursors: plan.nextCursors, tried: nextTried, emptyAreas };
 };
