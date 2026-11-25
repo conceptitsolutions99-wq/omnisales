@@ -127,3 +127,54 @@ export const nonProspectReason = ({ name = '', tags = {}, categories = [], websi
   }
   return '';
 };
+
+// The bulk cleanup has no map tags to go on, so it only acts on a name that cannot be a business:
+// the institution word has to be the whole name or sit at its edge. "Royal Ontario Museum" ends
+// with museum and "Toronto City Hall" ends with city hall, while "Museum Street Café", "Landmark
+// Dental" and "City Hall Dental" are left for the agent to judge and delete by hand.
+const STRICT_NAME_RULES = [
+  ['consulate', /^\s*(the\s+)?(consulate|consulat|consulado)(\s+(general|général|of)\b|$)/i],
+  ['consulate', /^\s*(the\s+)?(embassy|ambassade|embajada)\s+(of|de|du|del)\b/i],
+  ['consulate', /^\s*(the\s+)?embassy\s*$/i],
+  ['consulate', /^\s*high commission\b/i],
+  ['government', /^\s*(the\s+)?ministry (of|for)\b/i],
+  ['government', /^\s*(the\s+)?minist[èe]re de\b/i],
+  ['government', /^\s*(the\s+)?ministerio de\b/i],
+  ['government', /^\s*(the\s+)?(city|county|town|township|village|region) of\b/i],
+  ['government', /\b(city|town|municipal) hall\s*$/i],
+  ['government', /^\s*(hôtel de ville|hotel de ville)\b/i],
+  ['government', /\bgovernorate\s*$/i],
+  ['government', /^\s*(the\s+)?(parliament|national assembly|assemblée nationale|senate)\b/i],
+  ['public-service', /^\s*palais de justice\b/i],
+  ['public-service', /\b(courthouse|post office|police station|fire station)\s*$/i],
+  ['landmark', /^\s*(the\s+)?museum of\b/i],
+  ['landmark', /\bmuseum\s*$/i],
+  ['landmark', /^\s*monument to\b/i],
+  ['landmark', /\b(monument|war memorial)\s*$/i],
+  ['landmark', /^\s*statue of\b/i],
+  ['landmark', /^\s*(tourist information|visitor cent(er|re)|welcome cent(er|re))\s*$/i],
+  ['landmark', /^\s*art gallery of\b/i]
+];
+
+// Arabic has no word boundary, so the institutional word has to open the name
+const STRICT_ARABIC_RULES = [
+  ['consulate', /^\s*(قنصلية|سفارة)/],
+  ['government', /^\s*(وزارة|محافظة)/],
+  ['public-service', /^\s*(محكمة|نيابة)/],
+  ['landmark', /^\s*(متحف|نصب تذكاري)/]
+];
+
+const ALL_STRICT_RULES = [...STRICT_NAME_RULES, ...STRICT_ARABIC_RULES];
+
+// What the bulk cleanup may remove: a government domain, or a name that is the institution itself.
+// A fetch keeps using the looser rules above, because there the map tags carry the evidence.
+export const strictInstitutionReason = ({ name = '', website = '' } = {}) => {
+  if (GOVERNMENT_DOMAIN.test(hostOf(website))) return 'government';
+
+  const text = String(name || '');
+  if (!text) return '';
+  for (const [reason, pattern] of ALL_STRICT_RULES) {
+    if (pattern.test(text)) return reason;
+  }
+  return '';
+};

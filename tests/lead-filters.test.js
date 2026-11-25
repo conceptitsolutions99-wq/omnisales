@@ -85,6 +85,44 @@ test('schools and places of worship are left in', async () => {
   assert.equal(nonProspectReason({ name: 'Dar El Salam', tags: { office: 'religion' } }), '');
 });
 
+test('the bulk cleanup only acts on a name that cannot be a business', async () => {
+  const { strictInstitutionReason } = await filters();
+
+  assert.equal(strictInstitutionReason({ name: 'Royal Ontario Museum' }), 'landmark');
+  assert.equal(strictInstitutionReason({ name: 'Toronto City Hall' }), 'government');
+  assert.equal(strictInstitutionReason({ name: 'City of Toronto' }), 'government');
+  assert.equal(strictInstitutionReason({ name: 'Ministry of Finance' }), 'government');
+  assert.equal(strictInstitutionReason({ name: 'Ministère de la Santé' }), 'government');
+  assert.equal(strictInstitutionReason({ name: 'Hôtel de ville de Montréal' }), 'government');
+  assert.equal(strictInstitutionReason({ name: 'Cairo Governorate' }), 'government');
+  assert.equal(strictInstitutionReason({ name: 'Consulate General of Italy' }), 'consulate');
+  assert.equal(strictInstitutionReason({ name: 'Consulat général de France' }), 'consulate');
+  assert.equal(strictInstitutionReason({ name: 'Embassy of Egypt' }), 'consulate');
+  assert.equal(strictInstitutionReason({ name: 'Main Post Office' }), 'public-service');
+  assert.equal(strictInstitutionReason({ name: 'Statue of Liberty' }), 'landmark');
+  assert.equal(strictInstitutionReason({ name: 'متحف الفن الحديث' }), 'landmark');
+  assert.equal(strictInstitutionReason({ name: 'Service Desk', website: 'https://travel.state.gov' }), 'government');
+});
+
+test('a business whose name only contains an institutional word is left alone', async () => {
+  const { strictInstitutionReason } = await filters();
+
+  for (const name of [
+    'Landmark Dental',
+    'Museum Street Café',
+    'City Hall Dental',
+    'Statue Studio',
+    'Courthouse Dental',
+    'Consulate Coffee',
+    'Embassy Suites by Hilton Toronto',
+    'Ministry Coffee Roasters',
+    'Post Office Lane Bakery',
+    'Monument Avenue Barbers'
+  ]) {
+    assert.equal(strictInstitutionReason({ name }), '', name);
+  }
+});
+
 test('an empty or untagged listing is not treated as an institution', async () => {
   const { nonProspectReason } = await filters();
 

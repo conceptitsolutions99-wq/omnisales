@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { searchLeadsAcrossMarkets } from '../lib/leads';
 import { LEAD_MARKETS, planAreaSearch } from '../lib/lead-markets.mjs';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
-import { nonProspectReason } from '../lib/lead-filters.mjs';
+import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import {
   Users,
@@ -479,17 +479,41 @@ export default function LeadsGenerator({
     }
   };
 
+  // A lead the team has already touched keeps its history, so the bulk cleanup never removes one
+  const workedLeadIds = new Set((callLogs || []).map(log => String(log.leadId ?? '')).filter(Boolean));
+  const isWorkedLead = (lead) => {
+    if (!lead) return true;
+    if (lead.contactedBy || lead.contactedAt || lead.statusBy || lead.statusAt || lead.owner) return true;
+    if (lead.status && lead.status !== 'New') return true;
+    return workedLeadIds.has(String(lead.id));
+  };
+
+  // One rule for both the count on the button and the click itself: an untouched lead whose name is
+  // the institution, never one that merely contains the word
+  const cleanupEligible = (lead) =>
+    !isWorkedLead(lead) &&
+    Boolean(strictInstitutionReason({ name: lead.name || lead.company || '', website: lead.website || '' }));
+
   // Rows fetched before the filter existed are still in the list. A stored lead keeps no map tags,
   // so the name, and the website when one is on file, are what is checked; the removal goes through
   // the same server call and the same undo window as a manual delete.
   const handleCleanupNonProspects = async () => {
+    // A matching lead the team already worked is kept, and the message says how many
+    const kept = leads.filter(lead =>
+      !cleanupEligible(lead) &&
+      strictInstitutionReason({ name: lead.name || lead.company || '', website: lead.website || '' })
+    ).length;
     if (!isAdmin || isDeleting) return;
 
     const targets = leads.filter(lead =>
-      nonProspectReason({ name: lead.name || lead.company || '', website: lead.website || '' })
+      cleanupEligible(lead)
     );
     if (targets.length === 0) {
-      setFetchMessage('No consulates, government offices or landmarks in the list.');
+      setFetchMessage(
+        kept > 0
+          ? `Nothing to remove: the ${kept} institutional listing${kept === 1 ? '' : 's'} left ${kept === 1 ? 'has' : 'have'} already been contacted or worked, so ${kept === 1 ? 'it stays' : 'they stay'}.`
+          : 'No consulates, government offices or landmarks in the list.'
+      );
       setTimeout(() => setFetchMessage(''), 8000);
       return;
     }
@@ -506,7 +530,10 @@ export default function LeadsGenerator({
       const gone = new Set(targets.map(lead => String(lead.id)));
       setLeads(prev => prev.filter(lead => !gone.has(String(lead.id))));
       setSelectedLeadIds(prev => prev.filter(id => !gone.has(id)));
-      setFetchMessage(`Removed ${label} that are not sales prospects.`);
+      setFetchMessage(
+        `Removed ${label} that are not sales prospects.` +
+          (kept > 0 ? ` ${kept} already contacted ${kept === 1 ? 'was' : 'were'} left alone.` : '')
+      );
       setTimeout(() => setFetchMessage(''), 8000);
     } catch (err) {
       setFetchMessage(err.message);
@@ -565,9 +592,7 @@ export default function LeadsGenerator({
   const visibleLeads = leads;
 
   // What the one-click cleanup would remove, so the button never invites a click that does nothing
-  const nonProspectLeads = visibleLeads.filter(lead =>
-    nonProspectReason({ name: lead.name || lead.company || '', website: lead.website || '' })
-  );
+  const nonProspectLeads = visibleLeads.filter(cleanupEligible);
 
   // Filter logic
   const filteredLeads = visibleLeads.filter(lead => {
@@ -672,7 +697,7 @@ export default function LeadsGenerator({
             <button
               onClick={handleCleanupNonProspects}
               disabled={isDeleting || nonProspectLeads.length === 0}
-              title="Remove the consulates, government offices and landmarks already in the team's list"
+              title="Remove the consulates, government offices and landmarks nobody has contacted yet; worked leads are kept"
               className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white font-medium rounded-xl shadow-md transition-all flex items-center space-x-2 text-sm"
             >
               <Building2 className="w-4 h-4" />
