@@ -5,14 +5,13 @@
 // tag is the strongest signal, then by the provider's category, and by name last, for listings
 // that carry no useful tag at all.
 //
-// The filter is deliberately about institutions and sights, not about sectors: a school, a place
-// of worship or an art gallery can still be a customer, so those are left in.
+// The filter is about institutions and sights, not whole sectors: schools and places of worship
+// are left in, because a private school or a congregation can still be a customer.
 
 const CONSULATE_OFFICES = new Set(['diplomatic']);
 const GOVERNMENT_OFFICES = new Set(['government', 'political_party', 'administrative']);
 const PUBLIC_SERVICE_OFFICES = new Set([
-  'association', 'charity', 'ngo', 'foundation', 'educational_institution', 'university',
-  'college', 'school', 'research', 'religion', 'religious', 'international_organization',
+  'association', 'charity', 'ngo', 'foundation', 'research', 'international_organization',
   'public_institution', 'quango'
 ]);
 
@@ -32,7 +31,7 @@ const LANDMARK_TOURISM = new Set(['attraction', 'museum', 'information', 'artwor
 const CATEGORY_RULES = [
   ['consulate', /(^|\.)office\.diplomatic|(^|\.)amenity\.embassy/],
   ['government', /(^|\.)office\.government|(^|\.)office\.political_party|(^|\.)building\.government|(^|\.)amenity\.(townhall|courthouse|police|fire_station|prison|post_office)/],
-  ['public-service', /(^|\.)office\.(association|charity|ngo|foundation|educational_institution|university|research|religion)|(^|\.)amenity\.(library|community_centre|public_building)/],
+  ['public-service', /(^|\.)office\.(association|charity|ngo|foundation|research)|(^|\.)amenity\.(library|community_centre|public_building)/],
   ['landmark', /(^|\.)tourism\.(attraction|museum|information|artwork|viewpoint|theme_park|zoo|aquarium|sights)|(^|\.)heritage/]
 ];
 
@@ -112,5 +111,3 @@ export const nonProspectReason = ({ name = '', tags = {}, categories = [] } = {}
   }
   return '';
 };
-
-export const isProspect = (listing) => nonProspectReason(listing) === '';

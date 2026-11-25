@@ -57,7 +57,7 @@ test('a museum, monument or tourist site is a landmark', async () => {
 });
 
 test('real businesses are kept, including the names that look institutional', async () => {
-  const { nonProspectReason, isProspect } = await filters();
+  const { nonProspectReason } = await filters();
 
   assert.equal(nonProspectReason({ name: 'City Dental Studio', tags: { amenity: 'dentist' } }), '');
   assert.equal(nonProspectReason({ name: 'Municipal Employees Credit Union', tags: { office: 'financial' } }), '');
@@ -67,8 +67,17 @@ test('real businesses are kept, including the names that look institutional', as
   assert.equal(nonProspectReason({ name: 'Liberty Law Chambers', tags: { office: 'lawyer' } }), '');
   assert.equal(nonProspectReason({ name: 'Cairo Kitchen', tags: { amenity: 'restaurant' } }), '');
   assert.equal(nonProspectReason({ name: 'Nile Hardware', tags: { shop: 'hardware' } }), '');
-  assert.equal(isProspect({ name: 'Nile Hardware', tags: { shop: 'hardware' } }), true);
-  assert.equal(isProspect({ name: 'Main Post Office' }), false);
+});
+
+// The header comment promises these stay, and the tag sets have to keep that promise
+test('schools and places of worship are left in', async () => {
+  const { nonProspectReason } = await filters();
+
+  assert.equal(nonProspectReason({ name: 'Bright Minds Academy', tags: { office: 'school' } }), '');
+  assert.equal(nonProspectReason({ name: 'Cairo University', tags: { office: 'university' } }), '');
+  assert.equal(nonProspectReason({ name: 'Northside College', tags: { office: 'college' } }), '');
+  assert.equal(nonProspectReason({ name: 'St. Michael Parish', tags: { amenity: 'place_of_worship' } }), '');
+  assert.equal(nonProspectReason({ name: 'Dar El Salam', tags: { office: 'religion' } }), '');
 });
 
 test('an empty or untagged listing is not treated as an institution', async () => {
