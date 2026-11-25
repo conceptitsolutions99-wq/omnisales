@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { searchLeadsAcrossMarkets } from '../lib/leads';
-import { LEAD_MARKETS, planAreaSearch } from '../lib/lead-markets.mjs';
+import { LEAD_MARKETS, mixLeads, planAreaSearch, planEmptyMarketNextArea } from '../lib/lead-markets.mjs';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
 import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
@@ -183,18 +183,16 @@ export default function LeadsGenerator({
     const categoryLabel = CATEGORY_OPTIONS.find(option => option.value === fetchCategory)?.label || 'businesses';
 
     const plan = planAreaSearch(countries, readAreaCursors());
-    saveAreaCursors(plan.nextCursors);
+    let cursors = plan.nextCursors;
+    saveAreaCursors(cursors);
 
     // Egyptian listings are richest in shops and restaurants, so the sweep uses the same default
     // the country picker applies, unless the agent chose a category themselves.
-    const markets = plan.markets.map(market => ({
+    const areaMarket = (market) => ({
       ...market,
       category: market.country === 'Egypt' && !categoryChosenByAgent ? EGYPT_SEARCH_CATEGORY : fetchCategory
-    }));
-
-    // Every area walks its own results, so the second sweep does not repeat the first
-    const offsets = {};
-    for (const market of markets) offsets[market.city] = nextSearchOffset(market.city, market.category);
+    });
+    const markets = plan.markets.map(areaMarket);
 
     setIsFetchingLive(true);
     setFetchMessage(`Searching ${markets.map(market => market.city).join(', ')} for ${categoryLabel.toLowerCase()}…`);
@@ -202,18 +200,58 @@ export default function LeadsGenerator({
     try {
       // Places already saved never need their details bought again, so the search is told
       // which ids are on file before it spends anything
-      const data = await searchLeadsAcrossMarkets({
-        markets,
-        category: fetchCategory,
-        limit: 6,
-        offsets,
-        knownIds: new Set(leads.map(lead => lead.id)),
-        // A business saved from OpenStreetMap comes back with a Geoapify id, so its name and
-        // position travel too and it is recognised before its details are bought
-        knownPlaces: leads.map(lead => ({ name: lead.name || lead.company, lat: lead.lat, lon: lead.lon })),
-        // A saved number identifies the same business even when its name reaches us differently
-        knownPhones: new Set(leads.map(lead => lead.phone).filter(Boolean)),
-      });
+      const knownIds = new Set(leads.map(lead => lead.id));
+      // A business saved from OpenStreetMap comes back with a Geoapify id, so its name and
+      // position travel too and it is recognised before its details are bought
+      const knownPlaces = leads.map(lead => ({ name: lead.name || lead.company, lat: lead.lat, lon: lead.lon }));
+      // A saved number identifies the same business even when its name reaches us differently
+      const knownPhones = new Set(leads.map(lead => lead.phone).filter(Boolean));
+
+      // Every area walks its own results, so a second sweep of the same area does not repeat the first
+      const searchAreas = async (batch) => {
+        const offsets = {};
+        for (const market of batch) offsets[market.city] = nextSearchOffset(market.city, market.category);
+        return searchLeadsAcrossMarkets({
+          markets: batch,
+          category: fetchCategory,
+          limit: 6,
+          offsets,
+          knownIds,
+          knownPlaces,
+          knownPhones
+        });
+      };
+
+      let data = await searchAreas(markets);
+      let searchedAreas = markets;
+      let tried = {};
+
+      // An area with nothing contactable would otherwise report its whole country as empty for this
+      // click, so the next area of that country is swept before the message is built
+      for (;;) {
+        const next = planEmptyMarketNextArea(data.markets, countries, cursors, tried);
+        if (next.markets.length === 0) break;
+
+        cursors = next.nextCursors;
+        tried = next.tried;
+        const extraMarkets = next.markets.map(areaMarket);
+        setFetchMessage(
+          `Nothing contactable in ${next.markets.map(market => market.city).join(', ')} — trying ` +
+            `${extraMarkets.map(market => market.city).join(', ')}…`
+        );
+
+        const extra = await searchAreas(extraMarkets);
+        searchedAreas = [...searchedAreas, ...extraMarkets];
+        data = {
+          leads: mixLeads([data.leads, extra.leads]),
+          markets: [...data.markets, ...extra.markets],
+          skippedKnown: (data.skippedKnown || 0) + (extra.skippedKnown || 0),
+          skippedNonProspects: (data.skippedNonProspects || 0) + (extra.skippedNonProspects || 0),
+          allKnown: data.allKnown && extra.allKnown,
+          areaLimited: data.areaLimited || extra.areaLimited
+        };
+      }
+      saveAreaCursors(cursors);
 
       const fetched = Array.isArray(data.leads) ? data.leads : [];
 
@@ -277,7 +315,7 @@ export default function LeadsGenerator({
       const nonProspectsNote = nonProspects > 0
         ? ` ${nonProspects} consulate, government or landmark listing${nonProspects === 1 ? '' : 's'} kept out.`
         : '';
-      const searched = markets.map(market => market.city).join(', ');
+      const searched = [...new Set(searchedAreas.map(market => market.city))].join(', ');
 
       setFetchMessage(
         fresh.length > 0

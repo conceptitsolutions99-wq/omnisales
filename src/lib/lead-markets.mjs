@@ -142,3 +142,29 @@ export const planAreaSearch = (countries, cursors = {}, perCountry = AREAS_PER_S
 
   return { markets, nextCursors };
 };
+
+// An area can come back with nothing contactable: thin map coverage, a mirror with a gap, or a
+// district the provider does not index. One such area would make its whole country look dead for
+// that click, so the sweep moves on to the next area of that country. Two extra areas are enough
+// to get past a gap without turning one click into a long crawl.
+export const MAX_EXTRA_AREAS = 2;
+
+// The areas a sweep should try next, for the countries that produced no leads at all. A country
+// with even one lead is left alone, because its market is not empty. `tried` counts the extra
+// areas already spent on each country, so one click cannot sweep forever.
+export const planEmptyMarketNextArea = (reports, countries, cursors = {}, tried = {}, maxExtra = MAX_EXTRA_AREAS) => {
+  const empty = countries.filter((country) => {
+    const own = (reports || []).filter((report) => report.country === country);
+    if (own.length === 0) return false;
+    if (own.some((report) => report.count > 0)) return false;
+    return (tried[country] || 0) < maxExtra;
+  });
+
+  if (empty.length === 0) return { markets: [], nextCursors: cursors, tried };
+
+  const plan = planAreaSearch(empty, cursors, 1);
+  const nextTried = { ...tried };
+  for (const country of empty) nextTried[country] = (nextTried[country] || 0) + 1;
+
+  return { markets: plan.markets, nextCursors: plan.nextCursors, tried: nextTried };
+};

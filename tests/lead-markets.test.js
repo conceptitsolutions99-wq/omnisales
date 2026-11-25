@@ -138,6 +138,56 @@ test('every area of every real market is reachable', async () => {
   }
 });
 
+test('a country with no leads is swept on to its next area, a country with leads is not', async () => {
+  const { planEmptyMarketNextArea, LEAD_MARKETS } = await markets();
+  const reports = [
+    { country: 'Canada', city: 'Toronto', count: 3 },
+    { country: 'Egypt', city: 'Cairo', count: 0 },
+    { country: 'Egypt', city: 'Alexandria', count: 0 },
+    { country: 'USA', city: 'New York', count: 0 }
+  ];
+
+  const plan = planEmptyMarketNextArea(reports, ['Canada', 'USA', 'Egypt'], { Canada: [0, 1], USA: [0, 1], Egypt: [0, 1] });
+
+  assert.deepEqual(plan.markets.map((market) => market.country).sort(), ['Egypt', 'USA']);
+  const areasOf = (country) => LEAD_MARKETS.find((market) => market.country === country).areas;
+  assert.equal(plan.markets.find((market) => market.country === 'Egypt').city, areasOf('Egypt')[2]);
+  assert.equal(plan.markets.find((market) => market.country === 'USA').city, areasOf('USA')[2]);
+  assert.deepEqual(plan.nextCursors.Egypt, [0, 1, 2]);
+  assert.deepEqual(plan.nextCursors.USA, [0, 1, 2]);
+  assert.deepEqual(plan.nextCursors.Canada, [0, 1]);
+  assert.equal(plan.tried.Egypt, 1);
+});
+
+test('one click tries a bounded number of extra areas per country', async () => {
+  const { planEmptyMarketNextArea } = await markets();
+  const reports = [{ country: 'Egypt', city: 'Cairo', count: 0 }];
+
+  let cursors = { Egypt: [0, 1] };
+  let tried = {};
+  let rounds = 0;
+  for (;;) {
+    const plan = planEmptyMarketNextArea(reports, ['Egypt'], cursors, tried);
+    if (plan.markets.length === 0) break;
+    rounds += 1;
+    cursors = plan.nextCursors;
+    tried = plan.tried;
+  }
+
+  assert.equal(rounds, 2);
+  // Each extra area is a new one, so the retry sweeps the country instead of repeating itself
+  assert.deepEqual(cursors.Egypt, [0, 1, 2, 3]);
+});
+
+test('a market that is already fully saved still gets another area', async () => {
+  const { planEmptyMarketNextArea } = await markets();
+  const reports = [{ country: 'Canada', city: 'Toronto', count: 0, allKnown: true }];
+  const plan = planEmptyMarketNextArea(reports, ['Canada'], { Canada: [0, 1] });
+
+  assert.equal(plan.markets.length, 1);
+  assert.equal(plan.markets[0].country, 'Canada');
+});
+
 test('each country carries a spread of cities and smaller regions', async () => {
   const { LEAD_MARKETS } = await markets();
   assert.deepEqual(LEAD_MARKETS.map((market) => market.country), ['Canada', 'USA', 'Egypt']);
