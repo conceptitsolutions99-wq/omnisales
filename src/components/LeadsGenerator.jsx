@@ -456,6 +456,20 @@ export default function LeadsGenerator({
     setSelectedLeadIds(prev => (prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key]));
   };
 
+  // One delete-and-undo path for both buttons: the rows go for the whole team, and the same
+  // 30-second strip brings them back. The caller words the message it wants shown.
+  const removeLeadsWithUndo = async (batch, message) => {
+    await deleteSharedLeads(batch);
+    undoDeadline.current = Date.now() + UNDO_WINDOW_MS;
+    // A batch already waiting to be undone stays undoable: the two are offered together
+    setDeletedBatch(prev => (prev ? [...prev, ...batch] : batch));
+    const gone = new Set(batch.map(lead => String(lead.id)));
+    setLeads(prev => prev.filter(lead => !gone.has(String(lead.id))));
+    setSelectedLeadIds(prev => prev.filter(id => !gone.has(id)));
+    setFetchMessage(message || `Deleted ${batch.length} lead${batch.length === 1 ? '' : 's'}.`);
+    setTimeout(() => setFetchMessage(''), 8000);
+  };
+
   const handleDeleteSelected = async () => {
     if (!isAdmin || selectedLeads.length === 0 || isDeleting) return;
 
@@ -464,14 +478,7 @@ export default function LeadsGenerator({
 
     setIsDeleting(true);
     try {
-      await deleteSharedLeads(selectedLeads);
-      undoDeadline.current = Date.now() + UNDO_WINDOW_MS;
-      setDeletedBatch(selectedLeads);
-      const gone = new Set(selectedLeads.map(lead => String(lead.id)));
-      setLeads(prev => prev.filter(lead => !gone.has(String(lead.id))));
-      setSelectedLeadIds([]);
-      setFetchMessage(`Deleted ${selectedLeads.length} lead${selectedLeads.length === 1 ? '' : 's'}.`);
-      setTimeout(() => setFetchMessage(''), 8000);
+      await removeLeadsWithUndo(selectedLeads);
     } catch (err) {
       setFetchMessage(err.message);
     } finally {
@@ -488,26 +495,23 @@ export default function LeadsGenerator({
     return workedLeadIds.has(String(lead.id));
   };
 
-  // One rule for both the count on the button and the click itself: an untouched lead whose name is
-  // the institution, never one that merely contains the word
-  const cleanupEligible = (lead) =>
-    !isWorkedLead(lead) &&
-    Boolean(strictInstitutionReason({ name: lead.name || lead.company || '', website: lead.website || '' }));
+  // The cleanup's two lists from one pass: the rows it may remove, and the matching rows the team
+  // already worked, which keep their history and are only reported
+  const cleanupSplit = (list) => {
+    const institutional = list.filter(lead =>
+      strictInstitutionReason({ name: lead.name || lead.company || '', website: lead.website || '' })
+    );
+    const removable = institutional.filter(lead => !isWorkedLead(lead));
+    return { removable, kept: institutional.length - removable.length };
+  };
 
   // Rows fetched before the filter existed are still in the list. A stored lead keeps no map tags,
   // so the name, and the website when one is on file, are what is checked; the removal goes through
   // the same server call and the same undo window as a manual delete.
   const handleCleanupNonProspects = async () => {
-    // A matching lead the team already worked is kept, and the message says how many
-    const kept = leads.filter(lead =>
-      !cleanupEligible(lead) &&
-      strictInstitutionReason({ name: lead.name || lead.company || '', website: lead.website || '' })
-    ).length;
     if (!isAdmin || isDeleting) return;
 
-    const targets = leads.filter(lead =>
-      cleanupEligible(lead)
-    );
+    const { removable: targets, kept } = cleanupSplit(leads);
     if (targets.length === 0) {
       setFetchMessage(
         kept > 0
@@ -523,18 +527,11 @@ export default function LeadsGenerator({
 
     setIsDeleting(true);
     try {
-      await deleteSharedLeads(targets);
-      undoDeadline.current = Date.now() + UNDO_WINDOW_MS;
-      // A batch already waiting to be undone stays undoable: the two are offered together
-      setDeletedBatch(prev => (prev ? [...prev, ...targets] : targets));
-      const gone = new Set(targets.map(lead => String(lead.id)));
-      setLeads(prev => prev.filter(lead => !gone.has(String(lead.id))));
-      setSelectedLeadIds(prev => prev.filter(id => !gone.has(id)));
-      setFetchMessage(
+      await removeLeadsWithUndo(
+        targets,
         `Removed ${label} that are not sales prospects.` +
           (kept > 0 ? ` ${kept} already contacted ${kept === 1 ? 'was' : 'were'} left alone.` : '')
       );
-      setTimeout(() => setFetchMessage(''), 8000);
     } catch (err) {
       setFetchMessage(err.message);
     } finally {
@@ -592,7 +589,7 @@ export default function LeadsGenerator({
   const visibleLeads = leads;
 
   // What the one-click cleanup would remove, so the button never invites a click that does nothing
-  const nonProspectLeads = visibleLeads.filter(cleanupEligible);
+  const { removable: nonProspectLeads } = cleanupSplit(visibleLeads);
 
   // Filter logic
   const filteredLeads = visibleLeads.filter(lead => {
