@@ -96,13 +96,29 @@ const categoryReasonFor = (categories) => {
   return '';
 };
 
+// A government site names the institution even when the listing's name does not, so the domain is
+// checked as well: state.gov, a ministry's .gc.ca address, a city's .gov.on.ca subdomain.
+const GOVERNMENT_DOMAIN = /(^|\.)(gov|mil)(\.[a-z]{2,}){0,2}$|\.gc\.ca$/i;
+
+const hostOf = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  try {
+    return new URL(text.includes('://') ? text : `https://${text}`).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+};
+
 // '' means the listing is a prospect. The reason is returned so a caller can say what it dropped.
-export const nonProspectReason = ({ name = '', tags = {}, categories = [] } = {}) => {
+export const nonProspectReason = ({ name = '', tags = {}, categories = [], website = '' } = {}) => {
   const tagReason = tagReasonFor(tags || {});
   if (tagReason) return tagReason;
 
   const categoryReason = categoryReasonFor(categories);
   if (categoryReason) return categoryReason;
+
+  if (GOVERNMENT_DOMAIN.test(hostOf(website))) return 'government';
 
   const text = String(name || '');
   if (!text) return '';

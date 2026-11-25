@@ -270,7 +270,8 @@ const searchWithOverpass = async ({ city, category, limit, country, bbox }) => {
   let skippedNonProspects = 0;
   for (const element of elements) {
     const tags = element.tags || {};
-    if (nonProspectReason({ name: tags.name || tags.operator || '', tags })) {
+    const website = tags.website || tags['contact:website'] || '';
+    if (nonProspectReason({ name: tags.name || tags.operator || '', tags, website })) {
       skippedNonProspects += 1;
       continue;
     }
@@ -399,7 +400,8 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     const nonProspect = nonProspectReason({
       name: place.name || place.address_line1 || '',
       tags: place.datasource?.raw || {},
-      categories: place.categories || []
+      categories: place.categories || [],
+      website: place.website || ''
     });
     if (nonProspect) {
       skippedNonProspects += 1;

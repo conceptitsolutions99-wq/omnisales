@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { searchLeadsAcrossMarkets } from '../lib/leads';
 import { LEAD_MARKETS, planAreaSearch } from '../lib/lead-markets.mjs';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
+import { nonProspectReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import {
   Users,
@@ -478,6 +479,42 @@ export default function LeadsGenerator({
     }
   };
 
+  // Rows fetched before the filter existed are still in the list. A stored lead keeps no map tags,
+  // so the name, and the website when one is on file, are what is checked; the removal goes through
+  // the same server call and the same undo window as a manual delete.
+  const handleCleanupNonProspects = async () => {
+    if (!isAdmin || isDeleting) return;
+
+    const targets = leads.filter(lead =>
+      nonProspectReason({ name: lead.name || lead.company || '', website: lead.website || '' })
+    );
+    if (targets.length === 0) {
+      setFetchMessage('No consulates, government offices or landmarks in the list.');
+      setTimeout(() => setFetchMessage(''), 8000);
+      return;
+    }
+
+    const label = `${targets.length} consulate, government office or landmark listing${targets.length === 1 ? '' : 's'}`;
+    if (!window.confirm(`Remove ${label} from the team's list for everyone?`)) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteSharedLeads(targets);
+      undoDeadline.current = Date.now() + UNDO_WINDOW_MS;
+      // A batch already waiting to be undone stays undoable: the two are offered together
+      setDeletedBatch(prev => (prev ? [...prev, ...targets] : targets));
+      const gone = new Set(targets.map(lead => String(lead.id)));
+      setLeads(prev => prev.filter(lead => !gone.has(String(lead.id))));
+      setSelectedLeadIds(prev => prev.filter(id => !gone.has(id)));
+      setFetchMessage(`Removed ${label} that are not sales prospects.`);
+      setTimeout(() => setFetchMessage(''), 8000);
+    } catch (err) {
+      setFetchMessage(err.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // The window closes on its own; the strip disappears instead of lingering as a stale offer.
   // The interval clears itself at zero rather than re-rendering this screen every second while
   // the undo strip is already gone.
@@ -526,6 +563,11 @@ export default function LeadsGenerator({
     }
   };
   const visibleLeads = leads;
+
+  // What the one-click cleanup would remove, so the button never invites a click that does nothing
+  const nonProspectLeads = visibleLeads.filter(lead =>
+    nonProspectReason({ name: lead.name || lead.company || '', website: lead.website || '' })
+  );
 
   // Filter logic
   const filteredLeads = visibleLeads.filter(lead => {
@@ -626,6 +668,17 @@ export default function LeadsGenerator({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={handleCleanupNonProspects}
+              disabled={isDeleting || nonProspectLeads.length === 0}
+              title="Remove the consulates, government offices and landmarks already in the team's list"
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white font-medium rounded-xl shadow-md transition-all flex items-center space-x-2 text-sm"
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Clean Up Consulates &amp; Landmarks ({nonProspectLeads.length})</span>
+            </button>
+          )}
           <select
             value={fetchCategory}
             onChange={(e) => {

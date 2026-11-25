@@ -30,6 +30,9 @@ test('a government office is dropped, in English, French and Arabic', async () =
   assert.equal(nonProspectReason({ name: 'Revenue Office', tags: { office: 'government' } }), 'government');
   assert.equal(nonProspectReason({ name: 'Town Office', tags: { amenity: 'townhall' } }), 'government');
   assert.equal(nonProspectReason({ name: 'Civic Centre', categories: ['office.government'] }), 'government');
+  assert.equal(nonProspectReason({ name: 'Service Desk', website: 'https://travel.state.gov' }), 'government');
+  assert.equal(nonProspectReason({ name: 'Municipal Desk', website: 'city.gov.on.ca' }), 'government');
+  assert.equal(nonProspectReason({ name: 'Federal Desk', website: 'https://justice.gc.ca' }), 'government');
 });
 
 test('police stations, courthouses and post offices count as public services', async () => {
@@ -67,6 +70,8 @@ test('real businesses are kept, including the names that look institutional', as
   assert.equal(nonProspectReason({ name: 'Liberty Law Chambers', tags: { office: 'lawyer' } }), '');
   assert.equal(nonProspectReason({ name: 'Cairo Kitchen', tags: { amenity: 'restaurant' } }), '');
   assert.equal(nonProspectReason({ name: 'Nile Hardware', tags: { shop: 'hardware' } }), '');
+  assert.equal(nonProspectReason({ name: 'Nile Hardware', website: 'https://nilehardware.com' }), '');
+  assert.equal(nonProspectReason({ name: 'Gov Tech Solutions', website: 'https://govtechsolutions.com' }), '');
 });
 
 // The header comment promises these stay, and the tag sets have to keep that promise
