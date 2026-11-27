@@ -36,6 +36,43 @@ module.exports = async (req, res) => {
   const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
+  // ── staff: mint a link the agent copies and pastes into WhatsApp or their own mail app ──
+  // The link is a real record, so the answers come back to the Requirements panel exactly as
+  // they do for a form attached to an email. Created only when asked, so the panel does not
+  // fill up with forms no customer was ever given.
+  if (req.method === 'POST' && req.body?.action === 'link') {
+    const type = clean(req.body?.type, 20);
+    if (!store.TYPES.includes(type)) {
+      return res.status(400).json({ error: 'Choose the website, mobile or desktop form.' });
+    }
+
+    const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
+
+    try {
+      const request = await store.createRequest({
+        type,
+        leadId: req.body?.leadId ?? null,
+        leadEmail: clean(req.body?.leadEmail, 200),
+        leadName: clean(req.body?.leadName, 200),
+        company: clean(req.body?.company, 200),
+        agent: session.name || '',
+        agentEmail: session.email
+      });
+
+      return res.status(200).json({
+        ok: true,
+        link: {
+          type,
+          label: store.labelFor(type),
+          token: request.token,
+          url: `${origin}/#/requirements/${request.token}`
+        }
+      });
+    } catch (err) {
+      return res.status(500).json({ error: `Could not create the ${type} form link: ${err.message}` });
+    }
+  }
+
   // ── staff: list the forms that were sent and the answers that came back ──
   if (req.method === 'GET') {
     const requests = await store.listVisible(session, auth.isReviewer(session));

@@ -21,6 +21,25 @@ export const submitRequirementForm = (token, payload) =>
 
 export const listRequirements = () => json(fetch('/api/requirements', { credentials: 'same-origin' }));
 
+// A link to paste into WhatsApp or a hand-written email. Each call creates its own form record,
+// so only the forms the agent actually shares show up as awaiting answers.
+export const createRequirementLink = (type, lead = {}) =>
+  json(
+    fetch('/api/requirements', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'link',
+        type,
+        leadId: lead.id ?? null,
+        leadEmail: lead.email || '',
+        leadName: lead.name || '',
+        company: lead.company || ''
+      })
+    })
+  ).then((data) => data.link);
+
 // Admin only: the server refuses this for anyone else
 export const deleteRequirementForms = (tokens) =>
   json(

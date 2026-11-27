@@ -21,6 +21,7 @@ import {
 import { markLeadContacted } from '../lib/lead-status';
 import { whatsappNumberFor } from '../lib/contact-channels';
 import { buildSignature, SIGNATURE_SERVICE_LINE, COMPANY_SITE } from '../lib/signature';
+import { createRequirementLink } from '../lib/requirements';
 import WhatsAppProofModal from './WhatsAppProofModal';
 
 // The outreach copy names the market the prospect is in, so an Egyptian lead is not told about
@@ -233,6 +234,14 @@ export default function Dialler({
   const toggleEmailRequirement = (value) => {
     setEmailRequirements((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]));
   };
+  // Copyable form links for the lead on the line, minted the first time a link is copied. They
+  // belong to that lead, so choosing another lead clears them.
+  const [formLinks, setFormLinks] = useState({});
+  const [linkStatus, setLinkStatus] = useState(null);
+  useEffect(() => {
+    setFormLinks({});
+    setLinkStatus(null);
+  }, [activeLead?.id]);
   // Reputation guard for the one shared mailbox: allowance left and the gap to the next send
   const [sendPacing, setSendPacing] = useState(null);
   const [pacingClock, setPacingClock] = useState(Date.now());
@@ -420,6 +429,27 @@ export default function Dialler({
     setEmailSubject(draft.subject);
     setEmailBody(draft.body);
     setEmailStatus(null);
+  };
+
+  // One click gives the agent the link for the form the customer needs: it is created on the
+  // first click, then the same link is copied again on later clicks.
+  const copyRequirementLink = async (type) => {
+    if (!activeLead || linkStatus?.state === 'working') return;
+    setLinkStatus({ type, state: 'working' });
+
+    try {
+      let url = formLinks[type];
+      if (!url) {
+        const link = await createRequirementLink(type, activeLead);
+        url = link.url;
+        setFormLinks((prev) => ({ ...prev, [type]: url }));
+      }
+      await navigator.clipboard.writeText(url);
+      setLinkStatus({ type, state: 'copied' });
+      setTimeout(() => setLinkStatus((prev) => (prev?.type === type && prev.state === 'copied' ? null : prev)), 2500);
+    } catch (err) {
+      setLinkStatus({ type, state: 'error', message: err.message || 'Could not copy the link.' });
+    }
   };
 
   const handleOpenEmailCompose = () => {
@@ -1107,6 +1137,41 @@ export default function Dialler({
               <div className="p-3 glass-soft">
                 <strong className="text-[var(--text-primary)] block mb-1">3. Closing Call to Action</strong>
                 "Would you be open to a 10-minute technical walkthrough of a tailored prototype for {activeLead?.company} next Tuesday?"
+              </div>
+
+              <div className="p-3 glass-soft rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                <strong className="text-indigo-700 dark:text-indigo-300 block mb-1">4. Requirements Form Links</strong>
+                <p className="mb-2">
+                  Copy the form {activeLead?.company || 'the customer'} needs and paste the link into WhatsApp or
+                  your own email draft. The link belongs to this lead, so the answers come back under Requirements.
+                </p>
+                <div className="space-y-2">
+                  {REQUIREMENT_FORM_OPTIONS.map((option) => {
+                    const url = formLinks[option.value];
+                    const copied = linkStatus?.type === option.value && linkStatus.state === 'copied';
+                    const working = linkStatus?.type === option.value && linkStatus.state === 'working';
+                    return (
+                      <div key={option.value}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-medium text-[var(--text-secondary)]">{option.label}</span>
+                          <button
+                            type="button"
+                            onClick={() => copyRequirementLink(option.value)}
+                            disabled={!activeLead || working}
+                            className="px-2 py-1 rounded-lg border border-indigo-400/40 bg-indigo-400/10 hover:bg-indigo-400/20 disabled:opacity-50 text-indigo-700 dark:text-indigo-300 font-semibold text-[11px] inline-flex items-center gap-1 transition-all"
+                          >
+                            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            {working ? 'Creating…' : copied ? 'Copied' : 'Copy link'}
+                          </button>
+                        </div>
+                        {url && <p className="mt-1 text-[10px] text-muted break-all select-all">{url}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {linkStatus?.state === 'error' && (
+                  <p className="mt-2 text-[10px] text-rose-500">{linkStatus.message}</p>
+                )}
               </div>
             </div>
           </div>
