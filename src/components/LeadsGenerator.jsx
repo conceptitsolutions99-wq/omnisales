@@ -97,6 +97,8 @@ export default function LeadsGenerator({
   const [page, setPage] = useState(1);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
+  // How many leads the last sweep added. The table is oldest first, so they sit on the last page
+  const [sweepNewCount, setSweepNewCount] = useState(0);
   const [fetchCategory, setFetchCategory] = useState('offices');
   // Picking a country can pre-select the category that country's listings are richest in, but
   // only until the agent chooses a category themselves
@@ -111,6 +113,7 @@ export default function LeadsGenerator({
   const [undoSeconds, setUndoSeconds] = useState(0);
   const [isRestoring, setIsRestoring] = useState(false);
   const undoDeadline = useRef(0);
+  const tableRef = useRef(null);
 
   // Egyptian OpenStreetMap coverage is thin for offices and dense for shops and restaurants, so
   // choosing Egypt moves the search there; leaving it restores offices unless the agent picked
@@ -237,6 +240,8 @@ export default function LeadsGenerator({
   // sweeps a couple of areas in each selected country and advances a cursor, so repeated searches
   // spread the list across the whole country instead of pinning one city to each market.
   const handleFetchLiveLeads = async () => {
+    // A new sweep decides afresh how many leads it added
+    setSweepNewCount(0);
     const countries = countryFilter === 'All' ? LEAD_MARKETS.map(market => market.country) : [countryFilter];
     const mixed = countries.length > 1;
     const categoryLabel = CATEGORY_OPTIONS.find(option => option.value === fetchCategory)?.label || 'businesses';
@@ -346,6 +351,7 @@ export default function LeadsGenerator({
 
       if (fresh.length > 0) {
         setLeads(prev => [...fresh, ...prev]);
+        setSweepNewCount(fresh.length);
         // A fresh list is mostly phone-only until each business's own site is read, so it is read
         // straight away instead of waiting for the agent to press the button afterwards
         enrichMany(fresh).then(result => {
@@ -737,6 +743,13 @@ export default function LeadsGenerator({
   const firstShown = sortedLeads.length ? (currentPage - 1) * LEADS_PER_PAGE + 1 : 0;
   const lastShown = Math.min(currentPage * LEADS_PER_PAGE, sortedLeads.length);
 
+  // The order stays oldest first, so the leads a sweep just added are at the end of the list: the
+  // sweep summary jumps there rather than leaving the agent on page 1 with nothing new in sight
+  const showNewestSweepLeads = () => {
+    setPage(pageCount);
+    if (tableRef.current) tableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   // A page number for the ends and for the pages around the current one; the gaps become "…"
   const pageNumbers = [];
   for (let number = 1; number <= pageCount; number += 1) {
@@ -906,9 +919,18 @@ export default function LeadsGenerator({
       </div>
 
       {fetchMessage && (
-        <div className="p-4 accent-pill border border-blue-200 dark:border-blue-900 rounded-2xl text-xs text-blue-800 dark:text-blue-300 font-medium flex items-center space-x-2">
+        <div className="p-4 accent-pill border border-blue-200 dark:border-blue-900 rounded-2xl text-xs text-blue-800 dark:text-blue-300 font-medium flex flex-wrap items-center gap-2">
           <Database className="w-4 h-4 text-blue-600 animate-pulse" />
           <span>{fetchMessage}</span>
+          {sweepNewCount > 0 && (
+            <button
+              type="button"
+              onClick={showNewestSweepLeads}
+              className="ml-auto whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
+            >
+              Show newest {sweepNewCount}
+            </button>
+          )}
         </div>
       )}
 
@@ -1068,7 +1090,7 @@ export default function LeadsGenerator({
       </div>
 
       {/* Leads Table */}
-      <div className="glass overflow-hidden">
+      <div ref={tableRef} className="glass overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
