@@ -81,7 +81,6 @@ export default function LeadsGenerator({
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [countryFilter, setCountryFilter] = useState('All');
-  const [sizeFilter, setSizeFilter] = useState('All');
   const [solutionFilter, setSolutionFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [websiteFilter, setWebsiteFilter] = useState('All');
@@ -133,7 +132,6 @@ export default function LeadsGenerator({
     email: '',
     country: 'Canada',
     region: 'Ontario (Toronto)',
-    size: 'Medium',
     solution: 'Website',
     value: 15000,
     notes: ''
@@ -179,7 +177,6 @@ export default function LeadsGenerator({
       email: '',
       country: 'Canada',
       region: 'Ontario (Toronto)',
-      size: 'Medium',
       solution: 'Website',
       value: 15000,
       notes: ''
@@ -682,8 +679,10 @@ export default function LeadsGenerator({
                           lead.region.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (lead.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCountry = countryFilter === 'All' || lead.country === countryFilter;
-    const matchesSize = sizeFilter === 'All' || lead.size === sizeFilter;
-    const matchesSolution = solutionFilter === 'All' || lead.solution === solutionFilter;
+    // A lead swept from the map has no interest recorded, so it is a candidate for every
+    // offer; only a lead the team has tagged is narrowed to one solution
+    const interest = String(lead.solution || '').trim();
+    const matchesSolution = solutionFilter === 'All' || !interest || interest === solutionFilter;
     const matchesStatus = statusFilter === 'All' || lead.status === statusFilter;
     const matchesWebsite =
       websiteFilter === 'All' ||
@@ -702,7 +701,6 @@ export default function LeadsGenerator({
     return (
       matchesSearch &&
       matchesCountry &&
-      matchesSize &&
       matchesSolution &&
       matchesStatus &&
       matchesWebsite &&
@@ -740,7 +738,6 @@ export default function LeadsGenerator({
   }, [
     searchTerm,
     countryFilter,
-    sizeFilter,
     solutionFilter,
     statusFilter,
     websiteFilter,
@@ -952,25 +949,12 @@ export default function LeadsGenerator({
             </select>
           </div>
 
-          {/* Size Filter */}
-          <div>
-            <select
-              value={sizeFilter}
-              onChange={(e) => setSizeFilter(e.target.value)}
-              className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
-            >
-              <option value="All">All Business Sizes</option>
-              <option value="Small">Small Business</option>
-              <option value="Medium">Medium Business</option>
-              <option value="Large">Large Enterprise</option>
-            </select>
-          </div>
-
           {/* Solution Filter */}
           <div>
             <select
               value={solutionFilter}
               onChange={(e) => setSolutionFilter(e.target.value)}
+              title="A lead with no interest recorded yet is a candidate for every offer"
               className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
             >
               <option value="All">All IT Solutions</option>
@@ -1087,7 +1071,7 @@ export default function LeadsGenerator({
                 )}
                 <th className="py-3.5 px-4">Contact & Company</th>
                 <th className="py-3.5 px-4">Phone & Region</th>
-                <th className="py-3.5 px-4">Size & Solution</th>
+                <th className="py-3.5 px-4">Solution</th>
                 <th className="py-3.5 px-4">Potential Value</th>
                 <th className="py-3.5 px-4">Status</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
@@ -1194,11 +1178,6 @@ export default function LeadsGenerator({
                       </div>
                     </td>
                     <td className="py-4 px-4">
-                      {lead.size && lead.size !== 'Unknown' && (
-                        <span className="inline-block px-2 py-0.5 glass-soft text-[var(--text-primary)]/80 rounded text-xs font-medium mb-1">
-                          {lead.size} Business
-                        </span>
-                      )}
                       <div className="text-xs font-semibold text-blue-600 dark:text-blue-400">
                         {lead.solution || <span className="text-muted font-normal">Not specified</span>}
                       </div>
@@ -1393,7 +1372,7 @@ export default function LeadsGenerator({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Country</label>
                   <select
@@ -1420,18 +1399,6 @@ export default function LeadsGenerator({
                     onChange={(e) => setNewLead({...newLead, region: e.target.value})}
                     className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Business Size</label>
-                  <select
-                    value={newLead.size}
-                    onChange={(e) => setNewLead({...newLead, size: e.target.value})}
-                    className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
-                  >
-                    <option value="Small">Small</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Large">Large</option>
-                  </select>
                 </div>
               </div>
 

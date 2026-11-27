@@ -955,7 +955,7 @@ export default function Dialler({
                   <div>
                     <h3 className="text-lg font-bold text-[var(--text-primary)]">{activeLead.name}</h3>
                     <div className="text-xs text-muted flex items-center mt-0.5">
-                      <Building2 className="w-3.5 h-3.5 mr-1 text-muted" /> {activeLead.company} ({activeLead.size} Business)
+                      <Building2 className="w-3.5 h-3.5 mr-1 text-muted" /> {activeLead.company}
                     </div>
                   </div>
                   <div className="text-left sm:text-right">
