@@ -6,7 +6,7 @@ import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
 import { leadKey } from '../lib/lead-key';
 import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
-import { manualPhoneFor } from '../lib/manual-phone.mjs';
+import { leadPhoneFor, manualPhoneFor } from '../lib/manual-phone.mjs';
 import { KNOWN_DIAL_CODES, dialCodeLabel } from '../lib/dial-codes.mjs';
 import { SOLUTION_OPTIONS, UNTAGGED_FILTER, matchesSolution, solutionOf, tagSolution } from '../lib/lead-solutions.mjs';
 import {
@@ -439,7 +439,9 @@ export default function LeadsGenerator({
       facebook: lead.facebook || socials.facebook || '',
       instagram: lead.instagram || socials.instagram || '',
       linkedin: lead.linkedin || socials.linkedin || '',
-      whatsapp: lead.whatsapp || result?.whatsapp || ''
+      // A WhatsApp link on the site carries the number in international form; it is normalised
+      // anyway so a local "0100…" cannot be saved with its trunk zero
+      whatsapp: lead.whatsapp || leadPhoneFor(result?.whatsapp, lead.country)
     };
   };
 

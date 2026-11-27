@@ -37,6 +37,37 @@ test('a delete survives a push sent at the same moment', async () => {
   }
 });
 
+// Every lead reaches the list through this store, so the phone rule is enforced here once: a local
+// Egyptian number loses its trunk zero, and a code on its own is stored as no number at all.
+test('a pushed lead is stored with an international number, never a bare code', async () => {
+  const pushed = await store.upsertLeads(
+    [
+      { id: 'num-egypt', name: 'Cairo Print Shop', phone: '0100 123 4567', whatsapp: '0100 123 4567', country: 'Egypt' },
+      { id: 'num-code-only', name: 'Nowhere Yet', phone: '+20', country: 'Egypt' },
+      { id: 'num-canada', name: 'Maple Dental', phone: '(416) 555-0192', country: 'Canada' }
+    ],
+    actor
+  );
+
+  const byId = new Map(pushed.map((row) => [row.id, row]));
+  assert.equal(byId.get('num-egypt').phone, '+201001234567');
+  assert.equal(byId.get('num-egypt').whatsapp, '+201001234567');
+  assert.equal(byId.get('num-code-only').phone, '', 'a dial code alone is not a number');
+  assert.equal(byId.get('num-canada').phone, '+14165550192');
+
+  // What another browser reads back is the same normalised number
+  const stored = new Map((await store.listLeads()).map((row) => [row.id, row]));
+  assert.equal(stored.get('num-egypt').phone, '+201001234567');
+  assert.equal(stored.get('num-canada').phone, '+14165550192');
+
+  // The other tests in this file count the list, so these leads are removed again
+  await store.deleteLeads(
+    ['num-egypt', 'num-code-only', 'num-canada'].map((id) => stored.get(id)),
+    actor
+  );
+  assert.equal((await store.listLeads()).length, 0);
+});
+
 // In one process the in-memory store hands back the same object to every caller, so two writers
 // mutate one copy and a lost update stays hidden. Two serverless instances each hold their own
 // copy of the JSON; handing out a private copy per read reproduces that.

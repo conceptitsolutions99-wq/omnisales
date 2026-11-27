@@ -113,6 +113,26 @@ test('the public form asks for a country code and the right digit count', async 
   assert.match(long.error, /needs 9\u201310 digits/);
 });
 
+// Map listings, websites and pasted lists write numbers their own way; whatever the source, the
+// stored lead carries the international number WhatsApp opens.
+test('a lead from a sweep or an import is stored internationally', async () => {
+  const { leadPhoneFor } = await phones();
+
+  assert.equal(leadPhoneFor('0100 123 4567', 'Egypt'), '+201001234567');
+  assert.equal(leadPhoneFor('+20 100 123 4567', 'Egypt'), '+201001234567');
+  assert.equal(leadPhoneFor('02 2345 6789', 'Egypt'), '+20223456789');
+  assert.equal(leadPhoneFor('(416) 555-0192', 'Canada'), '+14165550192');
+  assert.equal(leadPhoneFor('+1 416 555 0192', 'Canada'), '+14165550192');
+
+  // A code on its own is a country, not a number
+  assert.equal(leadPhoneFor('+20', 'Egypt'), '');
+  assert.equal(leadPhoneFor('+1', 'Canada'), '');
+  assert.equal(leadPhoneFor('', 'Egypt'), '');
+
+  // No country to place it in: the digits are kept as they came rather than guessed at
+  assert.equal(leadPhoneFor('01001234567', ''), '01001234567');
+});
+
 test('a bare number that starts with the code is not cut when it already fits', async () => {
   const { manualPhoneFor } = await phones();
 

@@ -111,3 +111,35 @@ export const publicPhoneFor = (typed) => {
 
   return { ok: false, phone: '', displayPhone: value, error: `A number after +${code} needs ${wanted} digits.` };
 };
+
+// A lead's number arrives from a map listing, a website or a pasted list, written the way the
+// source writes it: "+20 100 123 4567", "0100 123 4567", or occasionally a country code on its
+// own. Every one is stored in the international form WhatsApp opens, using the same rule the
+// forms use; a number that is only a code becomes no number at all.
+export const leadPhoneFor = (raw, country) => {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+
+  const code = dialCodeFor(country);
+  // Without a country there is nothing to place a local number in, so the digits are kept as they
+  // came rather than guessed at
+  if (!code) return value.replace(/[^+\d]/g, '');
+
+  const checked = manualPhoneFor(value, country);
+  if (checked.ok) return checked.phone;
+
+  // Sources also publish numbers the country's format does not fit (a hotline, a line shared by
+  // two offices). Those keep their digits and the code they already carry, but never a bare code
+  // and never a trunk zero in front of a national number.
+  const digits = value.replace(/\D/g, '');
+  const international = digits.startsWith('00') ? digits.slice(2) : digits;
+  const other = KNOWN_DIAL_CODES.find((known) => international.startsWith(known));
+
+  if (other && other !== code) {
+    const national = stripTrunkZero(international.slice(other.length));
+    return national.length >= 7 ? `+${other}${national}` : '';
+  }
+
+  const national = stripTrunkZero(international.startsWith(code) ? international.slice(code.length) : international);
+  return national.length >= 7 ? `+${code}${national}` : '';
+};

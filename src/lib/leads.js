@@ -7,6 +7,7 @@
 import { firstGeoapifyResult, windowFromGeoapify, windowFromNominatim } from './geo-window.mjs';
 import { mixLeads } from './lead-markets.mjs';
 import { nonProspectReason } from './lead-filters.mjs';
+import { leadPhoneFor } from './manual-phone.mjs';
 
 const JSON_HEADERS = { Accept: 'application/json' };
 
@@ -201,10 +202,12 @@ const mapOverpassLead = (element, fallbackCity, country) => {
     id: `osm-${element.type}-${element.id}`,
     name,
     company: name,
-    phone: rawPhone.replace(/[^+\d]/g, ''),
+    // Stored in the international form WhatsApp opens: a listing's local "0100 123 4567" becomes
+    // "+201001234567", and a tag that is only a code is stored as no number
+    phone: leadPhoneFor(rawPhone, country),
     displayPhone: rawPhone || 'No phone on file',
-    mobile: mobile.replace(/[^+\d]/g, ''),
-    whatsapp: whatsapp.replace(/[^+\d]/g, ''),
+    mobile: leadPhoneFor(mobile, country),
+    whatsapp: leadPhoneFor(whatsapp, country),
     email,
     website,
     facebook,
@@ -462,20 +465,21 @@ const searchWithGeoapify = async ({ city, category, limit, country, bbox, offset
     const mobile = String(raw.mobile || raw['contact:mobile'] || '');
     const whatsapp = String(raw['contact:whatsapp'] || raw.whatsapp || '');
     const phone = place.contact?.phone || raw.phone || raw['contact:phone'] || mobile || whatsapp || '';
+    const leadCountry = country || countryFromCode(place.country_code);
     return {
     id: `geoapify-${place.place_id || place.formatted}`,
     name: place.name || place.address_line1 || 'Unnamed business',
     company: place.name || place.address_line1 || 'Unnamed business',
-    phone: String(phone).replace(/[^+\d]/g, ''),
+    phone: leadPhoneFor(phone, leadCountry),
     displayPhone: phone || 'No phone on file',
-    mobile: mobile.replace(/[^+\d]/g, ''),
-    whatsapp: whatsapp.replace(/[^+\d]/g, ''),
+    mobile: leadPhoneFor(mobile, leadCountry),
+    whatsapp: leadPhoneFor(whatsapp, leadCountry),
     email: place.contact?.email || raw.email || raw['contact:email'] || '',
     website: place.website || '',
     facebook: place.contact?.facebook || raw['contact:facebook'] || '',
     instagram: place.contact?.instagram || raw['contact:instagram'] || '',
     address: [place.address_line1, place.address_line2].filter(Boolean).join(', '),
-    country: country || countryFromCode(place.country_code),
+    country: leadCountry,
     region: place.city || place.state || city,
     size: 'Unknown',
     solution: '',
