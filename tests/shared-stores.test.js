@@ -11,6 +11,9 @@ const assert = require('node:assert/strict');
 
 const { withPrivateReads } = require('./private-reads');
 const followups = require('../lib/followups-store');
+const sendPacing = require('../lib/send-pacing');
+const suppression = require('../lib/suppression-store');
+const kv = require('../lib/kv-store');
 const replies = require('../lib/replies-store');
 const proofs = require('../lib/whatsapp-proof-store');
 const activity = require('../lib/activity-store');
@@ -110,6 +113,43 @@ test('two activity entries logged at once both reach the shared history', async 
   const ids = (await activity.listActivity()).map((entry) => String(entry.id));
   assert.ok(ids.includes(first.id), 'the first entry survived');
   assert.ok(ids.includes(second.id), 'the second entry survived');
+});
+
+// The worst of the remaining ones: the send limiter protects the team's one mailbox. A lost
+// reservation lets two messages leave inside the same spacing window, and a lost slot count can
+// spend the whole day's allowance in one burst.
+test('two sends at the same moment cannot both take a slot', async () => {
+  const key = 'omnisales:send-pacing';
+  await kv.update(key, [], () => []);
+
+  const results = await withPrivateReads(() => Promise.all([sendPacing.reserve(), sendPacing.reserve()]));
+
+  const accepted = results.filter((result) => result.ok);
+  const refused = results.filter((result) => !result.ok);
+  assert.equal(accepted.length, 1, 'only one send may take the slot');
+  assert.equal(refused.length, 1);
+  assert.equal(refused[0].reason, 'spacing', 'the second send waits for the gap');
+
+  const stored = await kv.read(key, []);
+  assert.equal(stored.length, 1, 'the row holds exactly the one reservation');
+
+  // The refused attempt must not have left the mailbox blocked for the accepted one
+  await sendPacing.release(accepted[0].stamp);
+});
+
+test('two opt-outs recorded at once both stick', async () => {
+  const first = `opt-${stamp()}@example.com`;
+  const second = `opt-${stamp()}@example.com`;
+
+  await withPrivateReads(() =>
+    Promise.all([
+      suppression.suppress(first, { reason: 'unsubscribed', source: 'link' }),
+      suppression.suppress(second, { reason: 'bounced', source: 'smtp' })
+    ])
+  );
+
+  assert.ok(await suppression.findSuppressed(first), 'the first opt-out is on file');
+  assert.ok(await suppression.findSuppressed(second), 'the second opt-out is on file');
 });
 
 test('two activity deletes at once keep both sets of tombstones', async () => {
