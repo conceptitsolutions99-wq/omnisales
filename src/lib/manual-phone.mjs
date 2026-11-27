@@ -4,7 +4,7 @@
 // the dial code of the country they picked, and drop the trunk prefix — Egyptian numbers are
 // written locally as 01012345678, but WhatsApp and the dialler need +201012345678.
 
-import { dialCodeFor, stripTrunkZero } from './dial-codes.mjs';
+import { DIAL_CODES, KNOWN_DIAL_CODES, dialCodeFor, stripTrunkZero } from './dial-codes.mjs';
 
 // How many digits a number has after its dial code. Canada and the USA are always ten; Egypt's
 // mobiles are ten and its landlines nine.
@@ -59,4 +59,55 @@ export const manualPhoneFor = (typed, country) => {
   }
 
   return { ok: true, phone: `+${code}${national}`, displayPhone: `+${code} ${national}`, error: '' };
+};
+
+// The public requirements form asks for one number and no country: the customer writes it the way
+// they would dial it abroad. The code is read off the front, then the same trunk-zero and
+// digit-count rules decide whether it is a number WhatsApp can open, and it is stored in the
+// international form that link needs.
+const countryForCode = (code) => Object.keys(DIAL_CODES).find((name) => DIAL_CODES[name] === code) || '';
+
+export const publicPhoneFor = (typed) => {
+  const value = String(typed || '').trim();
+  const digits = digitsOf(value);
+
+  if (!digits) {
+    return { ok: false, phone: '', displayPhone: value, error: 'Enter the number we can reach you on WhatsApp.' };
+  }
+
+  const writtenInternational = value.startsWith('+') || digits.startsWith('00');
+  const international = digits.startsWith('00') ? digits.slice(2) : digits;
+
+  if (!writtenInternational) {
+    return {
+      ok: false,
+      phone: '',
+      displayPhone: value,
+      error: 'Start the number with its country code, like +20 101 234 5678.'
+    };
+  }
+
+  const code = KNOWN_DIAL_CODES.find((known) => international.startsWith(known));
+  if (!code) {
+    return {
+      ok: false,
+      phone: '',
+      displayPhone: value,
+      error: 'That does not start with a country code we know, like +1 or +20.'
+    };
+  }
+
+  const allowed = lengthsFor(code);
+  const wanted = allowed.length === 1 ? `${allowed[0]}` : `${allowed[0]}\u2013${allowed[allowed.length - 1]}`;
+
+  if (international.length <= code.length) {
+    return { ok: false, phone: '', displayPhone: value, error: `Enter the ${wanted} digits after +${code}.` };
+  }
+
+  // The rest is the manual form's own rule: the country's code kept, the trunk zero dropped, the
+  // national length measured against the same table
+  const checked = manualPhoneFor(`+${code} ${international.slice(code.length)}`, countryForCode(code));
+  if (checked.ok) return checked;
+
+  return { ok: false, phone: '', displayPhone: value, error: `A number after +${code} needs ${wanted} digits.` };
 };

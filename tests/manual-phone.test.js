@@ -71,6 +71,48 @@ test('a number that belongs to another country is refused instead of mangled', a
   assert.match(result.error, /another country/);
 });
 
+// The public requirements form has no country picker, so the number carries its own code and the
+// same rules say whether WhatsApp can open it.
+test('the public form refuses a number that is only a country code', async () => {
+  const { publicPhoneFor } = await phones();
+
+  for (const typed of ['+1', '+1 ', '+20', '+20 ', '+971']) {
+    const result = publicPhoneFor(typed);
+    assert.equal(result.ok, false, `"${typed}" is refused`);
+    assert.equal(result.phone, '');
+    assert.match(result.error, /digits after \+/);
+  }
+
+  assert.match(publicPhoneFor('+20').error, /digits after \+20/);
+});
+
+test('the public form saves the international number WhatsApp opens', async () => {
+  const { publicPhoneFor } = await phones();
+
+  assert.equal(publicPhoneFor('+20 010 1234 5678').phone, '+201012345678');
+  assert.equal(publicPhoneFor('0020 101 234 5678').phone, '+201012345678');
+  assert.equal(publicPhoneFor('+1 (416) 555-0192').phone, '+14165550192');
+  assert.equal(publicPhoneFor('+20 2 2345 6789').phone, '+20223456789');
+  assert.equal(publicPhoneFor('+971 50 123 4567').phone, '+971501234567');
+});
+
+test('the public form asks for a country code and the right digit count', async () => {
+  const { publicPhoneFor } = await phones();
+
+  // A local number without its code cannot be placed in a country
+  const local = publicPhoneFor('01012345678');
+  assert.equal(local.ok, false);
+  assert.match(local.error, /country code/);
+
+  const short = publicPhoneFor('+1 416 555 01');
+  assert.equal(short.ok, false);
+  assert.match(short.error, /needs 10 digits/);
+
+  const long = publicPhoneFor('+20 101 2345 6789');
+  assert.equal(long.ok, false);
+  assert.match(long.error, /needs 9\u201310 digits/);
+});
+
 test('a bare number that starts with the code is not cut when it already fits', async () => {
   const { manualPhoneFor } = await phones();
 

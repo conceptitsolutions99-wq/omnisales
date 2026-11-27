@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Send, AlertTriangle } from 'lucide-react';
 import { REQUIREMENT_DETAILS } from '../data/requirementForms';
+import { publicPhoneFor } from '../lib/manual-phone.mjs';
 
 const emptyDetails = () => REQUIREMENT_DETAILS.reduce((acc, field) => ({ ...acc, [field.id]: '' }), {});
 
@@ -10,6 +11,7 @@ export default function RequirementFormView({ form, leadName, company, submittin
   const [other, setOther] = useState({});
   const [notes, setNotes] = useState('');
   const [localError, setLocalError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
 
   const toggle = (sectionId, option) =>
     setAnswers((current) => {
@@ -30,13 +32,27 @@ export default function RequirementFormView({ form, leadName, company, submittin
       return;
     }
 
+    // The number is saved as WhatsApp will open it, so the customer's "+20" alone is refused here
+    // with the same rules the manual lead form uses, and the error sits under the field
+    let savedDetails = details;
+    setPhoneError('');
+    const typedPhone = String(details.phone || '').trim();
+    if (typedPhone) {
+      const checked = publicPhoneFor(typedPhone);
+      if (!checked.ok) {
+        setPhoneError(checked.error);
+        return;
+      }
+      savedDetails = { ...details, phone: checked.phone };
+    }
+
     // "Other" notes travel as one extra answer per section, so nothing the customer typed is lost
     const merged = { ...answers };
     Object.entries(other).forEach(([sectionId, text]) => {
       if (String(text || '').trim()) merged[sectionId] = [...(merged[sectionId] || []), `Other: ${text.trim()}`];
     });
 
-    onSubmit({ details, answers: merged, notes });
+    onSubmit({ details: savedDetails, answers: merged, notes });
   };
 
   const chosen = Object.values(answers).reduce((total, picked) => total + picked.length, 0);
@@ -74,10 +90,19 @@ export default function RequirementFormView({ form, leadName, company, submittin
                 <input
                   type={field.type}
                   value={details[field.id]}
-                  onChange={(event) => setDetails({ ...details, [field.id]: event.target.value })}
+                  onChange={(event) => {
+                    setDetails({ ...details, [field.id]: event.target.value });
+                    if (field.id === 'phone') setPhoneError('');
+                  }}
                   placeholder={field.placeholder}
-                  className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
+                  aria-invalid={field.id === 'phone' && Boolean(phoneError)}
+                  className={`w-full p-2.5 glass-input rounded-xl text-sm dark:text-white ${
+                    field.id === 'phone' && phoneError ? 'border border-rose-400/60' : ''
+                  }`}
                 />
+              )}
+              {field.id === 'phone' && phoneError && (
+                <span className="block text-[11px] font-medium text-rose-300 mt-1">{phoneError}</span>
               )}
             </label>
           ))}
