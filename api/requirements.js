@@ -74,21 +74,7 @@ module.exports = async (req, res) => {
     const leadEmail = clean(req.body?.leadEmail, 200);
 
     try {
-      const existing = await store.findForLead({ leadId, leadEmail, type });
-      if (existing) {
-        return res.status(200).json({
-          ok: true,
-          reused: true,
-          link: {
-            type,
-            label: store.labelFor(type),
-            token: existing.token,
-            url: `${origin}/#/requirements/${existing.token}`
-          }
-        });
-      }
-
-      const request = await store.createRequest({
+      const { request, reused } = await store.createOrReuseRequest({
         type,
         leadId,
         leadEmail,
@@ -100,6 +86,7 @@ module.exports = async (req, res) => {
 
       return res.status(200).json({
         ok: true,
+        ...(reused ? { reused: true } : {}),
         link: {
           type,
           label: store.labelFor(type),

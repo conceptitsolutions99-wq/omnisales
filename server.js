@@ -545,14 +545,15 @@ app.post('/api/emails', async (req, res) => {
 
   // Email clients strip form controls, so the requirements form travels as a tokenised link
   // One email can carry several forms: the customer ticks what they need for each project type,
-  // and each form gets its own link because each link is its own record
+  // and each form gets its own link. A type this lead was already sent keeps the link it has,
+  // so a second email cannot fill the Requirements panel with duplicates.
   const formTypes = requirementsEmail.cleanTypes(requirements);
   const formLinks = [];
   let messageBody = body;
 
   for (const type of formTypes) {
     try {
-      const request = await requirementsStore.createRequest({
+      const { request } = await requirementsStore.createOrReuseRequest({
         type,
         leadId: entry.leadId ?? null,
         leadEmail: entry.to,
