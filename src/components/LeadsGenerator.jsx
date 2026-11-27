@@ -6,6 +6,7 @@ import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
 import { leadKey } from '../lib/lead-key';
 import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
+import { manualPhoneFor } from '../lib/manual-phone.mjs';
 import {
   Users,
   Search,
@@ -136,6 +137,8 @@ export default function LeadsGenerator({
     value: 15000,
     notes: ''
   });
+  // The phone field arrives holding the dial code, so it is checked when the form is submitted
+  const [phoneError, setPhoneError] = useState('');
 
   // The form has to open on screen, so the page behind it does not scroll while it is open
   useEffect(() => {
@@ -150,25 +153,35 @@ export default function LeadsGenerator({
   // The field is ready with the dial code of the country already chosen when the form opens
   const openAddModal = () => {
     setNewLead((prev) => ({ ...prev, phone: withDialCode(prev.phone, prev.country) }));
+    setPhoneError('');
     setIsAddModalOpen(true);
   };
 
   const handleAddLead = (e) => {
     e.preventDefault();
-    if (!newLead.name || !newLead.company || !newLead.phone) return;
+    if (!newLead.name || !newLead.company) return;
 
-    const cleanPhone = newLead.phone.replace(/[^+\d]/g, '');
+    // A dial code alone is not a number: it has to have enough digits after it, and an Egyptian
+    // number has to lose the leading zero so WhatsApp can open it
+    const phone = manualPhoneFor(newLead.phone, newLead.country);
+    if (!phone.ok) {
+      setPhoneError(phone.error);
+      return;
+    }
+    setPhoneError('');
+
     const leadToAdd = {
       id: Date.now(),
       ...newLead,
-      phone: cleanPhone,
-      displayPhone: newLead.phone,
+      phone: phone.phone,
+      displayPhone: phone.displayPhone,
       status: 'New',
       createdAt: new Date().toISOString().split('T')[0]
     };
 
     setLeads([leadToAdd, ...leads]);
     setIsAddModalOpen(false);
+    setPhoneError('');
     setNewLead({
       name: '',
       company: '',
@@ -1356,9 +1369,15 @@ export default function LeadsGenerator({
                     required
                     placeholder="+1 (416) 555-0199"
                     value={newLead.phone}
-                    onChange={(e) => setNewLead({...newLead, phone: e.target.value})}
+                    onChange={(e) => {
+                      setPhoneError('');
+                      setNewLead({...newLead, phone: e.target.value});
+                    }}
                     className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white font-mono"
                   />
+                  {phoneError && (
+                    <p className="mt-1 text-[11px] text-red-400">{phoneError}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Email Address</label>
