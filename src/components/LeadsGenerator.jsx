@@ -33,6 +33,17 @@ import {
 // A bulk delete is easy to trigger by accident, so a deleted batch stays in hand briefly
 const UNDO_WINDOW_MS = 30000;
 
+// The shared list is long, so the table shows a page at a time, oldest lead first
+const LEADS_PER_PAGE = 10;
+
+// A lead's age: its creation date when it has one, otherwise the timestamp in its id
+const leadTime = (lead) => {
+  const stamp = Date.parse(lead?.createdAt || '');
+  if (!Number.isNaN(stamp)) return stamp;
+  const id = Number(lead?.id);
+  return Number.isFinite(id) ? id : 0;
+};
+
 // The dial code the phone field takes when the agent picks a country for a manual lead
 const COUNTRY_DIAL_CODES = { Canada: '+1', USA: '+1', Egypt: '+20' };
 
@@ -80,6 +91,7 @@ export default function LeadsGenerator({
   // the channels outreach can actually use
   const [channelFilter, setChannelFilter] = useState('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
   const [fetchCategory, setFetchCategory] = useState('offices');
@@ -700,18 +712,59 @@ export default function LeadsGenerator({
     );
   });
 
-  // Select-all covers exactly what the filters show, so a country or channel can be cleaned up
-  // without touching the rest of the team's list
-  const allFilteredSelected =
-    filteredLeads.length > 0 && filteredLeads.every(lead => selectedLeadIds.includes(String(lead.id)));
+  // Oldest first, so page 1 is the start of the list rather than whatever arrived last
+  const sortedLeads = [...filteredLeads].sort((a, b) => leadTime(a) - leadTime(b));
+  const pageCount = Math.max(1, Math.ceil(sortedLeads.length / LEADS_PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const pagedLeads = sortedLeads.slice(
+    (currentPage - 1) * LEADS_PER_PAGE,
+    currentPage * LEADS_PER_PAGE
+  );
+  const firstShown = sortedLeads.length ? (currentPage - 1) * LEADS_PER_PAGE + 1 : 0;
+  const lastShown = Math.min(currentPage * LEADS_PER_PAGE, sortedLeads.length);
 
+  // A page number for the ends and for the pages around the current one; the gaps become "…"
+  const pageNumbers = [];
+  for (let number = 1; number <= pageCount; number += 1) {
+    if (number === 1 || number === pageCount || Math.abs(number - currentPage) <= 2) {
+      pageNumbers.push(number);
+    } else if (pageNumbers[pageNumbers.length - 1] !== '…') {
+      pageNumbers.push('…');
+    }
+  }
+
+  // A new filter means a new list, so it starts at page 1; a shrinking list cannot leave the
+  // table pointing at a page that is no longer there
+  useEffect(() => {
+    setPage(1);
+  }, [
+    searchTerm,
+    countryFilter,
+    sizeFilter,
+    solutionFilter,
+    statusFilter,
+    websiteFilter,
+    emailFilter,
+    contactFilter,
+    channelFilter
+  ]);
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  const allFilteredSelected =
+    pagedLeads.length > 0 && pagedLeads.every(lead => selectedLeadIds.includes(String(lead.id)));
+
+  // Select-all covers the page on screen: with ten rows a page, silently selecting leads the
+  // agent cannot see is how a bulk delete takes the wrong records
   const toggleSelectAllVisible = () => {
     if (allFilteredSelected) {
-      const visibleIds = new Set(filteredLeads.map(lead => String(lead.id)));
-      setSelectedLeadIds(prev => prev.filter(id => !visibleIds.has(id)));
+      const pageIds = new Set(pagedLeads.map(lead => String(lead.id)));
+      setSelectedLeadIds(prev => prev.filter(id => !pageIds.has(id)));
       return;
     }
-    setSelectedLeadIds(prev => [...new Set([...prev, ...filteredLeads.map(lead => String(lead.id))])]);
+    setSelectedLeadIds(prev => [...new Set([...prev, ...pagedLeads.map(lead => String(lead.id))])]);
   };
 
   // The employees who have contacted someone in this list, so the filter only offers real names
@@ -1026,8 +1079,8 @@ export default function LeadsGenerator({
                       type="checkbox"
                       checked={allFilteredSelected}
                       onChange={toggleSelectAllVisible}
-                      aria-label="Select all leads shown"
-                      title="Select every lead the current filters show"
+                      aria-label="Select all leads on this page"
+                      title={`Select the ${pagedLeads.length} lead${pagedLeads.length === 1 ? '' : 's'} on this page`}
                       className="h-4 w-4 rounded accent-blue-600 cursor-pointer"
                     />
                   </th>
@@ -1048,7 +1101,7 @@ export default function LeadsGenerator({
                   </td>
                 </tr>
               ) : (
-                filteredLeads.map((lead) => (
+                pagedLeads.map((lead) => (
                   <tr key={lead.id} className="row-hover transition-colors">
                     {isAdmin && (
                       <td className="py-4 px-3 align-top">
@@ -1222,6 +1275,55 @@ export default function LeadsGenerator({
             </tbody>
           </table>
         </div>
+
+        {/* Pages: ten leads at a time, oldest first */}
+        {sortedLeads.length > 0 && (
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-[var(--glass-border)] px-4 py-3 text-xs text-muted sm:flex-row">
+            <span>
+              Showing <strong className="text-[var(--text-primary)]">{firstShown}–{lastShown}</strong> of{' '}
+              <strong className="text-[var(--text-primary)]">{sortedLeads.length}</strong> leads
+            </span>
+
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1.5 rounded-lg glass-soft font-semibold text-[var(--text-primary)] disabled:opacity-40"
+              >
+                Prev
+              </button>
+
+              {pageNumbers.map((number, index) =>
+                number === '…' ? (
+                  <span key={`gap-${index}`} className="px-1.5 opacity-60">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={number}
+                    onClick={() => setPage(number)}
+                    aria-current={number === currentPage ? 'page' : undefined}
+                    className={`min-w-[30px] px-2 py-1.5 rounded-lg font-semibold transition-colors ${
+                      number === currentPage
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'glass-soft text-[var(--text-primary)] hover:bg-white/15'
+                    }`}
+                  >
+                    {number}
+                  </button>
+                )
+              )}
+
+              <button
+                onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+                disabled={currentPage === pageCount}
+                className="px-2.5 py-1.5 rounded-lg glass-soft font-semibold text-[var(--text-primary)] disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add Lead Modal. Rendered on the body: any ancestor with a filter or backdrop reaches
