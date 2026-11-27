@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { searchLeadsAcrossMarkets } from '../lib/leads';
-import { LEAD_MARKETS, mixLeads, planAreaSearch, planEmptyMarketNextArea } from '../lib/lead-markets.mjs';
+import { LEAD_MARKETS, areasFor, mixLeads, planAreaSearch, planEmptyMarketNextArea } from '../lib/lead-markets.mjs';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
 import { leadKey } from '../lib/lead-key';
 import { strictInstitutionReason } from '../lib/lead-filters.mjs';
@@ -50,8 +50,8 @@ const UNDO_WINDOW_MS = 30000;
 // WhatsApp link share
 const LEADING_DIAL_CODE = new RegExp(`^\\+(${KNOWN_DIAL_CODES.join('|')})(?=[\\s\\-().]|$)`);
 
-// The region field follows the country as well: an Egyptian lead must not keep a Canadian area
-const COUNTRY_REGIONS = { Canada: 'Ontario (Toronto)', USA: 'New York (NYC)', Egypt: 'Cairo' };
+// The region field follows the country as well: an Egyptian lead must not keep a Canadian area,
+// so switching country opens on an area the sweep actually searches there
 
 // Swap only a leading, separated dial code, so the local number already typed stays as it is; a
 // bare number simply gets the code in front of it.
@@ -1449,7 +1449,7 @@ export default function LeadsGenerator({
                         ...prev,
                         country,
                         phone: withDialCode(prev.phone, country),
-                        region: COUNTRY_REGIONS[country] || ''
+                        region: areasFor(country)[0] || ''
                       }));
                     }}
                     className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
@@ -1461,13 +1461,21 @@ export default function LeadsGenerator({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Region / State</label>
+                  {/* The country's own sweep areas are offered as suggestions; the field stays free
+                      text, because a business can sit outside the areas the sweep covers */}
                   <input
                     type="text"
-                    placeholder="Ontario (Toronto)"
+                    list="lead-region-options"
+                    placeholder={areasFor(newLead.country)[0] || 'City or area'}
                     value={newLead.region}
                     onChange={(e) => setNewLead({...newLead, region: e.target.value})}
                     className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                   />
+                  <datalist id="lead-region-options">
+                    {areasFor(newLead.country).map((area) => (
+                      <option key={area} value={area} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
 

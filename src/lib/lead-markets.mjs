@@ -36,6 +36,13 @@ export const LEAD_MARKETS = [
   }
 ];
 
+// The areas one country covers, in the order the sweep visits them. The lead form offers these as
+// suggestions for its region field, so an area typed by an agent is one the sweep can search too.
+export const areasFor = (country) => {
+  const market = LEAD_MARKETS.find((entry) => entry.country === country);
+  return market ? [...market.areas] : [];
+};
+
 // Two areas per country per fetch keeps one click cheap while still spreading the results
 export const AREAS_PER_SEARCH = 2;
 

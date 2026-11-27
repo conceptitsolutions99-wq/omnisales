@@ -6,6 +6,24 @@ const assert = require('node:assert/strict');
 
 const markets = () => import('../src/lib/lead-markets.mjs');
 
+// The lead form suggests the region from the same lists the sweep walks, so an area an agent picks
+// is one that was actually checked against the provider.
+test('each country offers the areas the sweep searches', async () => {
+  const { LEAD_MARKETS, areasFor } = await markets();
+
+  for (const market of LEAD_MARKETS) {
+    const areas = areasFor(market.country);
+    assert.ok(areas.length >= 10, `${market.country} has enough areas to suggest`);
+    assert.deepEqual(areas, market.areas, `${market.country} suggests the sweep's own areas`);
+    // A copy, so a caller cannot edit the market by sorting or pushing its suggestions
+    assert.notEqual(areas, market.areas);
+  }
+
+  assert.equal(areasFor('Egypt')[0], 'Cairo');
+  assert.ok(areasFor('Egypt').includes('Alexandria'));
+  assert.deepEqual(areasFor('Nowhere'), []);
+});
+
 test('every market is represented before a second row from any of them', async () => {
   const { mixLeads } = await markets();
   const canada = [{ id: 'c1', phone: '+14165550001' }, { id: 'c2', phone: '+14165550002' }];
