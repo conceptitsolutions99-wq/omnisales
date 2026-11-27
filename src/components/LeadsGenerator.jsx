@@ -100,8 +100,10 @@ export default function LeadsGenerator({
   const [page, setPage] = useState(1);
   const [isFetchingLive, setIsFetchingLive] = useState(false);
   const [fetchMessage, setFetchMessage] = useState('');
-  // How many leads the last sweep added. The table is oldest first, so they sit on the last page
+  // How many leads the last sweep added, and which ones they are. The table is oldest first, so
+  // they sit on the last page; the ids keep them marked in the table until the next sweep
   const [sweepNewCount, setSweepNewCount] = useState(0);
+  const [sweepNewIds, setSweepNewIds] = useState(() => new Set());
   const [fetchCategory, setFetchCategory] = useState('offices');
   // Picking a country can pre-select the category that country's listings are richest in, but
   // only until the agent chooses a category themselves
@@ -243,8 +245,9 @@ export default function LeadsGenerator({
   // sweeps a couple of areas in each selected country and advances a cursor, so repeated searches
   // spread the list across the whole country instead of pinning one city to each market.
   const handleFetchLiveLeads = async () => {
-    // A new sweep decides afresh how many leads it added
+    // A new sweep decides afresh which leads it added
     setSweepNewCount(0);
+    setSweepNewIds(new Set());
     const countries = countryFilter === 'All' ? LEAD_MARKETS.map(market => market.country) : [countryFilter];
     const mixed = countries.length > 1;
     const categoryLabel = CATEGORY_OPTIONS.find(option => option.value === fetchCategory)?.label || 'businesses';
@@ -355,6 +358,8 @@ export default function LeadsGenerator({
       if (fresh.length > 0) {
         setLeads(prev => [...fresh, ...prev]);
         setSweepNewCount(fresh.length);
+        // Marked in the table, so the rows the jump lands on are obvious rather than a guess
+        setSweepNewIds(new Set(fresh.map(lead => String(lead.id))));
         // A fresh list is mostly phone-only until each business's own site is read, so it is read
         // straight away instead of waiting for the agent to press the button afterwards
         enrichMany(fresh).then(result => {
@@ -1128,7 +1133,12 @@ export default function LeadsGenerator({
                 </tr>
               ) : (
                 pagedLeads.map((lead) => (
-                  <tr key={lead.id} className="row-hover transition-colors">
+                  <tr
+                    key={lead.id}
+                    className={`row-hover transition-colors ${
+                      sweepNewIds.has(String(lead.id)) ? 'bg-emerald-500/[0.06]' : ''
+                    }`}
+                  >
                     {isAdmin && (
                       <td className="py-4 px-3 align-top">
                         <input
@@ -1141,7 +1151,14 @@ export default function LeadsGenerator({
                       </td>
                     )}
                     <td className="py-4 px-4">
-                      <div className="font-semibold text-[var(--text-primary)]">{lead.name}</div>
+                      <div className="font-semibold text-[var(--text-primary)]">
+                        {lead.name}
+                        {sweepNewIds.has(String(lead.id)) && (
+                          <span className="ml-2 inline-flex items-center rounded px-1.5 py-0.5 align-middle text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300">
+                            New
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-muted flex items-center mt-0.5">
                         <Building2 className="w-3 h-3 mr-1 text-muted" /> {lead.company}
                       </div>
