@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { searchLeadsAcrossMarkets } from '../lib/leads';
 import { LEAD_MARKETS, mixLeads, planAreaSearch, planEmptyMarketNextArea } from '../lib/lead-markets.mjs';
 import { isWhatsAppLead, leadChannels } from '../lib/contact-channels';
@@ -31,6 +32,21 @@ import {
 
 // A bulk delete is easy to trigger by accident, so a deleted batch stays in hand briefly
 const UNDO_WINDOW_MS = 30000;
+
+// The dial code the phone field takes when the agent picks a country for a manual lead
+const COUNTRY_DIAL_CODES = { Canada: '+1', USA: '+1', Egypt: '+20' };
+
+// Swap only a leading, separated dial code, so the local number already typed stays as it is; a
+// bare number simply gets the code in front of it.
+const withDialCode = (phone, country) => {
+  const code = COUNTRY_DIAL_CODES[country] || '';
+  if (!code) return phone;
+
+  const value = String(phone || '').trim();
+  if (!value) return `${code} `;
+  if (/^\+(?:1|20)(?=[\s\-().]|$)/.test(value)) return value.replace(/^\+(?:1|20)/, code);
+  return value.startsWith('+') ? value : `${code} ${value}`;
+};
 
 const CATEGORY_OPTIONS = [
   { value: 'all', label: 'All categories' },
@@ -110,6 +126,16 @@ export default function LeadsGenerator({
     value: 15000,
     notes: ''
   });
+
+  // The form has to open on screen, so the page behind it does not scroll while it is open
+  useEffect(() => {
+    if (!isAddModalOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isAddModalOpen]);
 
   const handleAddLead = (e) => {
     e.preventDefault();
@@ -1192,10 +1218,13 @@ export default function LeadsGenerator({
         </div>
       </div>
 
-      {/* Add Lead Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
-          <div className="w-full max-w-lg glass-strong overflow-hidden">
+      {/* Add Lead Modal. Rendered on the body: any ancestor with a filter or backdrop reaches
+          position:fixed to itself, which put this form below the fold instead of on screen */}
+      {isAddModalOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4">
+            <div className="flex min-h-full items-start justify-center">
+              <div className="my-2 w-full max-w-lg overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl">
             <div className="p-6 border-b border-[var(--glass-border)] flex items-center justify-between">
               <h3 className="text-lg font-bold text-[var(--text-primary)]">Add New Business Lead</h3>
               <button
@@ -1261,7 +1290,12 @@ export default function LeadsGenerator({
                   <label className="block text-xs font-semibold uppercase tracking-wider text-muted mb-1">Country</label>
                   <select
                     value={newLead.country}
-                    onChange={(e) => setNewLead({...newLead, country: e.target.value})}
+                    onChange={(e) => {
+                      const country = e.target.value;
+                      // The phone field follows the country, so the agent never has to know the
+                      // dial code for the lead they are typing in
+                      setNewLead((prev) => ({ ...prev, country, phone: withDialCode(prev.phone, country) }));
+                    }}
                     className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                   >
                     <option value="Canada">Canada</option>
@@ -1343,10 +1377,12 @@ export default function LeadsGenerator({
                   Save Lead
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              </form>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
