@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   PhoneCall,
   PhoneOff,
@@ -281,6 +282,18 @@ export default function Dialler({
   // Why the WhatsApp channel is unavailable for this lead, and the proof the contact produced
   const [whatsAppIssue, setWhatsAppIssue] = useState('');
   const [proofLead, setProofLead] = useState(null);
+
+  // These dialogs cover the page, so the page behind them does not scroll. They are portalled to
+  // the body: rendered inside the tab's .rise wrapper — whose animation leaves a transform on it —
+  // a fixed overlay positions against that wrapper and its z-50 is trapped below the sticky navbar.
+  useEffect(() => {
+    if (!showOutcomeModal && !showEmailCompose && !proofLead) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [showOutcomeModal, showEmailCompose, proofLead]);
 
   // The call timer only exists while a call is running; ending the call removes it immediately
   useEffect(() => {
@@ -1234,9 +1247,10 @@ export default function Dialler({
       </div>
 
       {/* Outcome Modal */}
-      {showOutcomeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
-          <div className="w-full max-w-md glass-strong overflow-hidden">
+      {showOutcomeModal &&
+        createPortal(
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="my-auto w-full max-w-md glass-strong overflow-hidden">
             <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
               <h3 className="text-lg font-bold">Call Completed</h3>
               <p className="text-xs text-emerald-100 mt-0.5">Select outcome and add notes for {activeLead?.name} ({activeLead?.company})</p>
@@ -1295,13 +1309,15 @@ export default function Dialler({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Email Compose Modal */}
-      {showEmailCompose && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
-          <div className="w-full max-w-xl glass-strong overflow-hidden">
+      {showEmailCompose &&
+        createPortal(
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="my-auto w-full max-w-xl glass-strong overflow-hidden">
             <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <Mail className="w-4 h-4" /> Email {activeLead?.name}
@@ -1605,19 +1621,23 @@ export default function Dialler({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Every WhatsApp contact is stored with its conversation screenshots */}
-      {proofLead && (
-        <WhatsAppProofModal
-          open={Boolean(proofLead)}
-          lead={proofLead}
-          currentUser={currentUser}
-          onClose={() => setProofLead(null)}
-          onSaved={handleWhatsAppProofSaved}
-        />
-      )}
+      {/* Every WhatsApp contact is stored with its conversation screenshots. Its own overlay is
+          portalled for the same reason: this tab is inside a transformed wrapper */}
+      {proofLead &&
+        createPortal(
+          <WhatsAppProofModal
+            open={Boolean(proofLead)}
+            lead={proofLead}
+            currentUser={currentUser}
+            onClose={() => setProofLead(null)}
+            onSaved={handleWhatsAppProofSaved}
+          />,
+          document.body
+        )}
     </div>
   );
 }
