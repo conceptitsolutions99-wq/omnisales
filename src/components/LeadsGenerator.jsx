@@ -1339,6 +1339,19 @@ export default function LeadsGenerator({
             </span>
 
             <div className="flex flex-wrap items-center gap-1">
+              {/* Always available, unlike the sweep summary, so the leads a sweep added can be
+                  found again after the message is gone. The order stays oldest first: this only
+                  jumps to the page they are on. */}
+              <button
+                type="button"
+                onClick={showNewestSweepLeads}
+                disabled={currentPage === pageCount}
+                title="Jump to the last page, where the most recently added leads are"
+                className="px-2.5 py-1.5 rounded-lg glass-soft font-semibold text-[var(--text-primary)] disabled:opacity-40"
+              >
+                Show newest{sweepNewIds.size > 0 ? ` (${sweepNewIds.size})` : ''}
+              </button>
+
               <button
                 onClick={() => setPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
