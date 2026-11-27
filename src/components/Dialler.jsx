@@ -19,6 +19,7 @@ import {
   AtSign
 } from 'lucide-react';
 import { markLeadContacted } from '../lib/lead-status';
+import { OFFER_CATALOGUE, SOLUTION_OPTIONS, offerFor, solutionOf, tagSolution } from '../lib/lead-solutions.mjs';
 import { whatsappNumberFor } from '../lib/contact-channels';
 import { buildSignature, SIGNATURE_SERVICE_LINE, COMPANY_SITE } from '../lib/signature';
 import { createRequirementLink, listRequirementLinksForLead } from '../lib/requirements';
@@ -116,17 +117,17 @@ const EMAIL_TEMPLATES = [
     icon: Mail,
     build: (lead, agent) => {
       const firstName = (lead?.name || 'there').replace(/\(.*?\)/g, '').trim().split(/\s+/)[0] || 'there';
-      const solution = (lead?.solution || 'website').toLowerCase();
+      const offer = offerFor(lead);
       const company = lead?.company || 'your business';
 
       return {
-        subject: `A faster ${solution} for ${company}`,
+        subject: `A faster ${offer.noun} for ${company}`,
         body: [
           `Hi ${firstName},`,
           '',
-          `I'm ${agent.name}, ${agent.title || agent.role || 'Sales Agent'} at Concept IT Solutions — we build ${solution}s, web portals and mobile apps for businesses across ${marketLine(lead)}.`,
+          `I'm ${agent.name}, ${agent.title || agent.role || 'Sales Agent'} at Concept IT Solutions — we build ${OFFER_CATALOGUE} for businesses across ${marketLine(lead)}.`,
           '',
-          `I had a quick idea for ${company}: a modern ${solution} that brings in qualified inbound leads and removes some of the manual work your team does today.`,
+          `I had a quick idea for ${company}: a modern ${offer.noun} that brings in qualified inbound leads and removes some of the manual work your team does today.`,
           '',
           'Would you be open to a 10-minute walkthrough of a tailored prototype next week?',
         ].join('\n'),
@@ -140,15 +141,15 @@ const EMAIL_TEMPLATES = [
     icon: History,
     build: (lead, agent) => {
       const firstName = (lead?.name || 'there').replace(/\(.*?\)/g, '').trim().split(/\s+/)[0] || 'there';
-      const solution = (lead?.solution || 'website').toLowerCase();
+      const offer = offerFor(lead);
       const company = lead?.company || 'your business';
 
       return {
-        subject: `Following up — ${solution} for ${company}`,
+        subject: `Following up — ${offer.noun} for ${company}`,
         body: [
           `Hi ${firstName},`,
           '',
-          `I wanted to follow up on my note about ${company}'s ${solution}. In the last few months we've shipped similar builds for ${lead?.country || 'North American'} businesses, and the wins came down to three things:`,
+          `I wanted to follow up on my note about ${company}'s ${offer.noun}. In the last few months we've shipped similar builds for ${lead?.country || 'North American'} businesses, and the wins came down to three things:`,
           '',
           '- faster performance for customers',
           '- fewer manual steps for your team',
@@ -166,19 +167,19 @@ const EMAIL_TEMPLATES = [
     icon: FileText,
     build: (lead, agent) => {
       const firstName = (lead?.name || 'there').replace(/\(.*?\)/g, '').trim().split(/\s+/)[0] || 'there';
-      const solution = (lead?.solution || 'website').toLowerCase();
+      const offer = offerFor(lead);
       const company = lead?.company || 'your business';
       const value = Number(lead?.value) || 0;
       const deposit = Math.round(value * 0.4);
 
       return {
-        subject: `${company} — ${solution} estimate`,
+        subject: `${company} — ${offer.noun} estimate`,
         body: [
           `Hi ${firstName},`,
           '',
           `Thanks for the conversation about ${company}. Here is the estimate we discussed:`,
           '',
-          `- Scope: a custom ${solution}`,
+          `- Scope: a custom ${offer.noun}`,
           value ? `- Estimated investment: $${value.toLocaleString()}` : '- Estimated investment: to be scoped after the discovery call',
           value ? `- Deposit to start: $${deposit.toLocaleString()} (40%)` : '- Payment terms: 40% to start, balance on launch',
           '- Delivery window: 4–6 weeks from sign-off',
@@ -315,13 +316,21 @@ export default function Dialler({
   // A usable WhatsApp number is 8–15 digits and never starts with the 0 trunk prefix
   const usableWhatsAppNumber = (number) => /^[1-9]\d{7,14}$/.test(number);
 
-  // The opening message is written from what the app already knows about the lead: a business
-  // with no site gets the website angle, one with a site gets an improvement angle
-  const WHATSAPP_OFFERS = { Website: 'websites', 'Web Portal': 'web portals', 'Mobile App': 'mobile apps' };
+  // The opening message is written from the offer the team tagged the lead with: a business with
+  // no site gets that offer as the angle, one with a site gets an improvement angle. An untagged
+  // lead is offered what the team sells rather than a website it may have nothing to do with.
+  // The tag set here is the one the phone script, WhatsApp message and email templates are built
+  // from, so it is saved for the team exactly as the leads table saves it
+  const setActiveSolution = (solution) => {
+    if (!activeLead) return;
+    const tagged = tagSolution(activeLead, solution, currentUser?.name || '');
+    setActiveLead(tagged);
+    setLeads(prev => prev.map(item => (String(item.id) === String(tagged.id) ? tagged : item)));
+  };
 
   const buildWhatsAppMessage = (lead) => {
     const firstName = String(lead.name || '').split(' ')[0] || 'there';
-    const offer = WHATSAPP_OFFERS[lead.solution] || 'websites and apps';
+    const offer = offerFor(lead).plural;
     const pitch = lead.website
       ? `I had a quick look at ${lead.company}'s website and have two ideas that could bring in more enquiries — is now a good time for two minutes?`
       : `I noticed ${lead.company} doesn't have a website yet. We build ${offer} for businesses in ${lead.region || lead.country || 'your area'} — can I send you two examples?`;
@@ -942,7 +951,7 @@ export default function Dialler({
                 ) : (
                   leads.map((lead) => (
                     <option key={lead.id} value={lead.id}>
-                      {lead.name} — {lead.company} ({lead.country} • {lead.solution})
+                      {lead.name} — {lead.company} ({lead.country} · {solutionOf(lead) || 'no offer yet'})
                     </option>
                   ))
                 )}
@@ -967,11 +976,21 @@ export default function Dialler({
                 </div>
 
                 <div className="pt-3 border-t border-[var(--glass-border)] flex flex-wrap items-center justify-between gap-3">
-                  <div>
+                  <div className="flex items-center gap-1.5">
                     <span className="text-xs text-muted">Target Solution:</span>
-                    <span className="ml-1.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded font-semibold text-xs">
-                      {activeLead.solution} (${activeLead.value?.toLocaleString()})
-                    </span>
+                    <select
+                      value={solutionOf(activeLead)}
+                      onChange={(e) => setActiveSolution(e.target.value)}
+                      title="The offer this lead is being sold — it writes the phone script, WhatsApp message and email templates"
+                      aria-label="Target solution for this lead"
+                      className="rounded-lg glass-input px-1.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300"
+                    >
+                      <option value="">Not specified</option>
+                      {SOLUTION_OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                    <span className="text-xs text-muted">(${activeLead.value?.toLocaleString()})</span>
                   </div>
                   <div>
                     <span className="text-xs text-muted">Current Status:</span>
@@ -1150,7 +1169,7 @@ export default function Dialler({
             <div className="space-y-4 text-xs text-[var(--text-secondary)] leading-relaxed">
               <div className="p-3 glass-soft border-emerald-400/25 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
                 <strong className="text-emerald-700 dark:text-emerald-300 block mb-1">1. Introduction & Hook</strong>
-                "Hello {activeLead?.name || 'there'}, my name is {currentUser.name}, {currentUser.title || currentUser.role} at Concept IT Solutions. We specialize in empowering {activeLead?.country || 'North American'} businesses like {activeLead?.company || 'your company'} with high-performance {activeLead?.solution || 'websites and portals'}."
+                "Hello {activeLead?.name || 'there'}, my name is {currentUser.name}, {currentUser.title || currentUser.role} at Concept IT Solutions. We specialize in empowering {activeLead?.country || 'North American'} businesses like {activeLead?.company || 'your company'} with high-performance {offerFor(activeLead).plural}."
               </div>
 
               <div className="p-3 glass-soft">
@@ -1288,7 +1307,7 @@ export default function Dialler({
                 <Mail className="w-4 h-4" /> Email {activeLead?.name}
               </h3>
               <p className="text-xs text-indigo-100 mt-0.5">
-                {activeLead?.company} · {activeLead?.country} · {activeLead?.solution}
+                {activeLead?.company} · {activeLead?.country} · {solutionOf(activeLead) || 'no offer tagged'}
               </p>
               {activeLead?.owner && (
                 <p className="text-[11px] text-indigo-100/80 mt-1">

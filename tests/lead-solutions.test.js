@@ -29,6 +29,28 @@ test('a tagged lead matches its own offer and nothing else', async () => {
   assert.equal(matchesSolution(lead, 'All'), true);
 });
 
+test('the outreach copy names the offer the lead is tagged with', async () => {
+  const { offerFor, OFFER_CATALOGUE } = await solutions();
+
+  assert.equal(OFFER_CATALOGUE, 'websites, web portals and mobile apps');
+  assert.deepEqual(offerFor({ solution: 'Mobile App' }), {
+    key: 'mobile-app',
+    noun: 'mobile app',
+    plural: 'mobile apps',
+    label: 'Mobile App',
+    tagged: true
+  });
+  assert.equal(offerFor({ solution: ' Web Portal ' }).noun, 'web portal');
+  assert.equal(offerFor({ solution: 'Website' }).noun, 'website');
+
+  // An untagged lead is not quietly sold a website: the copy says what the team actually sells
+  const untagged = offerFor({ solution: '' });
+  assert.equal(untagged.tagged, false);
+  assert.equal(untagged.noun, 'website or app');
+  assert.equal(untagged.plural, 'websites and apps');
+  assert.notEqual(untagged.noun, 'website');
+});
+
 test('tagging a lead stamps the edit and only stores a real offer', async () => {
   const { tagSolution } = await solutions();
 
