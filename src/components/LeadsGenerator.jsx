@@ -8,6 +8,16 @@ import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import { manualPhoneFor } from '../lib/manual-phone.mjs';
 import {
+  clampPage,
+  isPageSelected,
+  pageCountFor,
+  pageNumbersFor,
+  pageRange,
+  pageSlice,
+  sortOldestFirst,
+  togglePageSelection
+} from '../lib/lead-paging.mjs';
+import {
   Users,
   Search,
   Filter,
@@ -33,17 +43,6 @@ import {
 
 // A bulk delete is easy to trigger by accident, so a deleted batch stays in hand briefly
 const UNDO_WINDOW_MS = 30000;
-
-// The shared list is long, so the table shows a page at a time, oldest lead first
-const LEADS_PER_PAGE = 10;
-
-// A lead's age: its creation date when it has one, otherwise the timestamp in its id
-const leadTime = (lead) => {
-  const stamp = Date.parse(lead?.createdAt || '');
-  if (!Number.isNaN(stamp)) return stamp;
-  const id = Number(lead?.id);
-  return Number.isFinite(id) ? id : 0;
-};
 
 // The dial code the phone field takes when the agent picks a country for a manual lead
 const COUNTRY_DIAL_CODES = { Canada: '+1', USA: '+1', Egypt: '+20' };
@@ -733,15 +732,12 @@ export default function LeadsGenerator({
   });
 
   // Oldest first, so page 1 is the start of the list rather than whatever arrived last
-  const sortedLeads = [...filteredLeads].sort((a, b) => leadTime(a) - leadTime(b));
-  const pageCount = Math.max(1, Math.ceil(sortedLeads.length / LEADS_PER_PAGE));
-  const currentPage = Math.min(page, pageCount);
-  const pagedLeads = sortedLeads.slice(
-    (currentPage - 1) * LEADS_PER_PAGE,
-    currentPage * LEADS_PER_PAGE
-  );
-  const firstShown = sortedLeads.length ? (currentPage - 1) * LEADS_PER_PAGE + 1 : 0;
-  const lastShown = Math.min(currentPage * LEADS_PER_PAGE, sortedLeads.length);
+  const sortedLeads = sortOldestFirst(filteredLeads);
+  const pageCount = pageCountFor(sortedLeads.length);
+  // A filter can shrink the list under the page the table is on
+  const currentPage = clampPage(page, pageCount);
+  const pagedLeads = pageSlice(sortedLeads, currentPage);
+  const { first: firstShown, last: lastShown } = pageRange(sortedLeads.length, currentPage);
 
   // The order stays oldest first, so the leads a sweep just added are at the end of the list: the
   // sweep summary jumps there rather than leaving the agent on page 1 with nothing new in sight
@@ -751,14 +747,7 @@ export default function LeadsGenerator({
   };
 
   // A page number for the ends and for the pages around the current one; the gaps become "…"
-  const pageNumbers = [];
-  for (let number = 1; number <= pageCount; number += 1) {
-    if (number === 1 || number === pageCount || Math.abs(number - currentPage) <= 2) {
-      pageNumbers.push(number);
-    } else if (pageNumbers[pageNumbers.length - 1] !== '…') {
-      pageNumbers.push('…');
-    }
-  }
+  const pageNumbers = pageNumbersFor(pageCount, currentPage);
 
   // A new filter means a new list, so it starts at page 1; a shrinking list cannot leave the
   // table pointing at a page that is no longer there
@@ -776,21 +765,14 @@ export default function LeadsGenerator({
   ]);
 
   useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount]);
+    if (page !== currentPage) setPage(currentPage);
+  }, [page, currentPage]);
 
-  const allFilteredSelected =
-    pagedLeads.length > 0 && pagedLeads.every(lead => selectedLeadIds.includes(String(lead.id)));
+  const allFilteredSelected = isPageSelected(pagedLeads, selectedLeadIds);
 
-  // Select-all covers the page on screen: with ten rows a page, silently selecting leads the
-  // agent cannot see is how a bulk delete takes the wrong records
+  // Select-all covers the page on screen, so a bulk delete cannot take rows the agent never saw
   const toggleSelectAllVisible = () => {
-    if (allFilteredSelected) {
-      const pageIds = new Set(pagedLeads.map(lead => String(lead.id)));
-      setSelectedLeadIds(prev => prev.filter(id => !pageIds.has(id)));
-      return;
-    }
-    setSelectedLeadIds(prev => [...new Set([...prev, ...pagedLeads.map(lead => String(lead.id))])]);
+    setSelectedLeadIds(prev => togglePageSelection(pagedLeads, prev));
   };
 
   // The employees who have contacted someone in this list, so the filter only offers real names
