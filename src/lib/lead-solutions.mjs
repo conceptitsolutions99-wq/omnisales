@@ -26,9 +26,6 @@ export const offerFor = (lead) => {
   return { ...offer, label, tagged: true };
 };
 
-// A lead swept from the map arrives with no interest recorded, so it is a candidate for every
-// offer. Once the team tags it, it answers for that offer only — which is what lets the filter
-// narrow the list instead of returning every untagged business alongside the matches.
 // Tagging from the list is an edit, not a discovery, so it carries a timestamp: the shared store
 // lets the newest edit win and a browser that has not synced yet cannot untag the lead with its
 // stale copy.
@@ -39,8 +36,15 @@ export const tagSolution = (lead, solution, by = '') => ({
   solutionBy: by
 });
 
+// A lead swept from the map arrives with no interest recorded. The offer filters name one offer,
+// so they list only the leads tagged with it: mixing the untagged businesses into every offer made
+// the filter show the same list three times. The untagged leads keep a view of their own, where
+// tagging a row moves it into its offer.
+export const UNTAGGED_FILTER = 'Untagged';
+
 export const matchesSolution = (lead, filter) => {
   if (!filter || filter === 'All') return true;
   const interest = solutionOf(lead);
-  return !interest || interest === filter;
+  if (filter === UNTAGGED_FILTER) return !interest;
+  return interest === filter;
 };

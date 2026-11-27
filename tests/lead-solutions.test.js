@@ -10,13 +10,21 @@ test('the offers are the three the team sells', async () => {
   assert.deepEqual(SOLUTION_OPTIONS, ['Website', 'Web Portal', 'Mobile App']);
 });
 
-test('an untagged lead is a candidate for every offer', async () => {
+test('an untagged lead is listed under No offer tagged yet, not under an offer', async () => {
   const { matchesSolution } = await solutions();
 
-  for (const filter of ['Website', 'Web Portal', 'Mobile App', 'All']) {
-    assert.equal(matchesSolution({ solution: '' }, filter), true, `untagged matches ${filter}`);
-    assert.equal(matchesSolution({}, filter), true, 'a lead with no solution key matches too');
+  // The offer filters have to segment the list: the same untagged businesses under every offer
+  // would make Website, Web Portal and Mobile App show one identical list.
+  for (const filter of ['Website', 'Web Portal', 'Mobile App']) {
+    assert.equal(matchesSolution({ solution: '' }, filter), false, `untagged is not under ${filter}`);
+    assert.equal(matchesSolution({}, filter), false, 'a lead with no solution key is not either');
   }
+
+  assert.equal(matchesSolution({ solution: '' }, 'Untagged'), true);
+  assert.equal(matchesSolution({}, 'Untagged'), true);
+  assert.equal(matchesSolution({ solution: 'Website' }, 'Untagged'), false);
+  assert.equal(matchesSolution({ solution: '' }, 'All'), true);
+  assert.equal(matchesSolution({ solution: 'Website' }, 'All'), true);
 });
 
 test('a tagged lead matches its own offer and nothing else', async () => {
@@ -27,6 +35,7 @@ test('a tagged lead matches its own offer and nothing else', async () => {
   assert.equal(matchesSolution(lead, 'Website'), false);
   assert.equal(matchesSolution(lead, 'Mobile App'), false);
   assert.equal(matchesSolution(lead, 'All'), true);
+  assert.equal(matchesSolution(lead, 'Untagged'), false, 'a tagged lead is not in the untagged list');
 });
 
 test('the outreach copy names the offer the lead is tagged with', async () => {
@@ -69,7 +78,8 @@ test('a blank or padded solution counts as untagged', async () => {
   const { matchesSolution, solutionOf } = await solutions();
 
   assert.equal(solutionOf({ solution: '   ' }), '');
-  assert.equal(matchesSolution({ solution: '   ' }, 'Website'), true);
+  assert.equal(matchesSolution({ solution: '   ' }, 'Website'), false);
+  assert.equal(matchesSolution({ solution: '   ' }, 'Untagged'), true);
 
   // A tag that reached us with padding still answers for its own offer
   assert.equal(solutionOf({ solution: ' Website ' }), 'Website');

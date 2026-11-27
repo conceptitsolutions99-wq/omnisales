@@ -7,7 +7,7 @@ import { leadKey } from '../lib/lead-key';
 import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import { manualPhoneFor } from '../lib/manual-phone.mjs';
-import { SOLUTION_OPTIONS, matchesSolution, solutionOf, tagSolution } from '../lib/lead-solutions.mjs';
+import { SOLUTION_OPTIONS, UNTAGGED_FILTER, matchesSolution, solutionOf, tagSolution } from '../lib/lead-solutions.mjs';
 import {
   clampPage,
   isPageSelected,
@@ -984,10 +984,11 @@ export default function LeadsGenerator({
             <select
               value={solutionFilter}
               onChange={(e) => setSolutionFilter(e.target.value)}
-              title="A lead with no interest recorded yet is a candidate for every offer"
+              title="Lists only the leads tagged with that offer; the untagged ones are under No offer tagged yet"
               className="w-full py-2.5 px-3 glass-input rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white"
             >
               <option value="All">All IT Solutions</option>
+              <option value={UNTAGGED_FILTER}>No offer tagged yet</option>
               <option value="Website">Website</option>
               <option value="Web Portal">Web Portal</option>
               <option value="Mobile App">Mobile App</option>
@@ -1054,8 +1055,11 @@ export default function LeadsGenerator({
         <div className="flex items-center justify-between pt-2 border-t border-[var(--glass-border)] text-xs text-muted">
           <span>
             Matching <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads
-            {solutionFilter !== 'All' && (
-              <span className="text-blue-500/90"> · untagged leads count as candidates for every offer</span>
+            {solutionFilter !== 'All' && solutionFilter !== UNTAGGED_FILTER && (
+              <span className="text-blue-500/90"> · only leads tagged {solutionFilter}</span>
+            )}
+            {solutionFilter === UNTAGGED_FILTER && (
+              <span className="text-blue-500/90"> · set an offer in a lead's Solution cell to move it</span>
             )}
             <span className="text-emerald-500/90"> · <strong>{emailCount}</strong> with an email</span>
             <span className="text-emerald-500/90"> · <strong>{whatsappCount}</strong> on WhatsApp</span>
@@ -1225,11 +1229,9 @@ export default function LeadsGenerator({
                           <option key={option} value={option}>{option}</option>
                         ))}
                       </select>
-                      {/* Why an untagged lead is in a filtered list: it was never narrowed to one
-                          offer, so it is a candidate for the one being looked at */}
-                      {solutionFilter !== 'All' && !solutionOf(lead) && (
+                      {solutionFilter === UNTAGGED_FILTER && !solutionOf(lead) && (
                         <div className="mt-0.5 text-[10px] text-muted">
-                          Untagged · candidate for {solutionFilter}
+                          Pick an offer to move it out of this list
                         </div>
                       )}
                       {lead.website ? (
