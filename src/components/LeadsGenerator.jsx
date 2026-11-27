@@ -1044,6 +1044,9 @@ export default function LeadsGenerator({
         <div className="flex items-center justify-between pt-2 border-t border-[var(--glass-border)] text-xs text-muted">
           <span>
             Matching <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads
+            {solutionFilter !== 'All' && (
+              <span className="text-blue-500/90"> · untagged leads count as candidates for every offer</span>
+            )}
             <span className="text-emerald-500/90"> · <strong>{emailCount}</strong> with an email</span>
             <span className="text-emerald-500/90"> · <strong>{whatsappCount}</strong> on WhatsApp</span>
             <span className="text-blue-500/90"> · <strong>{socialCount}</strong> with a social page</span>
@@ -1201,6 +1204,13 @@ export default function LeadsGenerator({
                       <div className="text-xs font-semibold text-blue-600 dark:text-blue-400">
                         {lead.solution || <span className="text-muted font-normal">Not specified</span>}
                       </div>
+                      {/* Why an untagged lead is in a filtered list: it was never narrowed to one
+                          offer, so it is a candidate for the one being looked at */}
+                      {solutionFilter !== 'All' && !String(lead.solution || '').trim() && (
+                        <div className="mt-0.5 text-[10px] text-muted">
+                          Untagged · candidate for {solutionFilter}
+                        </div>
+                      )}
                       {lead.website ? (
                         <a
                           href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
