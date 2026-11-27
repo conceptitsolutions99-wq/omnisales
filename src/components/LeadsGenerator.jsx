@@ -7,6 +7,7 @@ import { leadKey } from '../lib/lead-key';
 import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import { manualPhoneFor } from '../lib/manual-phone.mjs';
+import { SOLUTION_OPTIONS, matchesSolution, solutionOf, tagSolution } from '../lib/lead-solutions.mjs';
 import {
   clampPage,
   isPageSelected,
@@ -689,6 +690,16 @@ export default function LeadsGenerator({
   };
   const visibleLeads = leads;
 
+  // A swept lead arrives with no interest recorded, so its row is where the team tags it; the IT
+  // Solutions filter can only narrow by offer once the leads carry one
+  const setLeadSolution = (lead, solution) => {
+    setLeads(prev =>
+      prev.map(item =>
+        String(item.id) === String(lead.id) ? tagSolution(item, solution, currentUser?.name || '') : item
+      )
+    );
+  };
+
   // What the one-click cleanup would remove, so the button never invites a click that does nothing
   const { removable: nonProspectLeads } = cleanupSplit(visibleLeads);
 
@@ -702,8 +713,7 @@ export default function LeadsGenerator({
     const matchesCountry = countryFilter === 'All' || lead.country === countryFilter;
     // A lead swept from the map has no interest recorded, so it is a candidate for every
     // offer; only a lead the team has tagged is narrowed to one solution
-    const interest = String(lead.solution || '').trim();
-    const matchesSolution = solutionFilter === 'All' || !interest || interest === solutionFilter;
+    const matchesOffer = matchesSolution(lead, solutionFilter);
     const matchesStatus = statusFilter === 'All' || lead.status === statusFilter;
     const matchesWebsite =
       websiteFilter === 'All' ||
@@ -722,7 +732,7 @@ export default function LeadsGenerator({
     return (
       matchesSearch &&
       matchesCountry &&
-      matchesSolution &&
+      matchesOffer &&
       matchesStatus &&
       matchesWebsite &&
       matchesEmail &&
@@ -1201,12 +1211,23 @@ export default function LeadsGenerator({
                       </div>
                     </td>
                     <td className="py-4 px-4">
-                      <div className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                        {lead.solution || <span className="text-muted font-normal">Not specified</span>}
-                      </div>
+                      <select
+                        value={solutionOf(lead)}
+                        onChange={(e) => setLeadSolution(lead, e.target.value)}
+                        title="Set the offer this lead is a candidate for"
+                        aria-label={`IT solution interest for ${lead.name}`}
+                        className={`max-w-[130px] rounded-lg glass-input px-1.5 py-1 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 ${
+                          solutionOf(lead) ? 'text-blue-600 dark:text-blue-400' : 'text-muted'
+                        }`}
+                      >
+                        <option value="">Not specified</option>
+                        {SOLUTION_OPTIONS.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
                       {/* Why an untagged lead is in a filtered list: it was never narrowed to one
                           offer, so it is a candidate for the one being looked at */}
-                      {solutionFilter !== 'All' && !String(lead.solution || '').trim() && (
+                      {solutionFilter !== 'All' && !solutionOf(lead) && (
                         <div className="mt-0.5 text-[10px] text-muted">
                           Untagged · candidate for {solutionFilter}
                         </div>

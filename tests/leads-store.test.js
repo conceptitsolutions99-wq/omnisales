@@ -111,6 +111,32 @@ test('two agents claiming the same lead at once leave one owner', async () => {
   await store.deleteLeads([entry], actor);
 });
 
+test('an offer tagged in the list survives the next push, and the newest edit wins', async () => {
+  const entry = { ...lead(401), solution: '' };
+  await store.upsertLeads([entry], actor);
+  const stored = async () => (await store.listLeads()).find((row) => row.id === entry.id);
+
+  // A lead swept from the map has no offer; tagging it in the list is an edit with a timestamp
+  await store.upsertLeads([{ ...entry, solution: 'Website', solutionAt: '2026-11-27T10:00:00.000Z' }], actor);
+  assert.equal((await stored()).solution, 'Website', 'the tag is kept');
+
+  // Changing the offer is a later edit, so it replaces the first tag
+  await store.upsertLeads([{ ...entry, solution: 'Mobile App', solutionAt: '2026-11-27T10:05:00.000Z' }], actor);
+  assert.equal((await stored()).solution, 'Mobile App');
+
+  // A browser that has not synced pushes an older tag: it must not win
+  await store.upsertLeads([{ ...entry, solution: 'Website', solutionAt: '2026-11-27T10:03:00.000Z' }], actor);
+  assert.equal((await stored()).solution, 'Mobile App', 'an older edit does not overwrite a newer one');
+
+  // Clearing the offer is an edit as well, and the cleared lead stays cleared
+  await store.upsertLeads([{ ...entry, solution: '', solutionAt: '2026-11-27T10:10:00.000Z' }], actor);
+  assert.equal((await stored()).solution, '');
+  await store.upsertLeads([{ ...entry, solution: 'Website', solutionAt: '2026-11-27T10:07:00.000Z' }], actor);
+  assert.equal((await stored()).solution, '', 'a stale copy cannot re-tag a cleared lead');
+
+  await store.deleteLeads([entry], actor);
+});
+
 test('a delete survives a push whose write lands after it', async () => {
   const entry = lead(99);
   await store.upsertLeads([entry], actor);
