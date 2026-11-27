@@ -48,6 +48,9 @@ const leadTime = (lead) => {
 // The dial code the phone field takes when the agent picks a country for a manual lead
 const COUNTRY_DIAL_CODES = { Canada: '+1', USA: '+1', Egypt: '+20' };
 
+// The region field follows the country as well: an Egyptian lead must not keep a Canadian area
+const COUNTRY_REGIONS = { Canada: 'Ontario (Toronto)', USA: 'New York (NYC)', Egypt: 'Cairo' };
+
 // Swap only a leading, separated dial code, so the local number already typed stays as it is; a
 // bare number simply gets the code in front of it.
 const withDialCode = (phone, country) => {
@@ -1398,9 +1401,14 @@ export default function LeadsGenerator({
                     value={newLead.country}
                     onChange={(e) => {
                       const country = e.target.value;
-                      // The phone field follows the country, so the agent never has to know the
-                      // dial code for the lead they are typing in
-                      setNewLead((prev) => ({ ...prev, country, phone: withDialCode(prev.phone, country) }));
+                      // The phone field and the region follow the country, so the agent never has
+                      // to know the dial code, and the region cannot stay on the last country's area
+                      setNewLead((prev) => ({
+                        ...prev,
+                        country,
+                        phone: withDialCode(prev.phone, country),
+                        region: COUNTRY_REGIONS[country] || ''
+                      }));
                     }}
                     className="w-full p-2.5 glass-input rounded-xl text-sm dark:text-white"
                   >
