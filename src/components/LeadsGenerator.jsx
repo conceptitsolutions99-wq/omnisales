@@ -7,6 +7,7 @@ import { leadKey } from '../lib/lead-key';
 import { strictInstitutionReason } from '../lib/lead-filters.mjs';
 import { deleteSharedLeads, restoreSharedLeads } from '../lib/leads-api';
 import { manualPhoneFor } from '../lib/manual-phone.mjs';
+import { KNOWN_DIAL_CODES, dialCodeLabel } from '../lib/dial-codes.mjs';
 import { SOLUTION_OPTIONS, UNTAGGED_FILTER, matchesSolution, solutionOf, tagSolution } from '../lib/lead-solutions.mjs';
 import {
   clampPage,
@@ -45,8 +46,9 @@ import {
 // A bulk delete is easy to trigger by accident, so a deleted batch stays in hand briefly
 const UNDO_WINDOW_MS = 30000;
 
-// The dial code the phone field takes when the agent picks a country for a manual lead
-const COUNTRY_DIAL_CODES = { Canada: '+1', USA: '+1', Egypt: '+20' };
+// The dial code the phone field takes comes from the one table the form, the validation and the
+// WhatsApp link share
+const LEADING_DIAL_CODE = new RegExp(`^\\+(${KNOWN_DIAL_CODES.join('|')})(?=[\\s\\-().]|$)`);
 
 // The region field follows the country as well: an Egyptian lead must not keep a Canadian area
 const COUNTRY_REGIONS = { Canada: 'Ontario (Toronto)', USA: 'New York (NYC)', Egypt: 'Cairo' };
@@ -54,12 +56,13 @@ const COUNTRY_REGIONS = { Canada: 'Ontario (Toronto)', USA: 'New York (NYC)', Eg
 // Swap only a leading, separated dial code, so the local number already typed stays as it is; a
 // bare number simply gets the code in front of it.
 const withDialCode = (phone, country) => {
-  const code = COUNTRY_DIAL_CODES[country] || '';
+  const code = dialCodeLabel(country);
   if (!code) return phone;
 
   const value = String(phone || '').trim();
   if (!value) return `${code} `;
-  if (/^\+(?:1|20)(?=[\s\-().]|$)/.test(value)) return value.replace(/^\+(?:1|20)/, code);
+  const leading = value.match(LEADING_DIAL_CODE);
+  if (leading) return `${code}${value.slice(leading[0].length)}`;
   return value.startsWith('+') ? value : `${code} ${value}`;
 };
 

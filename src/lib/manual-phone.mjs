@@ -4,11 +4,7 @@
 // the dial code of the country they picked, and drop the trunk prefix — Egyptian numbers are
 // written locally as 01012345678, but WhatsApp and the dialler need +201012345678.
 
-const DIAL_CODES = {
-  Canada: '1',
-  USA: '1',
-  Egypt: '20'
-};
+import { dialCodeFor, stripTrunkZero } from './dial-codes.mjs';
 
 // How many digits a number has after its dial code. Canada and the USA are always ten; Egypt's
 // mobiles are ten and its landlines nine.
@@ -23,7 +19,7 @@ const lengthsFor = (code) => NATIONAL_LENGTHS[code] || [7, 8, 9, 10, 11, 12, 13,
 
 export const manualPhoneFor = (typed, country) => {
   const value = String(typed || '').trim();
-  const code = DIAL_CODES[country] || '';
+  const code = dialCodeFor(country);
   const digits = digitsOf(value);
   const allowed = lengthsFor(code);
   const longest = allowed[allowed.length - 1];
@@ -49,7 +45,7 @@ export const manualPhoneFor = (typed, country) => {
   }
 
   // The leading zero is how a number is written inside its country; international form has none
-  national = national.replace(/^0+/, '');
+  national = stripTrunkZero(national);
 
   if (!allowed.includes(national.length)) {
     const wanted = allowed.length === 1 ? `${allowed[0]}` : `${allowed[0]}–${longest}`;
