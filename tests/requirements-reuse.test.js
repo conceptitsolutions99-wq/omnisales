@@ -103,6 +103,67 @@ test('a different type still creates its own form', async () => {
   assert.equal(mobile.reused, false);
 });
 
+test('clicks arriving together still leave the lead one form per type', async () => {
+  const payload = {
+    type: 'website',
+    leadId: 'lead-race-mint',
+    leadEmail: 'race-mint@example.com',
+    agent: 'Seif',
+    agentEmail: 'seif@example.com'
+  };
+
+  // Two agents (and a double click) all ask for the link before any of them has been answered
+  const results = await Promise.all(
+    Array.from({ length: 8 }, () => store.createOrReuseRequest(payload))
+  );
+
+  const tokens = new Set(results.map((result) => result.request.token));
+  assert.equal(tokens.size, 1, 'every click was given the same form');
+  assert.equal(
+    results.filter((result) => !result.reused).length,
+    1,
+    'exactly one click created the form'
+  );
+
+  const links = await store.linksForLead({
+    leadId: 'lead-race-mint',
+    leadEmail: 'race-mint@example.com',
+    origin
+  });
+  assert.equal(
+    links.filter((link) => link.type === 'website').length,
+    1,
+    'the lead has one website form, not eight'
+  );
+});
+
+test('a submission landing during a mint does not erase the new form', async () => {
+  const sent = {
+    leadId: 'lead-race-submit',
+    leadEmail: 'race-submit@example.com',
+    agent: 'Seif',
+    agentEmail: 'seif@example.com'
+  };
+  const mobile = await store.createOrReuseRequest({ ...sent, type: 'mobile' });
+
+  // The customer submits while the agent copies a link for a different form at the same moment
+  await Promise.all([
+    store.saveAnswers(mobile.request.token, {
+      details: { fullName: 'Race Customer' },
+      answers: { platform: ['Android'] }
+    }),
+    store.createOrReuseRequest({ ...sent, type: 'desktop' })
+  ]);
+
+  const links = await store.linksForLead({ ...sent, origin });
+  assert.deepEqual(
+    links.map((link) => link.type).sort(),
+    ['desktop', 'mobile'],
+    'both records survive the overlap'
+  );
+  assert.equal((await store.getRequest(mobile.request.token)).details.fullName, 'Race Customer');
+});
+
 test('the dialler gets one link per type, newest first, with the app origin', async () => {
   const linksLead = { leadId: 'lead-links', leadEmail: 'links@example.com' };
   await create('website', linksLead);
