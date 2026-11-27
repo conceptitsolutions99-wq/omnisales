@@ -137,6 +137,12 @@ export default function LeadsGenerator({
     };
   }, [isAddModalOpen]);
 
+  // The field is ready with the dial code of the country already chosen when the form opens
+  const openAddModal = () => {
+    setNewLead((prev) => ({ ...prev, phone: withDialCode(prev.phone, prev.country) }));
+    setIsAddModalOpen(true);
+  };
+
   const handleAddLead = (e) => {
     e.preventDefault();
     if (!newLead.name || !newLead.company || !newLead.phone) return;
@@ -797,7 +803,7 @@ export default function LeadsGenerator({
             <span>Find Emails &amp; Socials ({missingContactCount})</span>
           </button>
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={openAddModal}
             className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-md transition-all flex items-center space-x-2 text-sm"
           >
             <Plus className="w-4 h-4" />
