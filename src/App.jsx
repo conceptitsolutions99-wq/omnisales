@@ -20,7 +20,13 @@ import WhatsAppReview from './components/WhatsAppReview';
 import { fetchReplies, markRepliesSeen, isAdminUser, isReviewerUser, assignReply } from './lib/replies';
 import { getSession, signIn, signOut } from './lib/session';
 import { listStaff } from './lib/staff';
-import { listRequirements } from './lib/requirements';
+import {
+  listRequirements,
+  markRequirementAnswersSeen,
+  readSeenRequirementAnswers
+} from './lib/requirements';
+import { REQUIREMENT_FORMS } from './data/requirementForms';
+import { BellRing } from 'lucide-react';
 import {
   listSharedLeads,
   pushSharedLeads,
@@ -478,16 +484,25 @@ function Workspace() {
   const [requirementsLoading, setRequirementsLoading] = useState(false);
   const [requirementsError, setRequirementsError] = useState('');
 
-  const loadRequirements = useCallback(async () => {
-    setRequirementsLoading(true);
-    setRequirementsError('');
+  // Answers this browser has not opened yet; the navbar badge and the toast both read from it
+  const [seenAnswerTokens, setSeenAnswerTokens] = useState(readSeenRequirementAnswers);
+
+  // A quiet refresh leaves the panel's spinner and error banner alone, which is what the poll
+  // behind the notification needs
+  const loadRequirements = useCallback(async (quiet = false) => {
+    if (!quiet) {
+      setRequirementsLoading(true);
+      setRequirementsError('');
+    }
     try {
       const data = await listRequirements();
       setRequirements(Array.isArray(data.requests) ? data.requests : []);
     } catch (err) {
-      setRequirementsError(err.message === 'Failed to fetch' ? 'Cannot reach the server.' : err.message);
+      if (!quiet) {
+        setRequirementsError(err.message === 'Failed to fetch' ? 'Cannot reach the server.' : err.message);
+      }
     } finally {
-      setRequirementsLoading(false);
+      if (!quiet) setRequirementsLoading(false);
     }
   }, []);
 
@@ -496,10 +511,28 @@ function Workspace() {
     else setRequirements([]);
   }, [currentUser, loadRequirements]);
 
+  // A customer filling the form an agent pasted into WhatsApp has to show up without anyone
+  // reloading, so the list is also checked every minute
+  useEffect(() => {
+    if (!currentUser) return undefined;
+    const timer = setInterval(() => loadRequirements(true), 60000);
+    return () => clearInterval(timer);
+  }, [currentUser, loadRequirements]);
+
   const openRequirements = () => {
     setRequirementsOpen(true);
+    // Opening the panel is reading the answers it lists
+    markRequirementAnswersSeen(
+      requirements.filter((request) => request.submittedAt).map((request) => request.token)
+    );
+    setSeenAnswerTokens(readSeenRequirementAnswers());
     loadRequirements();
   };
+
+  // Answers that arrived and have not been opened in this browser
+  const requirementAnswers = requirements.filter(
+    (request) => request.submittedAt && !seenAnswerTokens.has(request.token)
+  );
 
   const loadReplies = useCallback(async (user) => {
     if (!user) return;
@@ -726,6 +759,7 @@ function Workspace() {
         repliesUnread={replies.filter((reply) => reply.unread).length}
         onOpenRequirements={openRequirements}
         requirementsPending={requirements.filter((request) => !request.submittedAt).length}
+        requirementsAnswers={requirementAnswers.length}
         onOpenReplies={openReplies}
         onOpenWhatsAppProofs={() => setWhatsAppReviewOpen(true)}
         onOpenSetup={() => setSetupOpen(true)}
@@ -820,6 +854,32 @@ function Workspace() {
 
       <SetupChecklist open={setupOpen} onClose={() => setSetupOpen(false)} />
 
+      {/* A customer answering the form an agent shared shows up here without a reload, and
+          opening it is what marks the answers read */}
+      {!requirementsOpen && requirementAnswers.length > 0 && (
+        <button
+          onClick={openRequirements}
+          className="fixed bottom-4 right-4 z-40 max-w-xs text-left glass-strong border border-emerald-400/40 hover:border-emerald-400/70 p-3.5 shadow-2xl transition-colors"
+        >
+          <span className="flex items-center gap-2 text-emerald-500 dark:text-emerald-400">
+            <BellRing className="w-4 h-4" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">
+              {requirementAnswers.length} new requirement
+              {requirementAnswers.length === 1 ? '' : 's'} answer{requirementAnswers.length === 1 ? '' : 's'}
+            </span>
+          </span>
+          <span className="mt-1 block text-[12px] font-semibold text-[var(--text-primary)]">
+            {requirementAnswers[0].company ||
+              requirementAnswers[0].leadName ||
+              requirementAnswers[0].leadEmail ||
+              'A customer'}{' '}
+            filled the{' '}
+            {REQUIREMENT_FORMS[requirementAnswers[0].type]?.label || requirementAnswers[0].type} form
+          </span>
+          <span className="mt-0.5 block text-[11px] text-muted">Open Requirements to read the answers</span>
+        </button>
+      )}
+
       {profileOpen && (
         <ProfileModal
           user={currentUser}
@@ -837,7 +897,7 @@ function Workspace() {
         isAdmin={viewerIsAdmin}
         canReview={viewerCanReview}
         currentUser={currentUser}
-        onRefresh={loadRequirements}
+        onRefresh={() => loadRequirements()}
         setLeads={setLeads}
       />
 

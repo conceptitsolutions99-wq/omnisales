@@ -63,3 +63,26 @@ export const deleteRequirementForms = (tokens) =>
   );
 
 export const requirementLink = (token) => `${window.location.origin}/#/requirements/${token}`;
+
+// Which answered forms this browser has already opened, so the badge means "answers that
+// arrived" rather than "every form ever answered"
+const ANSWERS_SEEN_KEY = 'cit_seen_requirement_answers';
+
+export const readSeenRequirementAnswers = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ANSWERS_SEEN_KEY) || '[]');
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch (err) {
+    return new Set();
+  }
+};
+
+export const markRequirementAnswersSeen = (tokens) => {
+  try {
+    const seen = readSeenRequirementAnswers();
+    tokens.forEach((token) => seen.add(token));
+    localStorage.setItem(ANSWERS_SEEN_KEY, JSON.stringify([...seen].slice(-500)));
+  } catch (err) {
+    /* storage unavailable: the badge simply reappears next session */
+  }
+};

@@ -3,8 +3,13 @@
 // needs, so those two paths stay open and everything else requires a session.
 const auth = require('../lib/auth-core');
 const store = require('../lib/requirements-store');
+const notify = require('../lib/requirements-notify');
 
 const clean = (value, max) => String(value ?? '').trim().slice(0, max);
+
+// Links the customer receives have to point at the app the team actually uses
+const appOrigin = (req) =>
+  (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -30,13 +35,20 @@ module.exports = async (req, res) => {
       notes: body.notes
     });
     if (!saved) return res.status(404).json({ error: 'This form link is not valid any more.' });
-    return res.status(200).json({ ok: true, submittedAt: saved.submittedAt });
+
+    // The customer has already answered, so the note goes out now and a failure is only logged:
+    // the answers are saved either way
+    const notified = await notify
+      .notifySubmission({ request: saved, origin: appOrigin(req) })
+      .catch((err) => ({ sent: false, reason: err.message }));
+
+    return res.status(200).json({ ok: true, submittedAt: saved.submittedAt, notified: notified.sent });
   }
 
   const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
-  const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
+  const origin = appOrigin(req);
 
   // ── staff: the forms this lead already has, so the dialler can show their links ──
   if (req.method === 'GET' && (url.searchParams.has('leadId') || url.searchParams.has('leadEmail'))) {

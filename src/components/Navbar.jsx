@@ -30,7 +30,7 @@ const initialsOf = (name = '') =>
     .join('')
     .toUpperCase();
 
-export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, onOpenProfile, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenRequirements, requirementsPending = 0, onOpenWhatsAppProofs, onOpenSetup }) {
+export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout, onOpenProfile, darkMode, setDarkMode, onOpenPalette, repliesUnread = 0, onOpenReplies, onOpenRequirements,   requirementsPending = 0, requirementsAnswers = 0, onOpenWhatsAppProofs, onOpenSetup }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: true },
     { id: 'leads', label: 'Leads', icon: Users, permission: currentUser.permissions.leads },
@@ -118,12 +118,23 @@ export default function Navbar({ activeTab, setActiveTab, currentUser, onLogout,
                 <button
                   onClick={onOpenRequirements}
                   className="goldbar-action relative w-9 h-9 flex items-center justify-center"
-                  title={requirementsPending > 0 ? `${requirementsPending} requirements form${requirementsPending === 1 ? '' : 's'} awaiting answers` : 'Requirements forms'}
+                  title={
+                    requirementsAnswers > 0
+                      ? `${requirementsAnswers} new requirement${requirementsAnswers === 1 ? '' : 's'} answer${requirementsAnswers === 1 ? '' : 's'}`
+                      : requirementsPending > 0
+                        ? `${requirementsPending} requirements form${requirementsPending === 1 ? '' : 's'} awaiting answers`
+                        : 'Requirements forms'
+                  }
                 >
                   <ClipboardList className="w-4 h-4" />
                   {requirementsPending > 0 && (
                     <span className="goldbar-badge absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center">
                       {requirementsPending > 9 ? '9+' : requirementsPending}
+                    </span>
+                  )}
+                  {requirementsAnswers > 0 && (
+                    <span className="absolute -bottom-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-emerald-500 text-white ring-2 ring-[var(--surface,#0b1220)]">
+                      {requirementsAnswers > 9 ? '9+' : requirementsAnswers}
                     </span>
                   )}
                 </button>
