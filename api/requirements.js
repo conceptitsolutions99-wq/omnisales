@@ -36,23 +36,50 @@ module.exports = async (req, res) => {
   const session = await auth.requireActiveSession(req, res);
   if (!session) return;
 
+  const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
+
+  // ── staff: the forms this lead already has, so the dialler can show their links ──
+  if (req.method === 'GET' && (url.searchParams.has('leadId') || url.searchParams.has('leadEmail'))) {
+    const links = await store.linksForLead({
+      leadId: clean(url.searchParams.get('leadId'), 64) || null,
+      leadEmail: clean(url.searchParams.get('leadEmail'), 200),
+      origin
+    });
+    return res.status(200).json({ ok: true, links });
+  }
+
   // ── staff: mint a link the agent copies and pastes into WhatsApp or their own mail app ──
   // The link is a real record, so the answers come back to the Requirements panel exactly as
-  // they do for a form attached to an email. Created only when asked, so the panel does not
-  // fill up with forms no customer was ever given.
+  // they do for a form attached to an email. A form already sent to this lead is reused rather
+  // than duplicated, so the panel never lists the same project twice.
   if (req.method === 'POST' && req.body?.action === 'link') {
     const type = clean(req.body?.type, 20);
     if (!store.TYPES.includes(type)) {
       return res.status(400).json({ error: 'Choose the website, mobile or desktop form.' });
     }
 
-    const origin = (process.env.APP_ORIGIN || `https://${req.headers.host || 'omnisales-delta.vercel.app'}`).replace(/\/$/, '');
+    const leadId = req.body?.leadId ?? null;
+    const leadEmail = clean(req.body?.leadEmail, 200);
 
     try {
+      const existing = await store.findForLead({ leadId, leadEmail, type });
+      if (existing) {
+        return res.status(200).json({
+          ok: true,
+          reused: true,
+          link: {
+            type,
+            label: store.labelFor(type),
+            token: existing.token,
+            url: `${origin}/#/requirements/${existing.token}`
+          }
+        });
+      }
+
       const request = await store.createRequest({
         type,
-        leadId: req.body?.leadId ?? null,
-        leadEmail: clean(req.body?.leadEmail, 200),
+        leadId,
+        leadEmail,
         leadName: clean(req.body?.leadName, 200),
         company: clean(req.body?.company, 200),
         agent: session.name || '',

@@ -38,7 +38,18 @@ export const createRequirementLink = (type, lead = {}) =>
         company: lead.company || ''
       })
     })
-  ).then((data) => data.link);
+  ).then((data) => ({ ...data.link, reused: Boolean(data.reused) }));
+
+// The forms this lead already has, one per type. The dialler shows these links instead of
+// creating a second form for the same project.
+export const listRequirementLinksForLead = (lead = {}) => {
+  const params = new URLSearchParams();
+  if (lead.id !== null && lead.id !== undefined && String(lead.id) !== '') params.set('leadId', String(lead.id));
+  if (lead.email) params.set('leadEmail', String(lead.email));
+  return json(
+    fetch(`/api/requirements?${params.toString()}`, { credentials: 'same-origin' })
+  ).then((data) => data.links || []);
+};
 
 // Admin only: the server refuses this for anyone else
 export const deleteRequirementForms = (tokens) =>

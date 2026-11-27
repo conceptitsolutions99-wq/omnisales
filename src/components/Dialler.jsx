@@ -21,7 +21,7 @@ import {
 import { markLeadContacted } from '../lib/lead-status';
 import { whatsappNumberFor } from '../lib/contact-channels';
 import { buildSignature, SIGNATURE_SERVICE_LINE, COMPANY_SITE } from '../lib/signature';
-import { createRequirementLink } from '../lib/requirements';
+import { createRequirementLink, listRequirementLinksForLead } from '../lib/requirements';
 import WhatsAppProofModal from './WhatsAppProofModal';
 
 // The outreach copy names the market the prospect is in, so an Egyptian lead is not told about
@@ -234,14 +234,36 @@ export default function Dialler({
   const toggleEmailRequirement = (value) => {
     setEmailRequirements((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]));
   };
-  // Copyable form links for the lead on the line, minted the first time a link is copied. They
-  // belong to that lead, so choosing another lead clears them.
+  // Copyable form links for the lead on the line: forms this lead already has come back from
+  // the server, and a type with no form yet is created on first copy. They belong to that lead,
+  // so choosing another lead clears them.
   const [formLinks, setFormLinks] = useState({});
   const [linkStatus, setLinkStatus] = useState(null);
+  const activeLeadId = activeLead?.id ?? null;
+  const activeLeadEmail = activeLead?.email || '';
   useEffect(() => {
     setFormLinks({});
     setLinkStatus(null);
-  }, [activeLead?.id]);
+    if (activeLeadId === null && !activeLeadEmail) return undefined;
+
+    let alive = true;
+    listRequirementLinksForLead({ id: activeLeadId, email: activeLeadEmail })
+      .then((links) => {
+        if (!alive) return;
+        const saved = {};
+        links.forEach((link) => {
+          if (link?.type && link?.url) saved[link.type] = { url: link.url, existing: true };
+        });
+        setFormLinks(saved);
+      })
+      .catch(() => {
+        /* offline: the copy button still asks the server, which reuses the lead's form */
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [activeLeadId, activeLeadEmail]);
   // Reputation guard for the one shared mailbox: allowance left and the gap to the next send
   const [sendPacing, setSendPacing] = useState(null);
   const [pacingClock, setPacingClock] = useState(Date.now());
@@ -438,13 +460,15 @@ export default function Dialler({
     setLinkStatus({ type, state: 'working' });
 
     try {
-      let url = formLinks[type];
-      if (!url) {
-        const link = await createRequirementLink(type, activeLead);
-        url = link.url;
-        setFormLinks((prev) => ({ ...prev, [type]: url }));
+      let link = formLinks[type];
+      if (!link?.url) {
+        // The server returns the lead's existing form when there is one, so this cannot add a
+        // duplicate even if the page had not loaded it yet
+        const created = await createRequirementLink(type, activeLead);
+        link = { url: created.url, existing: created.reused };
+        setFormLinks((prev) => ({ ...prev, [type]: link }));
       }
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(link.url);
       setLinkStatus({ type, state: 'copied' });
       setTimeout(() => setLinkStatus((prev) => (prev?.type === type && prev.state === 'copied' ? null : prev)), 2500);
     } catch (err) {
@@ -1143,17 +1167,25 @@ export default function Dialler({
                 <strong className="text-indigo-700 dark:text-indigo-300 block mb-1">4. Requirements Form Links</strong>
                 <p className="mb-2">
                   Copy the form {activeLead?.company || 'the customer'} needs and paste the link into WhatsApp or
-                  your own email draft. The link belongs to this lead, so the answers come back under Requirements.
+                  your own email draft. A form this lead was already sent keeps its link — marked “sent” — so
+                  the Requirements panel never lists the same project twice.
                 </p>
                 <div className="space-y-2">
                   {REQUIREMENT_FORM_OPTIONS.map((option) => {
-                    const url = formLinks[option.value];
+                    const link = formLinks[option.value];
                     const copied = linkStatus?.type === option.value && linkStatus.state === 'copied';
                     const working = linkStatus?.type === option.value && linkStatus.state === 'working';
                     return (
                       <div key={option.value}>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-medium text-[var(--text-secondary)]">{option.label}</span>
+                          <span className="text-[11px] font-medium text-[var(--text-secondary)]">
+                            {option.label}
+                            {link?.existing && (
+                              <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                                sent
+                              </span>
+                            )}
+                          </span>
                           <button
                             type="button"
                             onClick={() => copyRequirementLink(option.value)}
@@ -1164,7 +1196,7 @@ export default function Dialler({
                             {working ? 'Creating…' : copied ? 'Copied' : 'Copy link'}
                           </button>
                         </div>
-                        {url && <p className="mt-1 text-[10px] text-muted break-all select-all">{url}</p>}
+                        {link?.url && <p className="mt-1 text-[10px] text-muted break-all select-all">{link.url}</p>}
                       </div>
                     );
                   })}
