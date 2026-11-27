@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Clock,
   CheckCircle2,
@@ -23,6 +24,16 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
     assignedTo: currentUser.name,
     notes: 'Awaiting wire transfer confirmation from client accounting.'
   });
+
+  // The form must sit above the sticky nav and the page must not scroll under it while it is open
+  useEffect(() => {
+    if (!isModalOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isModalOpen]);
 
   const handleStatusChange = (id, newStatus) => {
     const updated = followups.map(f => {
@@ -190,10 +201,13 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
         )}
       </div>
 
-      {/* Add Followup Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xl p-4">
-          <div className="w-full max-w-md glass-strong overflow-hidden">
+      {/* Add Followup Modal. On the body, above the sticky navbar (z-40): rendered inside the page,
+          an ancestor's filter made it position against that ancestor and the bar covered it */}
+      {isModalOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/70 p-4">
+            <div className="flex min-h-full items-start justify-center">
+              <div className="my-2 w-full max-w-md overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl">
             <div className="p-6 border-b border-[var(--glass-border)] bg-gradient-to-r from-amber-600 to-orange-600 text-white">
               <h3 className="text-lg font-bold">Schedule Customer Follow-up</h3>
               <p className="text-xs text-amber-100 mt-0.5">Assign callback or money transfer task</p>
@@ -275,9 +289,11 @@ export default function FollowUps({ followups, setFollowups, leads, currentUser 
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
