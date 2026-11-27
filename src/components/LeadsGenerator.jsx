@@ -1061,7 +1061,7 @@ export default function LeadsGenerator({
 
         <div className="flex items-center justify-between pt-2 border-t border-[var(--glass-border)] text-xs text-muted">
           <span>
-            Showing <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads
+            Matching <strong>{filteredLeads.length}</strong> of <strong>{visibleLeads.length}</strong> leads
             <span className="text-emerald-500/90"> · <strong>{emailCount}</strong> with an email</span>
             <span className="text-emerald-500/90"> · <strong>{whatsappCount}</strong> on WhatsApp</span>
             <span className="text-blue-500/90"> · <strong>{socialCount}</strong> with a social page</span>
