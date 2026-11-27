@@ -486,6 +486,8 @@ function Workspace() {
 
   // Answers this browser has not opened yet; the navbar badge and the toast both read from it
   const [seenAnswerTokens, setSeenAnswerTokens] = useState(readSeenRequirementAnswers);
+  // Whatever is already answered when a browser first loads the list is history, not news
+  const answersBaselined = useRef(false);
 
   // A quiet refresh leaves the panel's spinner and error banner alone, which is what the poll
   // behind the notification needs
@@ -496,7 +498,24 @@ function Workspace() {
     }
     try {
       const data = await listRequirements();
-      setRequirements(Array.isArray(data.requests) ? data.requests : []);
+      const loaded = Array.isArray(data.requests) ? data.requests : [];
+      setRequirements(loaded);
+
+      // A browser that has never opened the panel would otherwise announce every answer ever
+      // given as a new one. Its first load takes what is already there as read, so the badge and
+      // the toast only mean answers that arrived while someone was working.
+      if (!answersBaselined.current) {
+        answersBaselined.current = true;
+        if (readSeenRequirementAnswers().size === 0) {
+          const alreadyAnswered = loaded
+            .filter((request) => request.submittedAt)
+            .map((request) => request.token);
+          if (alreadyAnswered.length) {
+            markRequirementAnswersSeen(alreadyAnswered);
+            setSeenAnswerTokens(readSeenRequirementAnswers());
+          }
+        }
+      }
     } catch (err) {
       if (!quiet) {
         setRequirementsError(err.message === 'Failed to fetch' ? 'Cannot reach the server.' : err.message);
